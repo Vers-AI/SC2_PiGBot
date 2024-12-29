@@ -12,11 +12,6 @@ from ares.managers.manager_mediator import ManagerMediator
 # Cython or custom references
 from cython_extensions import (
     cy_closest_to,
-    cy_pick_enemy_target,
-    cy_find_units_center_mass,
-    cy_attack_ready,
-    cy_unit_pending,
-    cy_distance_to
 )
 
 # SC2-related imports

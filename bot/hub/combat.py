@@ -15,6 +15,12 @@ from ares.behaviors.combat.group import (
 from ares.managers.squad_manager import UnitSquad
 from ares.consts import UnitRole, UnitTreeQueryType
 
+from cython_extensions import (
+   
+    cy_find_units_center_mass, cy_pick_enemy_target
+    
+)
+
 # If you reference these from your bot.py, just import them directly from here
 COMMON_UNIT_IGNORE_TYPES: set[UnitTypeId] = {
     UnitTypeId.EGG,
@@ -71,7 +77,7 @@ def control_main_army(bot, main_army: Units, target: Point2) -> None:
             melee = [u for u in units if u.ground_range <= 3]
             ranged = [u for u in units if u.ground_range > 3]
             # Simple picking logic
-            enemy_target = bot.cy_pick_enemy_target(all_close)
+            enemy_target = cy_pick_enemy_target(all_close)
 
             # Ranged micro example
             for r_unit in ranged:
@@ -210,15 +216,45 @@ def threat_detection(bot, main_army: Units) -> None:
             enemy_units = bot.enemy_units.tags_in(enemy_tags)
             threat_value = assess_threat(bot, enemy_units, main_army)
 
-            # Simple logic to set bot._under_attack
-            if not bot._under_attack and threat_value >= 5:
-                bot._under_attack = True
-            elif bot._under_attack and threat_value < 2:
-                bot._under_attack = False
+            # Early game threat detection
+            if bot.time < 2 * 60 + 20 and bot.townhalls.first:
+                unit_categories = {'pylons': [], 'enemyWorkerUnits': [], 'cannons': [], 'zerglings': []}
+                for _, enemy_tags in ground_near.items():
+                    enemy_units = bot.enemy_units.tags_in(enemy_tags)
+                    for unit in enemy_units:
+                        if unit.type_id == UnitTypeId.PYLON:
+                            unit_categories['pylons'].append(unit)
+                            print("Pylon Detected")
+                        elif unit.type_id in [UnitTypeId.PROBE, UnitTypeId.SCV, UnitTypeId.DRONE]:
+                            unit_categories['enemyWorkerUnits'].append(unit)
+                        elif unit.type_id == UnitTypeId.PHOTONCANNON:
+                            unit_categories['cannons'].append(unit)
+                            print("Cannon Detected")
+                        elif unit.type_id == UnitTypeId.ZERGLING:
+                            unit_categories['zerglings'].append(unit)
+                            print("Zergling Detected")
 
-            # Send army to defend if under attack
-            if bot._under_attack and main_army:
-                # (cy_find_units_center_mass is from your Cython extension)
-                threat_position, _ = bot.cy_find_units_center_mass(enemy_units, 10.0)
-                if threat_position:
-                    control_main_army(bot, main_army, Point2(threat_position))
+                if unit_categories['pylons'] or len(unit_categories['enemyWorkerUnits']) >= 4 or unit_categories['cannons']:
+                    bot.defend_worker_cannon_rush(unit_categories['enemyWorkerUnits'], unit_categories['cannons'])
+                    print("cannon rush")
+                elif len(unit_categories['zerglings']) > 2:
+                    bot._used_cheese_response = True
+                    print("Defending against zergling rush")
+
+            # If there's a threat and we have a main army, send the army to defend
+            if main_army:
+                threat_position, num_units = cy_find_units_center_mass(enemy_units, 10.0)
+                threat_position = Point2(threat_position)
+                if bot.time < 3 * 60 and bot._used_cheese_response:
+                    if assess_threat(bot, enemy_units, main_army) >= 2:
+                        bot._under_attack = True
+                elif bot._under_attack and assess_threat(bot, enemy_units, main_army) < 2:
+                    bot._under_attack = False
+                elif not bot._under_attack and assess_threat(bot, enemy_units, main_army) >= 5:
+                    bot._under_attack = True
+                else:
+                    bot._under_attack = False
+                if bot._under_attack:
+                    bot.Control_Main_Army(main_army, threat_position)
+                    if bot._one_base_reaction_completed:
+                        bot.use_overcharge(main_army)
