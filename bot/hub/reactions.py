@@ -127,48 +127,26 @@ def cheese_reaction(bot):
             bot._cheese_reaction_completed = True
 
 def one_base_reaction(bot):
-    """
-    If the enemy is staying on one base, build extra defenses 
-    and hold off expansions for a while.
-    """
     pylon_count = bot.structures(UnitTypeId.PYLON).amount + bot.structure_pending(UnitTypeId.PYLON)
     gateway_count = bot.structures(UnitTypeId.GATEWAY).amount + bot.structure_pending(UnitTypeId.GATEWAY)
     stalker_count = bot.units(UnitTypeId.STALKER).amount
-    shield_battery_count = (
-        bot.structures(UnitTypeId.SHIELDBATTERY).amount 
-        + bot.structure_pending(UnitTypeId.SHIELDBATTERY)
-    )
-
+    shield_battery_count = bot.structures(UnitTypeId.SHIELDBATTERY).amount + bot.structure_pending(UnitTypeId.SHIELDBATTERY)
     natural = bot.natural_expansion.towards(bot.game_info.map_center, 1)
     cyb = bot.structures(UnitTypeId.CYBERNETICSCORE).ready
 
     if pylon_count < 2:
-        if not bot.structure_pending(UnitTypeId.PYLON):
+        if not bot.structure_pending(UnitTypeId.PYLON): 
             if bot.can_afford(UnitTypeId.PYLON):
-                bot.register_behavior(BuildStructure(
-                    base_location=natural, 
-                    structure_id=UnitTypeId.PYLON, 
-                    closest_to=bot.game_info.map_center
-                ))
+                bot.register_behavior(BuildStructure(base_location=natural, structure_id=UnitTypeId.PYLON, closest_to=bot.game_info.map_center))
 
-    # Once we have a gateway and 3+ stalkers, spam shield batteries
     if gateway_count > 0 and stalker_count >= 3:
         if shield_battery_count < 2:
-            if cyb and bot.can_afford(UnitTypeId.SHIELDBATTERY):
-                # Build shield battery near natural
-                if bot.structures(UnitTypeId.SHIELDBATTERY).closer_than(8, natural).amount == 0:
-                    bot.register_behavior(BuildStructure(
-                        base_location=natural, 
-                        structure_id=UnitTypeId.SHIELDBATTERY, 
-                        closest_to=bot.game_info.map_center
-                    ))
-                # Possibly one at the main if you want extra defense
-                elif bot.structures(UnitTypeId.SHIELDBATTERY).closer_than(8, bot.start_location).amount == 0:
-                    bot.register_behavior(BuildStructure(
-                        base_location=bot.start_location, 
-                        structure_id=UnitTypeId.SHIELDBATTERY, 
-                        closest_to=bot.townhalls[0].position.towards(bot.start_location, -1)
-                    ))
+            if cyb:
+                if bot.can_afford(UnitTypeId.SHIELDBATTERY):
+                    if bot.structures(UnitTypeId.SHIELDBATTERY).closer_than(8, natural).amount + bot.structure_pending(UnitTypeId.SHIELDBATTERY) == 0:
+                        bot.register_behavior(BuildStructure(base_location=natural, structure_id=UnitTypeId.SHIELDBATTERY, closest_to=bot.game_info.map_center))
+                    elif bot.structures(UnitTypeId.SHIELDBATTERY).closer_than(8, bot.start_location).amount == 0:
+                        bot.register_behavior(BuildStructure(base_location=bot.start_location, structure_id=UnitTypeId.SHIELDBATTERY, closest_to=bot.townhalls[0].position.towards(bot.start_location, -1)))
 
         if shield_battery_count >= 2:
             bot._one_base_reaction_completed = True
