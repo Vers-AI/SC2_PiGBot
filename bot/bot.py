@@ -7,7 +7,9 @@ import numpy as np
 # Ares imports (framework-specific)
 from ares import AresBot
 from ares.consts import ALL_STRUCTURES, WORKER_TYPES, UnitRole
+
 from ares.managers.manager_mediator import ManagerMediator
+from ares.managers.manager import Manager
 
 # Cython or custom references
 from cython_extensions import (
@@ -26,6 +28,7 @@ from sc2.units import Units
 from bot.hub.macro import handle_macro, worker_production
 from bot.hub.combat import threat_detection, control_main_army, warp_prism_follower
 from bot.hub.scouting import control_scout
+from ares.behaviors.macro import Mining
 from bot.hub.reactions import (
     early_threat_sensor,
     cheese_reaction,
@@ -87,8 +90,7 @@ class DragonBot(AresBot):
         self._one_base_reaction_completed = False
         self._is_building = False
 
-        # For referencing resources by tag (if needed)
-        self.resource_by_tag = {}
+        
 
     @property
     def attack_target(self) -> Point2:
@@ -178,12 +180,8 @@ class DragonBot(AresBot):
         Main loop executed each game step. Calls out to macro, combat, scouting,
         and reaction modules to handle behavior.
         """
-        await super().on_step(iteration)
-
-        # Optionally track resources by tag
-        self.resource_by_tag = {
-            unit.tag: unit for unit in chain(self.mineral_field, self.gas_buildings)
-        }
+        await super(DragonBot, self).on_step(iteration)
+        self.register_behavior(Mining()) #ares Mining 
 
         # Retrieve roles
         main_army = self.mediator.get_units_from_role(role=UnitRole.ATTACKING)
