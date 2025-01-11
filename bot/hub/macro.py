@@ -6,7 +6,6 @@ from sc2.position import Point2
 from sc2.units import Units
 
 from ares.behaviors.macro import (
-    Mining,
     ProductionController,
     SpawnController,
     MacroPlan,
