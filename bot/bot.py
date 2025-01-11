@@ -26,7 +26,7 @@ from sc2.units import Units
 
 # Modular imports for separated concerns
 from bot.hub.macro import handle_macro, worker_production
-from bot.hub.combat import threat_detection, control_main_army, warp_prism_follower
+from bot.hub.combat import threat_detection, control_main_army, warp_prism_follower, handle_attack_toggles  # Import the new function
 from bot.hub.scouting import control_scout
 from ares.behaviors.macro import Mining
 from bot.hub.reactions import (
@@ -205,13 +205,16 @@ class DragonBot(AresBot):
             main_army=main_army,
             warp_prism=warp_prism,
             scout_units=scout_units,
-            attack_target=self.attack_target,
             freeflow=self.freeflow,
         )
         worker_production(self)
 
         # Run combat-oriented threat detection
         threat_detection(self, main_army)
+
+        # Handle attack toggles if main_army exists
+        if main_army:
+            handle_attack_toggles(self, main_army, self.attack_target)
 
         # Optionally control main army or warp prism outside macro
         if self._commenced_attack and main_army:

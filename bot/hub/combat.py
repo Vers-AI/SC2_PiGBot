@@ -256,3 +256,16 @@ def threat_detection(bot, main_army: Units) -> None:
                     bot.Control_Main_Army(main_army, threat_position)
                     if bot._one_base_reaction_completed:
                         bot.use_overcharge(main_army)
+
+
+def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
+    """
+    Handles the attack toggles logic.
+    """
+    current_supply = bot.get_total_supply(main_army)
+    if current_supply <= bot._begin_attack_at_supply:
+        bot._commenced_attack = False
+    elif bot._commenced_attack and not bot._under_attack:
+        bot.Control_Main_Army(main_army, attack_target)
+    elif current_supply >= bot._begin_attack_at_supply:
+        bot._commenced_attack = True

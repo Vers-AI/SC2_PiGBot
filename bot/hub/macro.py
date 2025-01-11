@@ -38,7 +38,6 @@ async def handle_macro(
     main_army: Units,
     warp_prism: Units,
     scout_units: Units,
-    attack_target: Point2,
     freeflow: bool,
 ) -> None:
     """
@@ -59,15 +58,6 @@ async def handle_macro(
             )
         else:
             macro_plan.add(SpawnController(STANDARD_ARMY, freeflow_mode=freeflow))
-
-        # Attack toggles
-        current_supply = bot.get_total_supply(main_army)
-        if current_supply <= bot._begin_attack_at_supply:
-            bot._commenced_attack = False
-        elif bot._commenced_attack and not bot._under_attack:
-            bot.Control_Main_Army(main_army, attack_target)
-        elif current_supply >= bot._begin_attack_at_supply:
-            bot._commenced_attack = True
 
         bot.register_behavior(macro_plan)
 
@@ -97,15 +87,6 @@ async def handle_macro(
             cheese_defense_plan.add(
                 ProductionController(CHEESE_DEFENSE_ARMY, base_location=bot.start_location)
             )
-
-            # Attack toggles
-            current_supply = bot.get_total_supply(main_army)
-            if current_supply <= bot._begin_attack_at_supply:
-                bot._commenced_attack = False
-            elif bot._commenced_attack and not bot._under_attack:
-                bot.Control_Main_Army(main_army, attack_target)
-            elif current_supply >= bot._begin_attack_at_supply:
-                bot._commenced_attack = True
 
             bot.register_behavior(cheese_defense_plan)
 
