@@ -1,4 +1,3 @@
-import numpy as np
 from sc2.position import Point2
 from sc2.units import Units
 from sc2.unit import Unit
@@ -6,10 +5,10 @@ from sc2.ids.unit_typeid import UnitTypeId
 
 from ares.behaviors.combat import CombatManeuver
 from ares.behaviors.combat.individual import (
-    AMove, ShootTargetInRange, KeepUnitSafe, PathUnitToTarget, StutterUnitBack
+    KeepUnitSafe, PathUnitToTarget, StutterUnitBack
 )
 from ares.behaviors.combat.group import (
-    AMoveGroup, PathGroupToTarget, KeepGroupSafe, StutterGroupBack
+    AMoveGroup, PathGroupToTarget
 )
 from ares.managers.squad_manager import UnitSquad
 from ares.consts import UnitRole, UnitTreeQueryType
