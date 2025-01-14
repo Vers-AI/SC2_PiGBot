@@ -1,4 +1,4 @@
-# DragonBot - Bits of Code Example Bot
+# DragonBot - Bits of Code Bot
 
 Welcome to DragonBot, the example bot showcased in the "Bits of Code" series! This bot is designed as a starting point for those looking to dive into the world of AI bot development in StarCraft II using the Python-SC2 framework.
 
