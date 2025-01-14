@@ -59,7 +59,7 @@ COMMON_UNIT_IGNORE_TYPES: set[UnitTypeId] = {
 }
 
 
-class DragonBot(AresBot):
+class PiG_Bot(AresBot):
     """
     Main class for our Protoss bot, leveraging the Ares framework.
     Logic is organized into separate modules for macro, combat, scouting, and reactions.
@@ -180,7 +180,7 @@ class DragonBot(AresBot):
         Main loop executed each game step. Calls out to macro, combat, scouting,
         and reaction modules to handle behavior.
         """
-        await super(DragonBot, self).on_step(iteration)
+        await super(PiG_Bot, self).on_step(iteration)
         self.register_behavior(Mining()) #ares Mining 
 
         # Retrieve roles
