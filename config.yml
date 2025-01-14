@@ -3,7 +3,7 @@
 # Can add own unique config options here if desired
 
 # Custom values not used by ares
-MyBotName: PiGBot
+MyBotName: PiG_Bot
 MyBotRace: Protoss
 # setting ture allows auto upload to aiareana (https://aiarena.net/) on push to `main` branch
 # see tutorial on readme before setting to True
