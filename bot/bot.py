@@ -238,7 +238,7 @@ class PiG_Bot(AresBot):
         """
         Called whenever a new unit spawns. Assign roles based on type.
         """
-        await super().on_unit_created(unit)
+        await super(PiG_Bot, self).on_unit_created(unit)
 
         if unit.type_id in ALL_STRUCTURES or unit.type_id in WORKER_TYPES:
             return

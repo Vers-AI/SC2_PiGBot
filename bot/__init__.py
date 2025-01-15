@@ -1,1 +1,1 @@
-from .bot import DragonBot
+from .bot import PiG_Bot
