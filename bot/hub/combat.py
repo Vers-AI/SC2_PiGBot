@@ -1,3 +1,5 @@
+import numpy as np
+
 from sc2.position import Point2
 from sc2.units import Units
 from sc2.unit import Unit
@@ -46,9 +48,9 @@ def control_main_army(bot, main_army: Units, target: Point2) -> None:
     """
     Controls the main army's movement and engagement logic.
     """
-    squads = bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15)
-    pos_of_main_squad = bot.mediator.get_position_of_main_squad(role=UnitRole.ATTACKING)
-    grid = bot.mediator.get_ground_grid
+    squads: list[UnitSquad] = bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15)
+    pos_of_main_squad: Point2 = bot.mediator.get_position_of_main_squad(role=UnitRole.ATTACKING)
+    grid: np.ndarray = bot.mediator.get_ground_grid
 
     if main_army:
         bot.total_health_shield_percentage = (

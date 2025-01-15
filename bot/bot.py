@@ -24,6 +24,8 @@ from sc2.position import Point2
 from sc2.unit import Unit
 from sc2.units import Units
 
+
+
 # Modular imports for separated concerns
 from bot.hub.macro import handle_macro, worker_production
 from bot.hub.combat import threat_detection, control_main_army, warp_prism_follower, handle_attack_toggles  # Import the new function
@@ -99,6 +101,11 @@ class PiG_Bot(AresBot):
         If we see an enemy structure, we target the closest one. Otherwise,
         we may fallback to expansions or the enemy start location.
         """
+        # Ensure squads are initialized
+        if not self.mediator.get_squads(role=UnitRole.ATTACKING):
+            print("No squads found for ATTACKING role. Returning default target.")
+            return self.enemy_start_locations[0]  # Default to enemy start location
+
         main_army_position = self.mediator.get_position_of_main_squad(role=UnitRole.ATTACKING)
 
         # If enemy structures are visible, choose nearest
@@ -238,7 +245,7 @@ class PiG_Bot(AresBot):
         """
         Called whenever a new unit spawns. Assign roles based on type.
         """
-        await super(PiG_Bot, self).on_unit_created(unit)
+        await super().on_unit_created(unit)
 
         if unit.type_id in ALL_STRUCTURES or unit.type_id in WORKER_TYPES:
             return
