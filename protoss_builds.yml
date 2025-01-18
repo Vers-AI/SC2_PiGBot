@@ -91,6 +91,27 @@ Builds:
             - 64 IMMORTAL
             - 66 HIGHTEMPLAR *4 @ NAT
             - 66 ZEALOT *2 @ NAT
-             
-   
-    
+
+    One_Base_Reaction_Build:
+        # One base reaction Build order
+        OpeningBuildOrder:
+            - 14 PYLON @ NAT
+            - 16 GATEWAY @ NAT
+            - 20 STALKER
+            - 20 SHIELDBATTERY @ NAT
+            - 24 SHIELDBATTERY 
+            - 24 PYLON @ NAT
+
+    Cheese_Reaction_Build:
+        # Chesese reaction Build order
+        OpeningBuildOrder:
+            - 14 PYLON @ NAT
+            - 16 GATEWAY @ NAT
+            - 18 ZEALOT
+            - 18 SHIELDBATTERY @ NAT
+            - 20 ZEALOT
+            - 22 PYLON @ NAT
+            - 22 GATEWAY @ NAT
+            - 24 WARPGATERESEARCH
+            - 24 PYLON @ NAT
+            - 24 CHRONOBOOST @ GATEWAY

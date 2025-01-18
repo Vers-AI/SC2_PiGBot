@@ -47,109 +47,30 @@ def defend_worker_cannon_rush(bot, enemy_probes, enemy_cannons):
 
 def cheese_reaction(bot):
     """
-    Handles your 'cheese_reaction' logic from the old code.
     Builds pylon/gateway/shield battery to defend early cheese.
     """
-    pylon_count = bot.structures(UnitTypeId.PYLON).amount + bot.structure_pending(UnitTypeId.PYLON)
-    gateway_count = bot.structures(UnitTypeId.GATEWAY).amount + bot.structure_pending(UnitTypeId.GATEWAY)
-    zealot_count = bot.units(UnitTypeId.ZEALOT).amount
-    has_shield_battery = (
-        bot.structures(UnitTypeId.SHIELDBATTERY).ready
-        or bot.structure_pending(UnitTypeId.SHIELDBATTERY)
-    )
-
-    natural = bot.natural_expansion.towards(bot.game_info.map_center, 1)
-    pending_townhalls = bot.structure_pending(UnitTypeId.NEXUS)
-    cyb = bot.structures(UnitTypeId.CYBERNETICSCORE).ready
+    # Removed logic now handled by the build runner
+    print("Switching to Cheese Reaction Build")
+    bot.build_order_runner.switch_opening("Cheese_Reaction_Build")
 
     # Cancel a fast-expanding Nexus if it's started and we detect cheese
+    pending_townhalls = bot.structure_pending(UnitTypeId.NEXUS)
     if pending_townhalls == 1 and bot.time < 2 * 60:
         for pt in bot.townhalls.not_ready:
             bot.mediator.cancel_structure(structure=pt)
 
-    # Build pylon (up to 2), then gateway, zealots, shield battery, etc.
-    if pylon_count < 2:
-        if not bot.structure_pending(UnitTypeId.PYLON):
-            if bot.can_afford(UnitTypeId.PYLON):
-                bot.register_behavior(BuildStructure(
-                    base_location=natural, 
-                    structure_id=UnitTypeId.PYLON, 
-                    closest_to=bot.game_info.map_center
-                ))
-
-    if bot.structures(UnitTypeId.PYLON).ready and gateway_count < 2:
-        if bot.can_afford(UnitTypeId.GATEWAY) and bot.structure_pending(UnitTypeId.GATEWAY) == 0:
-            bot.register_behavior(BuildStructure(
-                base_location=natural, 
-                structure_id=UnitTypeId.GATEWAY, 
-                closest_to=bot.game_info.map_center
-            ))
-
-    if gateway_count > 0 and zealot_count < 2:
-        if bot.can_afford(UnitTypeId.ZEALOT):
-            bot.train(UnitTypeId.ZEALOT, closest_to=natural)
-            # Chrono gate if possible
-            for th in bot.townhalls:
-                if th.energy >= 50:
-                    gateways = [
-                        g for g in bot.mediator.get_own_structures_dict[UnitTypeId.GATEWAY]
-                        if g.build_progress >= 1.0 and not g.is_idle
-                    ]
-                    if gateways:
-                        th(AbilityId.EFFECT_CHRONOBOOSTENERGYCOST, gateways[0])
-
-    if gateway_count > 0 and zealot_count >= 1:
-        if not bot.structures(UnitTypeId.SHIELDBATTERY).ready and cyb:
-            if bot.can_afford(UnitTypeId.SHIELDBATTERY) and bot.structure_pending(UnitTypeId.SHIELDBATTERY) == 0:
-                bot.register_behavior(BuildStructure(
-                    base_location=natural, 
-                    structure_id=UnitTypeId.SHIELDBATTERY, 
-                    closest_to=bot.game_info.map_center
-                ))
-        if cyb:
-            # Warpgate research
-            if bot.can_afford(AbilityId.RESEARCH_WARPGATE):
-                cyb.first(AbilityId.RESEARCH_WARPGATE)
-            # Chrono the Cybercore
-            for th in bot.townhalls:
-                if th.energy >= 50:
-                    for ccore in bot.mediator.get_own_structures_dict[UnitTypeId.CYBERNETICSCORE]:
-                        if ccore.build_progress >= 1.0 and not ccore.is_idle:
-                            th(AbilityId.EFFECT_CHRONOBOOSTENERGYCOST, ccore)
-
-    if has_shield_battery and zealot_count >= 2 and pylon_count < 3:
-        if bot.can_afford(UnitTypeId.PYLON) and bot.structure_pending(UnitTypeId.PYLON) == 0:
-            bot.register_behavior(BuildStructure(
-                base_location=natural, 
-                structure_id=UnitTypeId.PYLON, 
-                closest_to=bot.game_info.map_center
-            ))
-            bot._cheese_reaction_completed = True
+    # Set the flag if the build order is completed
+    if bot.build_order_runner.build_completed:
+        bot._used_cheese_response = True
 
 def one_base_reaction(bot):
-    pylon_count = bot.structures(UnitTypeId.PYLON).amount + bot.structure_pending(UnitTypeId.PYLON)
-    gateway_count = bot.structures(UnitTypeId.GATEWAY).amount + bot.structure_pending(UnitTypeId.GATEWAY)
-    stalker_count = bot.units(UnitTypeId.STALKER).amount
-    shield_battery_count = bot.structures(UnitTypeId.SHIELDBATTERY).amount + bot.structure_pending(UnitTypeId.SHIELDBATTERY)
-    natural = bot.natural_expansion.towards(bot.game_info.map_center, 1)
-    cyb = bot.structures(UnitTypeId.CYBERNETICSCORE).ready
+    # Removed logic now handled by the build runner
+    print("Switching to One Base Reaction Build")
+    bot.build_order_runner.switch_opening("One_Base_Reaction_Build")
 
-    if pylon_count < 2:
-        if not bot.structure_pending(UnitTypeId.PYLON): 
-            if bot.can_afford(UnitTypeId.PYLON):
-                bot.register_behavior(BuildStructure(base_location=natural, structure_id=UnitTypeId.PYLON, closest_to=bot.game_info.map_center))
-
-    if gateway_count > 0 and stalker_count >= 3:
-        if shield_battery_count < 2:
-            if cyb:
-                if bot.can_afford(UnitTypeId.SHIELDBATTERY):
-                    if bot.structures(UnitTypeId.SHIELDBATTERY).closer_than(8, natural).amount + bot.structure_pending(UnitTypeId.SHIELDBATTERY) == 0:
-                        bot.register_behavior(BuildStructure(base_location=natural, structure_id=UnitTypeId.SHIELDBATTERY, closest_to=bot.game_info.map_center))
-                    elif bot.structures(UnitTypeId.SHIELDBATTERY).closer_than(8, bot.start_location).amount == 0:
-                        bot.register_behavior(BuildStructure(base_location=bot.start_location, structure_id=UnitTypeId.SHIELDBATTERY, closest_to=bot.townhalls[0].position.towards(bot.start_location, -1)))
-
-        if shield_battery_count >= 2:
-            bot._one_base_reaction_completed = True
+    # Set the flag if the build order is completed
+    if bot.build_order_runner.build_completed:
+        bot._one_base_reaction_completed = True
 
 def early_threat_sensor(bot):
     """
