@@ -49,8 +49,7 @@ def cheese_reaction(bot):
     """
     Builds pylon/gateway/shield battery to defend early cheese.
     """
-    # Removed logic now handled by the build runner
-    print("Switching to Cheese Reaction Build")
+    print(f"Current build: {bot.build_order_runner.chosen_opening}")
     bot.build_order_runner.switch_opening("Cheese_Reaction_Build")
 
     # Cancel a fast-expanding Nexus if it's started and we detect cheese
@@ -64,8 +63,6 @@ def cheese_reaction(bot):
         bot._used_cheese_response = True
 
 def one_base_reaction(bot):
-    # Removed logic now handled by the build runner
-    print("Switching to One Base Reaction Build")
     bot.build_order_runner.switch_opening("One_Base_Reaction_Build")
 
     # Set the flag if the build order is completed
