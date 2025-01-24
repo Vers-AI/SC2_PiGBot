@@ -15,7 +15,7 @@ from ares.behaviors.macro import (
 from ares.consts import UnitRole
 
 from bot.hub.reactions import one_base_reaction
-
+from bot.hub.scouting import control_scout
 
 # Army composition constants (instead of @property on a class)
 STANDARD_ARMY = {
@@ -111,7 +111,7 @@ async def handle_macro(
 
     # Scout control or build observer if no scout
     if scout_units and main_army:
-        bot.Control_Scout(scout_units, main_army)
+        control_scout(bot, scout_units, main_army)
     else:
         if bot.time > 4 * 60:
             if bot.structures(UnitTypeId.ROBOTICSFACILITY).ready:
