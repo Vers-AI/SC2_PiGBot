@@ -95,9 +95,10 @@ Builds:
     One_Base_Reaction_Build:
         # One base reaction Build order
         OpeningBuildOrder:
-            - 14 PYLON @ NAT
+            - 14 PYLON
             - 16 GATEWAY @ NAT
-            - 20 STALKER
+            - 16 CHRONO @ GATEWAY
+            - 20 STALKER *3
             - 20 SHIELDBATTERY @ NAT
             - 24 SHIELDBATTERY 
             - 24 PYLON @ NAT

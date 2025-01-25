@@ -1,14 +1,15 @@
 # bot/hub/reactions.py
+import numpy as np
 
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.ability_id import AbilityId
 from sc2.units import Units
 from sc2.position import Point2
 
-# Ares imports
-from ares.behaviors.macro import BuildStructure
-from ares.consts import UnitRole
 
+# Ares imports
+from ares.consts import UnitRole
+from ares.behaviors.combat.individual import PathUnitToTarget
 from ares.managers.manager_mediator import ManagerMediator
 
 
@@ -74,6 +75,13 @@ def early_threat_sensor(bot):
     Detects early threats like zergling rush, proxy zealots, etc.
     Sets flags so the bot can respond (e.g., cheese_reaction).
     """
+    
+    # Get scout units from build runner
+    scout_units = bot.mediator.get_units_from_role(
+        role=UnitRole.BUILD_RUNNER_SCOUT, 
+        unit_type=bot.worker_type
+    )
+
     if bot.mediator.get_enemy_worker_rushed:
         print("Rushed worker detected")
 
@@ -88,6 +96,59 @@ def early_threat_sensor(bot):
         or bot.mediator.get_enemy_roach_rushed
     ):
         bot._used_cheese_response = True
+    
+    # New scout control logic
+    elif bot.time > 2 * 60:
+        # Get enemy natural location
+        enemy_natural = bot.mediator.get_enemy_nat
+        grid: np.ndarray = bot.mediator.get_ground_grid
 
-    elif bot.time > 2 * 60 and not bot.mediator.get_enemy_expanded:
-        bot._used_one_base_response = True
+        # Retrieve scout units from build runner
+        scout_units: Units = bot.mediator.get_units_from_role(
+            role=UnitRole.BUILD_RUNNER_SCOUT, 
+            unit_type=bot.worker_type
+        )
+        
+        # Only proceed if scout units exist
+        if scout_units:
+            # Debug print for enemy natural visibility
+            print(f"Enemy Natural at {enemy_natural}, Visible: {bot.is_visible(enemy_natural)}")
+            
+            # Check if enemy natural is visible
+            if bot.is_visible(enemy_natural):
+                # If enemy natural is visible and hasn't expanded
+                if not bot.mediator.get_enemy_expanded:
+                    for scout in scout_units:
+                        # If before 3:30, path to and hold at enemy natural
+                        if bot.time <= 3.5 * 60:
+                            bot.register_behavior(
+                                PathUnitToTarget(
+                                    unit=scout, 
+                                    grid=grid,
+                                    target=enemy_natural
+                                )
+                            )
+                            print(f"Scout registered to path to enemy natural {enemy_natural}")
+                    
+                    # Check at 3:30 if still no expansion
+                    if bot.time > 3.5 * 60:
+                        if not bot.mediator.get_enemy_expanded:
+                            bot._used_one_base_response = True
+                            print("Enemy hasn't expanded by 3:30, triggering one-base reaction")
+                        
+                        # Always remove scout role at 3:30
+                        for scout in scout_units:
+                            bot.mediator.clear_unit_role(scout.tag, UnitRole.BUILD_RUNNER_SCOUT)
+            else:
+                # Enemy natural not visible, move scout to explore
+                for scout in scout_units:
+                    # If before 3:30, path to enemy natural
+                    if bot.time <= 3.5 * 60:
+                        bot.register_behavior(
+                            PathUnitToTarget(
+                                unit=scout, 
+                                grid=grid,
+                                target=enemy_natural
+                            )
+                        )
+                        print(f"Scout pathing to enemy natural at {enemy_natural}")
