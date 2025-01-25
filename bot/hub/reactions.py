@@ -92,76 +92,49 @@ def early_threat_sensor(bot):
         bot._used_cheese_response = True
     
     # Probe Enemy Natural Scout
-    elif bot.time > 2 * 60:
+    elif bot.time > 3.5 * 60:
         # Get enemy natural location
         enemy_natural = bot.mediator.get_enemy_nat
         grid: np.ndarray = bot.mediator.get_ground_grid
-        scout_maneuver : CombatManeuver = CombatManeuver()
 
-        # Retrieve scout units from build runner
+        # Assign BUILD_RUNNER_SCOUT units to SCOUTING role
+        if build_runner_scout_units := bot.mediator.get_units_from_role(
+            role=UnitRole.BUILD_RUNNER_SCOUT, unit_type=bot.worker_type
+        ):
+            bot.mediator.batch_assign_role(
+                tags=build_runner_scout_units.tags, role=UnitRole.SCOUTING
+            )
+        
+        # Get scout units with SCOUTING role
         scout_units: Units = bot.mediator.get_units_from_role(
-            role=UnitRole.BUILD_RUNNER_SCOUT, 
+            role=UnitRole.SCOUTING, 
             unit_type=bot.worker_type
         )
-        print(f"Scout unit(s): {scout_units}")
-        
-        # Only proceed if scout units exist
+
+        # Check if scout units exist
         if scout_units:
-            # Debug print for enemy natural visibility
-            print(f"Enemy Natural at {enemy_natural}, Visible: {bot.is_visible(enemy_natural)}")
-            
             # Check if enemy natural is visible
             if bot.is_visible(enemy_natural):
-                # If enemy natural is visible and hasn't expanded
+                # Check if enemy has expanded
                 if not bot.mediator.get_enemy_expanded:
-                    for scout in scout_units:
-                        # If before 3:30, path to and hold at enemy natural
-                        if bot.time <= 3.5 * 60:
-                            # Path to enemy natural
-                            scout_maneuver.add(
-                                PathUnitToTarget(
-                                unit=scout, 
-                                grid=grid,
-                                target=enemy_natural
-                                )
-                            )
-                            
-                            scout_maneuver.add(
-                                UseAbility(
-                                    unit=scout,
-                                    ability=AbilityId.HOLDPOSITION
-                                )
-                            )
-                            bot.register_behavior(scout_maneuver)
-                            print(f"Scout registered to path to enemy natural {enemy_natural}")
+                    # No expansion detected, trigger one base reaction
+                    one_base_reaction(bot)
                     
-                    # Check at 3:30 if still no expansion
-                    if bot.time > 3.5 * 60:
-                        if not bot.mediator.get_enemy_expanded:
-                            bot._used_one_base_response = True
-                            print("Enemy hasn't expanded by 3:30, triggering one-base reaction")
-                        
-                        # Always remove scout role at 3:30
-                        for scout in scout_units:
-                            bot.mediator.clear_unit_role(scout.tag, UnitRole.BUILD_RUNNER_SCOUT)
+                    # switch roles back to gathering
+                    for scout in scout_units:
+                        bot.mediator.switch_roles(
+                            from_role=UnitRole.SCOUTING, to_role=UnitRole.GATHERING
+                        )
+                else:
+                    # Enemy has expanded, continue scouting or other logic
+                    pass
             else:
-                # Enemy natural not visible, move scout to explore
+                # Enemy natural not visible, path scout to natural
                 for scout in scout_units:
-                    # If before 3:30, path to enemy natural
-                    if bot.time <= 3.5 * 60:
-                        scout_maneuver.add(
-                                PathUnitToTarget(
-                                unit=scout, 
-                                grid=grid,
-                                target=enemy_natural
-                            )
+                    bot.register_behavior(
+                        PathUnitToTarget(
+                            unit=scout, 
+                            grid=grid,
+                            target=enemy_natural
                         )
-                        
-                        scout_maneuver.add(
-                            UseAbility(
-                                unit=scout,
-                                ability=AbilityId.HOLDPOSITION
-                            )
-                        )
-                        bot.register_behavior(scout_maneuver)
-                        print(f"Scout pathing to enemy natural at {enemy_natural}")
+                    )

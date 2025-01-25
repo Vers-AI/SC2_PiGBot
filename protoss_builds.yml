@@ -41,8 +41,9 @@ Builds:
         OpeningBuildOrder:
             - 14 PYLON @ NAT
             - 16 GATEWAY @ NAT
-            - 16 WORKER_SCOUT
             - 16 CHRONO @ NEXUS
+            - 16 WORKER_SCOUT:
+                [enemy_spawn, enemy_nat, map_center, fourth,third, nat,spawn, enemy_nat]
             - 16 GAS
             - 20 EXPAND
             - 20 CORE @ NAT
