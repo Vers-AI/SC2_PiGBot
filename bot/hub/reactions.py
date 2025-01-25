@@ -76,13 +76,6 @@ def early_threat_sensor(bot):
     Detects early threats like zergling rush, proxy zealots, etc.
     Sets flags so the bot can respond (e.g., cheese_reaction).
     """
-    
-    # Get scout units from build runner
-    scout_units = bot.mediator.get_units_from_role(
-        role=UnitRole.BUILD_RUNNER_SCOUT, 
-        unit_type=bot.worker_type
-    )
-
     if bot.mediator.get_enemy_worker_rushed:
         print("Rushed worker detected")
 
@@ -98,7 +91,7 @@ def early_threat_sensor(bot):
     ):
         bot._used_cheese_response = True
     
-    # New scout control logic
+    # Probe Enemy Natural Scout
     elif bot.time > 2 * 60:
         # Get enemy natural location
         enemy_natural = bot.mediator.get_enemy_nat
@@ -110,6 +103,7 @@ def early_threat_sensor(bot):
             role=UnitRole.BUILD_RUNNER_SCOUT, 
             unit_type=bot.worker_type
         )
+        print(f"Scout unit(s): {scout_units}")
         
         # Only proceed if scout units exist
         if scout_units:
@@ -155,11 +149,19 @@ def early_threat_sensor(bot):
                 for scout in scout_units:
                     # If before 3:30, path to enemy natural
                     if bot.time <= 3.5 * 60:
-                        bot.register_behavior(
-                            PathUnitToTarget(
+                        scout_maneuver.add(
+                                PathUnitToTarget(
                                 unit=scout, 
                                 grid=grid,
                                 target=enemy_natural
                             )
                         )
+                        
+                        scout_maneuver.add(
+                            UseAbility(
+                                unit=scout,
+                                ability=AbilityId.HOLDPOSITION
+                            )
+                        )
+                        bot.register_behavior(scout_maneuver)
                         print(f"Scout pathing to enemy natural at {enemy_natural}")
