@@ -67,7 +67,8 @@ def cheese_reaction(bot):
 def one_base_reaction(bot):
     bot.build_order_runner.switch_opening("One_Base_Reaction_Build")
 
-    # Set the flag if the build order is completed
+    # Set the flags for 1 base reaction
+    bot._used_one_base_response = True
     if bot.build_order_runner.build_completed:
         bot._one_base_reaction_completed = True
 
@@ -91,8 +92,8 @@ def early_threat_sensor(bot):
     ):
         bot._used_cheese_response = True
     
-    # Probe Enemy Natural Scout
-    elif bot.time > 3.5 * 60:
+    # Scouting for Enemy 1 base build 
+    elif bot.time > 3.30 * 60 and not bot._used_one_base_response:
         # Get enemy natural location
         enemy_natural = bot.mediator.get_enemy_nat
         grid: np.ndarray = bot.mediator.get_ground_grid
@@ -138,3 +139,9 @@ def early_threat_sensor(bot):
                             target=enemy_natural
                         )
                     )
+        else:
+            # If no scout units, grab one worker to scout
+            if worker := bot.mediator.select_worker(
+                target_position=bot.mediator.get_enemy_nat, force_close=True
+            ):
+                bot.mediator.assign_role(tag=worker.tag, role=UnitRole.SCOUTING)
