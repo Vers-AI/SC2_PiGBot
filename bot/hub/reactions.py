@@ -9,7 +9,8 @@ from sc2.position import Point2
 
 # Ares imports
 from ares.consts import UnitRole
-from ares.behaviors.combat.individual import PathUnitToTarget
+from ares.behaviors.combat.individual import PathUnitToTarget, UseAbility
+from ares.behaviors.combat import CombatManeuver
 from ares.managers.manager_mediator import ManagerMediator
 
 
@@ -102,6 +103,7 @@ def early_threat_sensor(bot):
         # Get enemy natural location
         enemy_natural = bot.mediator.get_enemy_nat
         grid: np.ndarray = bot.mediator.get_ground_grid
+        scout_maneuver : CombatManeuver = CombatManeuver()
 
         # Retrieve scout units from build runner
         scout_units: Units = bot.mediator.get_units_from_role(
@@ -121,13 +123,22 @@ def early_threat_sensor(bot):
                     for scout in scout_units:
                         # If before 3:30, path to and hold at enemy natural
                         if bot.time <= 3.5 * 60:
-                            bot.register_behavior(
+                            # Path to enemy natural
+                            scout_maneuver.add(
                                 PathUnitToTarget(
-                                    unit=scout, 
-                                    grid=grid,
-                                    target=enemy_natural
+                                unit=scout, 
+                                grid=grid,
+                                target=enemy_natural
                                 )
                             )
+                            
+                            scout_maneuver.add(
+                                UseAbility(
+                                    unit=scout,
+                                    ability=AbilityId.HOLDPOSITION
+                                )
+                            )
+                            bot.register_behavior(scout_maneuver)
                             print(f"Scout registered to path to enemy natural {enemy_natural}")
                     
                     # Check at 3:30 if still no expansion
