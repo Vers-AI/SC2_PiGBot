@@ -4,6 +4,7 @@ from sc2.position import Point2
 from sc2.units import Units
 from sc2.unit import Unit
 from sc2.ids.unit_typeid import UnitTypeId
+from sc2.ids.ability_id import AbilityId
 
 from ares.behaviors.combat import CombatManeuver
 from ares.behaviors.combat.individual import (
@@ -132,14 +133,14 @@ def warp_prism_follower(bot, warp_prisms: Units, main_army: Units) -> None:
 
             # If close, morph to Phasing
             if distance_to_center < 15 and prism.is_idle:
-                prism.morph(UnitTypeId.WARPPRISMPHASINGMODE)
+                prism(AbilityId.MORPH_WARPPRISMPHASINGMODE)
             else:
                 # If no warpin in progress, revert to Transport
                 # Or simply path near the army
                 if prism.type_id == UnitTypeId.WARPPRISMPHASING:
                     not_ready_units = [unit for unit in bot.units if not unit.is_ready and unit.distance_to(prism) < 6.5]
                     if not not_ready_units:
-                        prism.morph(UnitTypeId.WARPPRISM)
+                        prism(AbilityId.MORPH_WARPPRISMTRANSPORTMODE)
 
                 # Keep prism ~5 distance behind the army center
                 direction_vector = (prism.position - main_army.center).normalized
@@ -290,7 +291,7 @@ def attack_target(bot, main_army_position: Point2) -> Point2:
         if closest_structure.distance_to(main_army_position) > 25.0:
             return fallback_target(bot)
         
-        return closest_structure.position
+        return Point2(closest_structure.position)
         
     # Not seen anything in early game, just head to enemy spawn
     elif bot.time < 240.0:

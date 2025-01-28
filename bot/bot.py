@@ -10,6 +10,8 @@ from ares.consts import ALL_STRUCTURES, WORKER_TYPES, UnitRole
 
 from ares.managers.manager_mediator import ManagerMediator
 from ares.managers.manager import Manager
+from ares.managers.squad_manager import UnitSquad
+
 
 # Cython or custom references
 from cython_extensions import (
