@@ -7,6 +7,7 @@ from sc2.position import Point2
 from ares.behaviors.combat import CombatManeuver
 from ares.behaviors.combat.individual import KeepUnitSafe, PathUnitToTarget
 from ares.consts import UnitRole, UnitTreeQueryType
+from bot.hub.combat import attack_target
 
 
 def control_scout(bot, scout_units: Units, main_army: Units) -> None:
@@ -41,9 +42,7 @@ def control_scout(bot, scout_units: Units, main_army: Units) -> None:
             else:
                 # Follow army at some offset
                 direction_vector = (main_army.center - scout.position).normalized
-                # e.g., 15 distance in front, or behind, or to the side
-                # depending on how you want them to 'shadow' the army
-                follow_target = main_army.center.towards(bot.attack_target, 15) - direction_vector * scout.radius
+                follow_target = main_army.center.towards(attack_target(bot, bot.main_army_position), 15) - direction_vector * scout.radius
                 scout_actions.add(
                     PathUnitToTarget(
                         unit=scout,

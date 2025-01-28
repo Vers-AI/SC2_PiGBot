@@ -28,7 +28,13 @@ from sc2.units import Units
 
 # Modular imports for separated concerns
 from bot.hub.macro import handle_macro, worker_production
-from bot.hub.combat import threat_detection, control_main_army, warp_prism_follower, handle_attack_toggles  # Import the new function
+from bot.hub.combat import (
+    attack_target,
+    control_main_army,
+    threat_detection,
+    warp_prism_follower,
+    handle_attack_toggles
+)
 from bot.hub.scouting import control_scout
 from ares.behaviors.macro import Mining
 from bot.hub.reactions import (
@@ -92,71 +98,7 @@ class PiG_Bot(AresBot):
         self._one_base_reaction_completed = False
         self._is_building = False
 
-        
 
-    @property
-    def attack_target(self) -> Point2:
-        """
-        Determines where our main attacking units should move toward.
-        If we see an enemy structure, we target the closest one. Otherwise,
-        we may fallback to expansions or the enemy start location.
-        """
-        # Ensure squads are initialized
-        if not self.mediator.get_squads(role=UnitRole.ATTACKING):
-            print("No squads found for ATTACKING role. Returning default target.")
-            return self.enemy_start_locations[0]  # Default to enemy start location
-
-        main_army_position = self.mediator.get_position_of_main_squad(role=UnitRole.ATTACKING)
-
-        # If enemy structures are visible, choose nearest
-        if self.enemy_structures:
-            closest_structure = cy_closest_to(main_army_position, self.enemy_structures).position
-            if closest_structure.distance_to(main_army_position) > 25.0:
-                return self.fallback_target
-            return closest_structure.position
-
-        # Before 4 minutes, assume enemy is at known start location
-        elif self.time < 240.0:
-            return self.enemy_start_locations[0]
-
-        # Otherwise cycle expansions as a fallback search pattern
-        else:
-            if self.is_visible(self.current_base_target):
-                self.current_base_target = next(self.expansions_generator)
-            return self.current_base_target
-
-    @property
-    def fallback_target(self) -> Point2:
-        """
-        A backup target if the main target isn't valid or is too far.
-        Cycles expansions to find potential enemy bases.
-        """
-        if self.is_visible(self.current_base_target):
-            self.current_base_target = next(self.expansions_generator)
-        return self.current_base_target
-
-    @property
-    def Standard_Army(self) -> dict:
-        """
-        Composition for general, non-cheese play.
-        """
-        return {
-            UnitTypeId.IMMORTAL: {"proportion": 0.2, "priority": 2},
-            UnitTypeId.COLOSSUS: {"proportion": 0.1, "priority": 3},
-            UnitTypeId.HIGHTEMPLAR: {"proportion": 0.45, "priority": 1},
-            UnitTypeId.ZEALOT: {"proportion": 0.25, "priority": 0},
-        }
-
-    @property
-    def cheese_defense_army(self) -> dict:
-        """
-        Composition specifically for defending early aggression or cheese.
-        """
-        return {
-            UnitTypeId.ZEALOT: {"proportion": 0.5, "priority": 0},
-            UnitTypeId.STALKER: {"proportion": 0.4, "priority": 1},
-            UnitTypeId.ADEPT: {"proportion": 0.1, "priority": 2},
-        }
 
     async def on_start(self) -> None:
         """
@@ -195,6 +137,9 @@ class PiG_Bot(AresBot):
         warp_prism = self.mediator.get_units_from_role(role=UnitRole.DROP_SHIP)
         scout_units = self.mediator.get_units_from_role(role=UnitRole.SCOUTING)
 
+        # Create Squad
+        squads: list[UnitSquad] = self.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15)
+
         # If not under attack and build order isn't done, do an early threat check
         if not self._under_attack and not self.build_order_runner.build_completed:
             early_threat_sensor(self)
@@ -221,11 +166,12 @@ class PiG_Bot(AresBot):
 
         # Handle attack toggles if main_army exists
         if main_army:
-            handle_attack_toggles(self, main_army, self.attack_target)
+            self.main_army_position = self.mediator.get_position_of_main_squad(role=UnitRole.ATTACKING)
+            handle_attack_toggles(self, main_army, attack_target(self, main_army_position=self.main_army_position))
 
         # Optionally control main army or warp prism outside macro
         if self._commenced_attack and main_army:
-            control_main_army(self, main_army, self.attack_target)
+            control_main_army(self, main_army, attack_target(self, main_army_position=self.main_army_position), squads)
         if warp_prism:
             warp_prism_follower(self, warp_prism, main_army)
 
@@ -336,3 +282,26 @@ class PiG_Bot(AresBot):
         by pulling and microing worker units.
         """
         defend_worker_cannon_rush(self, enemy_probes, enemy_cannons)
+
+    @property
+    def Standard_Army(self) -> dict:
+        """
+        Composition for general, non-cheese play.
+        """
+        return {
+            UnitTypeId.IMMORTAL: {"proportion": 0.2, "priority": 2},
+            UnitTypeId.COLOSSUS: {"proportion": 0.1, "priority": 3},
+            UnitTypeId.HIGHTEMPLAR: {"proportion": 0.45, "priority": 1},
+            UnitTypeId.ZEALOT: {"proportion": 0.25, "priority": 0},
+        }
+
+    @property
+    def cheese_defense_army(self) -> dict:
+        """
+        Composition specifically for defending early aggression or cheese.
+        """
+        return {
+            UnitTypeId.ZEALOT: {"proportion": 0.5, "priority": 0},
+            UnitTypeId.STALKER: {"proportion": 0.4, "priority": 1},
+            UnitTypeId.ADEPT: {"proportion": 0.1, "priority": 2},
+        }

@@ -122,7 +122,7 @@ async def handle_macro(
 
     # Warp Prism follows main army
     if warp_prism:
-        bot.Warp_Prism_Follower(warp_prism, main_army)
+        bot.warp_prism_follower(warp_prism, main_army)
 
     # Merge Archons if we have at least 2 High Templars
     if bot.units(UnitTypeId.HIGHTEMPLAR).amount >= 2:

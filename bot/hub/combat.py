@@ -17,7 +17,7 @@ from ares.consts import UnitRole, UnitTreeQueryType
 
 from cython_extensions import (
    
-    cy_find_units_center_mass, cy_pick_enemy_target
+    cy_find_units_center_mass, cy_pick_enemy_target, cy_closest_to
     
 )
 
@@ -45,14 +45,13 @@ COMMON_UNIT_IGNORE_TYPES: set[UnitTypeId] = {
 }
 
 
-def control_main_army(bot, main_army: Units, target: Point2) -> None:
+def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSquad]) -> Point2:
     """
     Controls the main army's movement and engagement logic.
     """
-    squads: list[UnitSquad] = bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15)
     pos_of_main_squad: Point2 = bot.mediator.get_position_of_main_squad(role=UnitRole.ATTACKING)
     grid: np.ndarray = bot.mediator.get_ground_grid
-
+    
     if main_army:
         bot.total_health_shield_percentage = (
             sum(unit.shield_health_percentage for unit in main_army) / len(main_army)
@@ -115,6 +114,8 @@ def control_main_army(bot, main_army: Units, target: Point2) -> None:
 
             bot.register_behavior(maneuver)
 
+    return pos_of_main_squad
+
 
 def warp_prism_follower(bot, warp_prisms: Units, main_army: Units) -> None:
     """
@@ -158,7 +159,7 @@ def warp_prism_follower(bot, warp_prisms: Units, main_army: Units) -> None:
     bot.register_behavior(maneuver)
 
 
-def assess_threat(bot, enemy_units: Units, own_forces: Units) -> int:
+def assess_threat(bot, enemy_units: Units, own_forces: Units) -> int: #TODO check why units aren't responding to enemy
     """
     Assigns a 'threat level' based on unit composition.
     You can refine logic to suit your needs.
@@ -256,7 +257,7 @@ def threat_detection(bot, main_army: Units) -> None:
                 else:
                     bot._under_attack = False
                 if bot._under_attack:
-                    control_main_army(bot, main_army, threat_position)
+                    control_main_army(bot, main_army, threat_position, bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
                     if bot._one_base_reaction_completed:
                         bot.use_overcharge(main_army)
 
@@ -269,6 +270,44 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
     if current_supply <= bot._begin_attack_at_supply:
         bot._commenced_attack = False
     elif bot._commenced_attack and not bot._under_attack:
-        control_main_army(bot, main_army, attack_target)
+        control_main_army(bot, main_army, attack_target, bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
     elif current_supply >= bot._begin_attack_at_supply:
         bot._commenced_attack = True
+
+
+def attack_target(bot, main_army_position: Point2) -> Point2:
+    """
+    Determines where our main attacking units should move toward.
+    If we see an enemy structure, we target the closest one. Otherwise,
+    we may fallback to expansions or the enemy start location.
+    """
+
+    if bot.enemy_structures:
+        # Prioritize the closest enemy structure to the main army
+        closest_structure = cy_closest_to(main_army_position, bot.enemy_structures).position
+        
+        # Check if the closest structure is far away and if so, fallback to a stable target
+        if closest_structure.distance_to(main_army_position) > 25.0:
+            return fallback_target(bot)
+        
+        return closest_structure.position
+        
+    # Not seen anything in early game, just head to enemy spawn
+    elif bot.time < 240.0:
+        return bot.enemy_start_locations[0]
+    
+    # Else search the map
+    else:
+        return fallback_target(bot)
+
+
+def fallback_target(bot) -> Point2:
+    """
+    Provides a fallback target for the main army when no clear target is available.
+    Cycles through expansion locations.
+    """
+    # Cycle through expansion locations
+    if bot.is_visible(bot.current_base_target):
+        bot.current_base_target = next(bot.expansions_generator)
+    
+    return bot.current_base_target
