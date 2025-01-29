@@ -1,9 +1,9 @@
 {
+    "typeCheckingMode": "basic",
     "extraPaths": [
         "ares-sc2/src/ares",
         "ares-sc2/src",
         "ares-sc2"
     ],
-    "pythonVersion": "3.11",
-    "typeCheckingMode": "basic"
+    "pythonVersion": "3.11"
 }
