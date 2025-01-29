@@ -8,15 +8,7 @@ import numpy as np
 from ares import AresBot
 from ares.consts import ALL_STRUCTURES, WORKER_TYPES, UnitRole
 
-from ares.managers.manager_mediator import ManagerMediator
-from ares.managers.manager import Manager
 from ares.managers.squad_manager import UnitSquad
-
-
-# Cython or custom references
-from cython_extensions import (
-    cy_closest_to,
-)
 
 # SC2-related imports
 from sc2.data import Result
@@ -119,7 +111,7 @@ class PiG_Bot(AresBot):
         self.scout_targets = self.expansion_locations_list
 
         # Reserve expansions and set flags
-        self.natural_expansion = await self.get_next_expansion()
+        self.natural_expansion: Point2 = await self.get_next_expansion()
         self._begin_attack_at_supply = 25.0
         self.expansions_generator = cycle(self.expansion_locations_list)
         self.freeflow = self.minerals > 800 and self.vespene < 200
@@ -203,12 +195,12 @@ class PiG_Bot(AresBot):
             return
         if unit.type_id == UnitTypeId.WARPPRISM:
             self.mediator.assign_role(tag=unit.tag, role=UnitRole.DROP_SHIP)
-            unit.move(self.natural_expansion.towards(self.game_info.map_center, 1))
+            unit.move(Point2(self.natural_expansion.towards(self.game_info.map_center, 1)))
             return
 
         # Default: Attacking role
         self.mediator.assign_role(tag=unit.tag, role=UnitRole.ATTACKING)
-        unit.attack(self.natural_expansion.towards(self.game_info.map_center, 2))
+        unit.attack(Point2(self.natural_expansion.towards(self.game_info.map_center, 2)))
 
     async def on_unit_took_damage(self, unit: Unit, amount_damage_taken: float) -> None:
         """
