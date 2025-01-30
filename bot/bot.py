@@ -9,6 +9,8 @@ from ares import AresBot
 from ares.consts import ALL_STRUCTURES, WORKER_TYPES, UnitRole
 
 from ares.managers.squad_manager import UnitSquad
+from ares.managers.manager_mediator import ManagerMediator
+
 
 # SC2-related imports
 from sc2.data import Result
@@ -166,8 +168,9 @@ class PiG_Bot(AresBot):
         # Optionally control main army or warp prism outside macro
         if self._commenced_attack and main_army:
             control_main_army(self, main_army, attack_target(self, main_army_position=self.main_army_position), squads)
-        if warp_prism:
-            warp_prism_follower(self, warp_prism, main_army)
+        
+        # Warp Prism following main army
+        warp_prism_follower(self, warp_prism, main_army)
 
         # Scouting actions
         control_scout(self, scout_units, main_army)

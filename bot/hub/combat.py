@@ -122,30 +122,30 @@ def warp_prism_follower(bot, warp_prisms: Units, main_army: Units) -> None:
     """
     Controls Warp Prisms: follows army, morphs between Transport/Phasing.
     """
-    air_grid = bot.mediator.get_air_grid
+    air_grid: np.ndarray = bot.mediator.get_air_grid
     if not warp_prisms:
         return
 
-    maneuver = CombatManeuver()
+    maneuver: CombatManeuver = CombatManeuver()
     for prism in warp_prisms:
         if main_army:
             distance_to_center = prism.distance_to(main_army.center)
 
             # If close, morph to Phasing
-            if distance_to_center < 15 and prism.is_idle:
+            if distance_to_center < 15:
                 prism(AbilityId.MORPH_WARPPRISMPHASINGMODE)
             else:
                 # If no warpin in progress, revert to Transport
                 # Or simply path near the army
-                if prism.type_id == UnitTypeId.WARPPRISMPHASING:
-                    not_ready_units = [unit for unit in bot.units if not unit.is_ready and unit.distance_to(prism) < 6.5]
-                    if not not_ready_units:
+                not_ready_units = [unit for unit in bot.units if not unit.is_ready and unit.distance_to(prism) < 6.5]
+                if prism.type_id == UnitTypeId.WARPPRISMPHASING and not not_ready_units:
                         prism(AbilityId.MORPH_WARPPRISMTRANSPORTMODE)
 
-                # Keep prism ~5 distance behind the army center
-                direction_vector = (prism.position - main_army.center).normalized
-                new_target = main_army.center + direction_vector * 5
-                maneuver.add(PathUnitToTarget(unit=prism, target=new_target, grid=air_grid, danger_distance=10))
+                elif prism.type_id == UnitTypeId.WARPPRISM:
+                    # Keep prism ~5 distance behind the army center
+                    direction_vector = (prism.position - main_army.center).normalized
+                    new_target = main_army.center + direction_vector * 5
+                    maneuver.add(PathUnitToTarget(unit=prism, target=new_target, grid=air_grid, danger_distance=10))
         else:
             # If no main army, just retreat to natural (or wherever)
             maneuver.add(
