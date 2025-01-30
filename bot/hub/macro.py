@@ -10,7 +10,9 @@ from ares.behaviors.macro import (
     SpawnController,
     MacroPlan,
     AutoSupply,
-    BuildStructure,
+    BuildWorkers,
+    ExpansionController,
+    GasBuildingController,
 )
 from ares.consts import UnitRole
 
@@ -71,12 +73,12 @@ async def handle_macro(
         # If we finished initial cheese response, maybe expand or produce a defense plan
         if bot._cheese_reaction_completed:
             if not bot._under_attack:
-                if bot.townhalls.ready.amount <= 1 and bot.structure_pending(UnitTypeId.NEXUS) == 0:
-                    if bot.can_afford(UnitTypeId.NEXUS):
-                        await bot.expand_to_next_location()
-                elif bot.townhalls.ready.amount <= 2 and bot.structure_pending(UnitTypeId.NEXUS) == 0:
-                    if bot.can_afford(UnitTypeId.NEXUS):
-                        await bot.expand_to_next_location()
+                bot.register_behavior(
+                    ExpansionController(to_count=3, max_pending=1)
+                )
+                bot.register_behavior(
+                    GasBuildingController(to_count=len(bot.townhalls)*2, max_pending=2)
+                )
 
             # Build a cheese defense plan
             cheese_defense_plan = MacroPlan()
@@ -97,12 +99,14 @@ async def handle_macro(
 
     # Build extra probes
     if bot._used_cheese_response and bot.townhalls.ready.amount <= 2 and bot.workers.amount < 44:
-        if bot.can_afford(UnitTypeId.PROBE):
-            bot.train(UnitTypeId.PROBE)
+        bot.register_behavior(
+            BuildWorkers(to_count=44)
+        )
         _chrono_townhalls(bot)
     elif bot.townhalls.ready.amount == 3 and bot.workers.amount < 66:
-        if bot.can_afford(UnitTypeId.PROBE):
-            bot.train(UnitTypeId.PROBE)
+        bot.register_behavior(
+            BuildWorkers(to_count=66)
+        )
         _chrono_townhalls(bot)
 
     # If something went horribly wrong with the build order, mark it as complete
@@ -120,9 +124,7 @@ async def handle_macro(
                     and bot.can_afford(UnitTypeId.OBSERVER)):
                     bot.train(UnitTypeId.OBSERVER)
 
-    # Warp Prism follows main army
-    if warp_prism:
-        bot.warp_prism_follower(warp_prism, main_army)
+    
 
     # Merge Archons if we have at least 2 High Templars
     if bot.units(UnitTypeId.HIGHTEMPLAR).amount >= 2:
