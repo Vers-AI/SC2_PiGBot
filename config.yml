@@ -11,7 +11,7 @@ AutoUploadToAiarena: False
 ########################
 
 UseData: False
-Debug: False
+Debug: True
 GameStep: 4
 DebugGameStep: 2
 
@@ -20,5 +20,5 @@ DebugOptions:
     ActiveGrid: Ground
     ChatDebug: False
     DebugSpawn: False
-    ShowPathingCost: False
-    ResourceDebug: False
+    ShowPathingCost: True
+    ResourceDebug: True
