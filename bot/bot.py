@@ -23,7 +23,7 @@ from sc2.units import Units
 
 
 # Modular imports for separated concerns
-from bot.hub.macro import handle_macro, worker_production
+from bot.hub.macro import handle_macro
 from bot.hub.combat import (
     attack_target,
     control_main_army,
@@ -155,7 +155,6 @@ class PiG_Bot(AresBot):
             scout_units=scout_units,
             freeflow=self.freeflow,
         )
-        worker_production(self)
 
         # Run combat-oriented threat detection
         threat_detection(self, main_army)
