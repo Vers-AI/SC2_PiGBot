@@ -64,21 +64,14 @@ async def handle_macro(
         bot.register_behavior(macro_plan)
 
     # If we detected cheese
-    elif bot._used_cheese_response:
-        bot.cheese_reaction()  # Example: a function from your reactions module
-
-        if not bot.build_order_runner.build_completed:
-            bot.build_order_runner.set_build_completed()
-
-        # If we finished initial cheese response, maybe expand or produce a defense plan
-        if bot._cheese_reaction_completed:
-            if not bot._under_attack:
-                bot.register_behavior(
-                    ExpansionController(to_count=3, max_pending=1)
-                )
-                bot.register_behavior(
-                    GasBuildingController(to_count=len(bot.townhalls)*2, max_pending=2)
-                )
+    elif bot._cheese_reaction_completed:
+        if not bot._under_attack:
+            bot.register_behavior(
+                ExpansionController(to_count=3, max_pending=1)
+            )
+            bot.register_behavior(
+                GasBuildingController(to_count=len(bot.townhalls)*2, max_pending=2)
+            )
 
             # Build a cheese defense plan
             cheese_defense_plan = MacroPlan()
@@ -92,26 +85,18 @@ async def handle_macro(
 
             bot.register_behavior(cheese_defense_plan)
 
-    # If we detected a one-base play
-    if bot._used_one_base_response:
-        one_base_reaction(bot)
+        # Build extra probes
+        if bot.townhalls.ready.amount <= 2 and bot.workers.amount < 44:
+            bot.register_behavior(
+                BuildWorkers(to_count=44)
+            )
+            _chrono_townhalls(bot)
+        elif bot.townhalls.ready.amount == 3 and bot.workers.amount < 66:
+            bot.register_behavior(
+                BuildWorkers(to_count=66)
+            )
+            _chrono_townhalls(bot)
 
-
-    # Build extra probes
-    if bot._used_cheese_response and bot.townhalls.ready.amount <= 2 and bot.workers.amount < 44:
-        bot.register_behavior(
-            BuildWorkers(to_count=44)
-        )
-        _chrono_townhalls(bot)
-    elif bot.townhalls.ready.amount == 3 and bot.workers.amount < 66:
-        bot.register_behavior(
-            BuildWorkers(to_count=66)
-        )
-        _chrono_townhalls(bot)
-
-    # If something went horribly wrong with the build order, mark it as complete
-    if bot.minerals > 2500 and not bot.build_order_runner.build_completed:
-        bot.build_order_runner.set_build_completed()
 
     # Scout control or build observer if no scout
     if scout_units and main_army:
@@ -131,16 +116,6 @@ async def handle_macro(
         for templar in bot.units(UnitTypeId.HIGHTEMPLAR).ready:
             templar(AbilityId.MORPH_ARCHON)
 
-
-def worker_production(bot) -> None:
-    """
-    Simple separate function for worker production logic if desired.
-    Could be merged into handle_macro if you like.
-    """
-    # Example check:
-    if bot.townhalls.ready and bot.workers.amount < 70:
-        if bot.can_afford(UnitTypeId.PROBE):
-            bot.train(UnitTypeId.PROBE)
 
 
 def _chrono_townhalls(bot) -> None:
