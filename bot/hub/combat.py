@@ -286,9 +286,10 @@ def attack_target(bot, main_army_position: Point2) -> Point2:
     if bot.enemy_structures:
         # Prioritize the closest enemy structure to the main army
         closest_structure = cy_closest_to(main_army_position, bot.enemy_structures).position
+        print(closest_structure)
         
         # Check if the closest structure is far away and if so, fallback to a stable target
-        if closest_structure.distance_to(main_army_position) > 25.0:
+        if closest_structure.distance_to(main_army_position) > 30.0:
             return fallback_target(bot)
         
         return Point2(closest_structure.position)
