@@ -181,7 +181,7 @@ class PiG_Bot(AresBot):
                 templar(AbilityId.MORPH_ARCHON)
 
         # Fail-safe if build order still not done but we have too many minerals
-        if self.minerals > 2500 and not self.build_order_runner.build_completed:
+        if self.minerals > 2800 and not self.build_order_runner.build_completed:
             self.build_order_runner.set_build_completed()
 
     async def on_unit_created(self, unit: Unit) -> None:
