@@ -142,9 +142,9 @@ def warp_prism_follower(bot, warp_prisms: Units, main_army: Units) -> None:
                         prism(AbilityId.MORPH_WARPPRISMTRANSPORTMODE)
 
                 elif prism.type_id == UnitTypeId.WARPPRISM:
-                    # Keep prism ~5 distance behind the army center
+                    # Keep prism ~3 distance behind the army center
                     direction_vector = (prism.position - main_army.center).normalized
-                    new_target = main_army.center + direction_vector * 5
+                    new_target = main_army.center + direction_vector * 3
                     maneuver.add(PathUnitToTarget(unit=prism, target=new_target, grid=air_grid, danger_distance=10))
         else:
             # If no main army, just retreat to natural (or wherever)
