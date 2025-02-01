@@ -113,7 +113,7 @@ def early_threat_sensor(bot):
         )
 
         # Check if scout units exist
-        if scout_units:
+        if scout_units: #TODO need to create a condition that makes sure the probe doesn't come out forever
             # Check if enemy natural is visible
             if bot.is_visible(enemy_natural):
                 # Check if enemy has expanded

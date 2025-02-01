@@ -10,7 +10,7 @@ from ares.consts import UnitRole, UnitTreeQueryType
 from bot.hub.combat import attack_target
 
 
-def control_scout(bot, scout_units: Units, main_army: Units) -> None:
+def control_scout(bot, scout_units: Units, main_army: Units) -> None: #TODO figure out why observer isn't moving straight to target and not scouting to locaions
     """
     Controls your scouting units: decides whether to follow the main army
     or visit expansion locations when safe.
