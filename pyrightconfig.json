@@ -1,12 +1,13 @@
 {
     "typeCheckingMode": "basic",
+    "exclude": [
+        "bot/Episodes/**"
+    ],
     "extraPaths": [
         "ares-sc2/src/ares",
         "ares-sc2/src",
         "ares-sc2"
     ],
     "pythonVersion": "3.11",
-    "exclude": [
-        "bot/Episodes/Episode3.py"
-    ]
+    
 }
