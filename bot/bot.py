@@ -113,7 +113,7 @@ class PiG_Bot(AresBot):
         self.scout_targets = self.expansion_locations_list
 
         # Reserve expansions and set flags
-        self.natural_expansion: Point2 = await self.get_next_expansion()
+        self.natural_expansion: Point2 = self.expansion_locations_list[-2]
         self._begin_attack_at_supply = 25.0
         self.expansions_generator = cycle(self.expansion_locations_list)
         self.freeflow = self.minerals > 800 and self.vespene < 200

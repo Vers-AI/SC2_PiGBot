@@ -111,7 +111,7 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     )
                 )
             else:
-                maneuver.add(AMoveGroup(group=units, group_tags=squad_tags, target=target.position))
+                maneuver.add(AMoveGroup(group=units, group_tags=squad_tags, target=target))
 
             bot.register_behavior(maneuver)
 
