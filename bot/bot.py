@@ -226,22 +226,7 @@ class PiG_Bot(AresBot):
     # -------------------------------------
     # Utility / Additional Methods
     # -------------------------------------
-    async def expand_to_next_location(self) -> None:
-        """
-        Triggered when we decide to expand to another base location.
-        Chooses a worker and instructs it to build a Nexus.
-        """
-        if next_expand_loc := await self.get_next_expansion():
-            if worker := self.mediator.select_worker(
-                target_position=next_expand_loc,
-                force_close=True,
-            ):
-                self.mediator.build_with_specific_worker(
-                    worker=worker,
-                    structure_type=UnitTypeId.NEXUS,
-                    pos=next_expand_loc,
-                )
-
+    
     def use_overcharge(self, main_army: Units) -> bool:
         """
         Checks conditions for Shield Battery Overcharge if army is near 

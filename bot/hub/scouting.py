@@ -55,8 +55,6 @@ def control_scout(bot, scout_units: Units, main_army: Units) -> None: #TODO figu
     else:
         # Peaceful scouting: move scout around expansions or enemy start
         # Create a list of potential scout targets
-        # This is your old `targets = self.expansion_locations_list[:5] + [self.enemy_start_locations[0]]`
-        # Adjust or parametrize as desired
         targets = bot.expansion_locations_list[:5] + [bot.enemy_start_locations[0]]
 
         # If we haven't assigned a current scout target, do so
