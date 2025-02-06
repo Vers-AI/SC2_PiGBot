@@ -93,7 +93,7 @@ def early_threat_sensor(bot):
         bot._used_cheese_response = True
     
     # Scouting for Enemy 1 base build 
-    elif bot.time > 3.30 * 60 and not bot._used_one_base_response:
+    elif 2.5 * 60 < bot.time < 3.5 * 60 and not bot.mediator.get_enemy_expanded:
         # Get enemy natural location
         enemy_natural = bot.mediator.get_enemy_nat
         grid: np.ndarray = bot.mediator.get_ground_grid
@@ -113,7 +113,7 @@ def early_threat_sensor(bot):
         )
 
         # Check if scout units exist
-        if scout_units: #TODO need to create a condition that makes sure the probe doesn't come out forever
+        if scout_units: 
             # Check if enemy natural is visible
             if bot.is_visible(enemy_natural):
                 # Check if enemy has expanded
