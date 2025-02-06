@@ -51,7 +51,16 @@ async def handle_macro(
         macro_plan = MacroPlan()
         macro_plan.add(AutoSupply(base_location=bot.start_location))
         macro_plan.add(ProductionController(STANDARD_ARMY, base_location=bot.start_location))
-
+        bot.register_behavior(
+                GasBuildingController(to_count=len(bot.townhalls)*2, max_pending=2)
+            )
+        
+        if not bot._under_attack:
+            # TODO need make an optimum way of knowing when is the best time to expand
+            bot.register_behavior(
+                ExpansionController(to_count=3, max_pending=1)
+            )
+           
         # Spawn units near Warp Prism if available, else at base
         if warp_prism:
             prism_position = warp_prism[0].position
