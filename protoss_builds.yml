@@ -43,7 +43,7 @@ Builds:
             - 16 GATEWAY @ NAT
             - 16 CHRONO @ NEXUS
             - 16 WORKER_SCOUT:
-                [spawn,nat,enemy_spawn, enemy_nat, map_center, fourth,third, enemy_nat]
+                [enemy_spawn, enemy_nat, map_center, fourth,third, enemy_nat,spawn,nat,]
             - 16 GAS
             - 20 EXPAND
             - 20 CORE @ NAT
@@ -103,7 +103,7 @@ Builds:
             - 16 GATEWAY @ NAT
             - 16 CHRONO @ NEXUS
             - 16 WORKER_SCOUT:
-                [spawn,nat,enemy_spawn, enemy_nat, map_center, fourth,third, enemy_nat]
+                [enemy_spawn, enemy_nat, map_center, fourth,third, enemy_nat]
             - 16 GAS
             - 20 EXPAND
             - 20 CORE @ NAT
@@ -155,6 +155,7 @@ Builds:
 
     One_Base_Reaction_Build:
         # One base reaction Build order
+        ConstantWorkerProductionTill: 44
         OpeningBuildOrder:
             - 14 PYLON
             - 16 GATEWAY @ NAT
