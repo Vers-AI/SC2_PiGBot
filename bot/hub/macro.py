@@ -16,15 +16,16 @@ from ares.behaviors.macro import (
 )
 from ares.consts import UnitRole
 
-from bot.hub.reactions import one_base_reaction
 from bot.hub.scouting import control_scout
 
-# Army composition constants (instead of @property on a class)
+# Army composition constants 
 STANDARD_ARMY = {
     UnitTypeId.IMMORTAL: {"proportion": 0.2, "priority": 2},
     UnitTypeId.COLOSSUS: {"proportion": 0.1, "priority": 3},
-    UnitTypeId.HIGHTEMPLAR: {"proportion": 0.45, "priority": 1},
-    UnitTypeId.ZEALOT: {"proportion": 0.25, "priority": 0},
+    UnitTypeId.HIGHTEMPLAR: {"proportion": 0.35, "priority": 1},
+    UnitTypeId.DISRUPTOR: {"proportion": 0.1, "priority": 1},
+    UnitTypeId.ZEALOT: {"proportion": 0.24, "priority": 0},
+    UnitTypeId.WARPPRISM: {"proportion": 0.01, "priority": 0},
 }
 
 CHEESE_DEFENSE_ARMY = {
@@ -48,14 +49,15 @@ async def handle_macro(
     """
     # If our build is done and we haven't detected cheese, do standard macro
     if bot.build_order_runner.build_completed and not bot._used_cheese_response:
-        macro_plan = MacroPlan()
+        macro_plan: MacroPlan = MacroPlan()
         macro_plan.add(AutoSupply(base_location=bot.start_location))
         macro_plan.add(ProductionController(STANDARD_ARMY, base_location=bot.start_location))
+        bot.register_behavior(BuildWorkers(to_count=len(bot.townhalls) * 22))
         bot.register_behavior(
                 GasBuildingController(to_count=len(bot.townhalls)*2, max_pending=2)
             )
         
-        if not bot._under_attack:
+        if not bot._under_attack and bot.time > 3 * 60:
             # TODO need make an optimum way of knowing when is the best time to expand
             bot.register_behavior(
                 ExpansionController(to_count=3, max_pending=1)
@@ -65,15 +67,17 @@ async def handle_macro(
         if warp_prism:
             prism_position = warp_prism[0].position
             macro_plan.add(
-                SpawnController(STANDARD_ARMY, spawn_target=prism_position, freeflow_mode=freeflow)
+                SpawnController(STANDARD_ARMY, spawn_target=prism_position, freeflow_mode=False)
             )
         else:
-            macro_plan.add(SpawnController(STANDARD_ARMY, freeflow_mode=freeflow))
+            macro_plan.add(SpawnController(STANDARD_ARMY, freeflow_mode=False))
 
         bot.register_behavior(macro_plan)
 
     # If we detected cheese
+    #TODO have it switch to standard army if we're in the mid-game after doing cheese defense
     elif bot._cheese_reaction_completed:
+        bot.register_behavior(BuildWorkers(to_count=len(bot.townhalls) * 22))
         if not bot._under_attack:
             bot.register_behavior(
                 ExpansionController(to_count=3, max_pending=1)
@@ -83,7 +87,7 @@ async def handle_macro(
             )
 
             # Build a cheese defense plan
-            cheese_defense_plan = MacroPlan()
+            cheese_defense_plan: MacroPlan = MacroPlan()
             cheese_defense_plan.add(AutoSupply(base_location=bot.start_location))
             cheese_defense_plan.add(
                 SpawnController(CHEESE_DEFENSE_ARMY, spawn_target=bot.start_location, freeflow_mode=freeflow)
@@ -94,17 +98,7 @@ async def handle_macro(
 
             bot.register_behavior(cheese_defense_plan)
 
-        # Build extra probes
-        if bot.townhalls.ready.amount <= 2 and bot.workers.amount < 44:
-            bot.register_behavior(
-                BuildWorkers(to_count=44)
-            )
-            _chrono_townhalls(bot)
-        elif bot.townhalls.ready.amount == 3 and bot.workers.amount < 66:
-            bot.register_behavior(
-                BuildWorkers(to_count=66)
-            )
-            _chrono_townhalls(bot)
+        
 
 
     # Scout control or build observer if no scout
