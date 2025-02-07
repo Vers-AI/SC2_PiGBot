@@ -29,7 +29,8 @@ from bot.hub.combat import (
     control_main_army,
     threat_detection,
     warp_prism_follower,
-    handle_attack_toggles
+    handle_attack_toggles,
+    regroup_army
 )
 from bot.hub.scouting import control_scout
 from ares.behaviors.macro import Mining
@@ -170,6 +171,10 @@ class PiG_Bot(AresBot):
         
         # Warp Prism following main army
         warp_prism_follower(self, warp_prism, main_army)
+
+        # Check if the main army needs to regroup when not under attack or engaged in attack
+        if not self._under_attack and not self._commenced_attack and main_army:
+            regroup_army(self, main_army)
 
         # Scouting actions
         control_scout(self, scout_units, main_army)

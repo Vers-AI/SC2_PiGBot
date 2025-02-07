@@ -160,43 +160,60 @@ def warp_prism_follower(bot, warp_prisms: Units, main_army: Units) -> None:
     bot.register_behavior(maneuver)
 
 
-def assess_threat(bot, enemy_units: Units, own_forces: Units) -> int: #TODO check why units aren't responding to enemy
+def assess_threat(bot, enemy_units: Units, own_forces: Units) -> int: 
     """
     Assigns a 'threat level' based on unit composition.
     You can refine logic to suit your needs.
     """
     threat_level = 0
+    threat_weights = {
+        UnitTypeId.MARINE: 1.5, UnitTypeId.ZEALOT: 1.5, UnitTypeId.ZERGLING: 1.0,
+        UnitTypeId.ADEPT: 2.0, UnitTypeId.STALKER: 2.0, UnitTypeId.ROACH: 2.5,
+        UnitTypeId.REAPER: 1.5, UnitTypeId.MARAUDER: 3.0, UnitTypeId.SENTRY: 1.5,
+        UnitTypeId.HYDRALISK: 2.5, UnitTypeId.BANELING: 3.0, UnitTypeId.HELLION: 2.0,
+        UnitTypeId.HELLIONTANK: 3.0, UnitTypeId.HIGHTEMPLAR: 2.5, UnitTypeId.MUTALISK: 1.5,
+        UnitTypeId.BANSHEE: 2.0, UnitTypeId.VIKING: 2.0, UnitTypeId.VIKINGFIGHTER: 2.0,
+        UnitTypeId.PHOENIX: 2.0, UnitTypeId.ORACLE: 2.0, UnitTypeId.RAVEN: 2.0,
+        UnitTypeId.GHOST: 2.0,
+        UnitTypeId.SIEGETANK: 3.5, UnitTypeId.IMMORTAL: 3.5, UnitTypeId.CYCLONE: 3.5,
+        UnitTypeId.DISRUPTOR: 3.5, UnitTypeId.COLOSSUS: 4.0, UnitTypeId.RAVAGER: 4.0,
+        UnitTypeId.LURKER: 4.0, UnitTypeId.VOIDRAY: 3.0, UnitTypeId.CARRIER: 4.0,
+        UnitTypeId.BATTLECRUISER: 4.5, UnitTypeId.TEMPEST: 4.0, UnitTypeId.BROODLORD: 4.5,
+        UnitTypeId.ULTRALISK: 4.0, UnitTypeId.THOR: 4.5, UnitTypeId.SIEGETANKSIEGED: 4.0,
+        UnitTypeId.LIBERATOR: 3.5, UnitTypeId.LIBERATORAG: 3.5, UnitTypeId.LURKERBURROWED: 4.0,
+        UnitTypeId.DARKTEMPLAR: 3.0, UnitTypeId.ARCHON: 3.0, UnitTypeId.CORRUPTOR: 3.0,
+        UnitTypeId.WIDOWMINE: 3.5, UnitTypeId.INFESTOR: 3.5, UnitTypeId.INFESTORBURROWED: 3.5,
+        UnitTypeId.SWARMHOSTBURROWEDMP: 3.5, UnitTypeId.VIPER: 3.5, UnitTypeId.WIDOWMINEBURROWED: 3.5,
+    }
     for unit in enemy_units:
-        if unit.type_id in (
-            UnitTypeId.MARINE, UnitTypeId.ZEALOT, UnitTypeId.ZERGLING,
-            UnitTypeId.ADEPT, UnitTypeId.STALKER, UnitTypeId.ROACH,
-            UnitTypeId.REAPER, UnitTypeId.MARAUDER, UnitTypeId.SENTRY,
-            UnitTypeId.HYDRALISK, UnitTypeId.BANELING, UnitTypeId.HELLION,
-            UnitTypeId.HELLIONTANK, UnitTypeId.HIGHTEMPLAR, UnitTypeId.MUTALISK,
-            UnitTypeId.BANSHEE, UnitTypeId.VIKING, UnitTypeId.VIKINGFIGHTER,
-            UnitTypeId.PHOENIX, UnitTypeId.ORACLE, UnitTypeId.RAVEN, UnitTypeId.GHOST
-        ):
-            threat_level += 2
-        elif unit.type_id in (
-            UnitTypeId.SIEGETANK, UnitTypeId.IMMORTAL, UnitTypeId.CYCLONE,
-            UnitTypeId.DISRUPTOR, UnitTypeId.COLOSSUS, UnitTypeId.RAVAGER,
-            UnitTypeId.LURKER, UnitTypeId.VOIDRAY, UnitTypeId.CARRIER,
-            UnitTypeId.BATTLECRUISER, UnitTypeId.TEMPEST, UnitTypeId.BROODLORD,
-            UnitTypeId.ULTRALISK, UnitTypeId.THOR, UnitTypeId.SIEGETANKSIEGED,
-            UnitTypeId.LIBERATOR, UnitTypeId.LIBERATORAG, UnitTypeId.LURKERBURROWED,
-            UnitTypeId.DARKTEMPLAR, UnitTypeId.ARCHON, UnitTypeId.CORRUPTOR,
-            UnitTypeId.WIDOWMINE, UnitTypeId.INFESTOR, UnitTypeId.INFESTORBURROWED,
-            UnitTypeId.SWARMHOSTBURROWEDMP, UnitTypeId.VIPER, UnitTypeId.WIDOWMINEBURROWED
-        ):
-            threat_level += 3
-        else:
-            threat_level += 1
+        weight = threat_weights.get(unit.type_id, 1.0)
+        # Multiply weight by the effective power (health + shield) scaled by 50.0, tweak if needed
+        threat_level += weight * ((unit.health + unit.shield) / 50.0)
 
-    # Simple “we have bigger army” adjustment
+    # Density check: adjust threat level based on enemy clustering
+    if enemy_units.amount > 0:
+        sum_x, sum_y = 0.0, 0.0
+        for unit in enemy_units:
+            sum_x += unit.position.x
+            sum_y += unit.position.y
+        center_x = sum_x / enemy_units.amount
+        center_y = sum_y / enemy_units.amount
+        center = Point2((center_x, center_y))
+
+        cluster_count = 0
+        for unit in enemy_units:
+            if unit.position.distance_to(center) <= 5.0:
+                cluster_count += 1
+
+        # If fewer than 3 enemy units are clustered, scale down the threat level
+        if cluster_count < 3:
+            threat_level *= 0.5
+
+    # Adjust threat if our forces significantly outnumber enemy units
     if own_forces.amount > enemy_units.amount * 2:
         threat_level -= 2
 
-    return max(threat_level, 0)
+    return max(round(threat_level), 0)
 
 
 def threat_detection(bot, main_army: Units) -> None:
@@ -217,63 +234,55 @@ def threat_detection(bot, main_army: Units) -> None:
 
         for _, enemy_tags in all_threats.items():
             enemy_units = bot.enemy_units.tags_in(enemy_tags)
-            threat_value = assess_threat(bot, enemy_units, main_army)
-
-            # Early game threat detection
-            if bot.time < 2 * 60 + 20 and bot.townhalls.first:
-                unit_categories = {'pylons': [], 'enemyWorkerUnits': [], 'cannons': [], 'zerglings': []}
-                for _, enemy_tags in ground_near.items():
-                    enemy_units = bot.enemy_units.tags_in(enemy_tags)
-                    for unit in enemy_units:
-                        if unit.type_id == UnitTypeId.PYLON:
-                            unit_categories['pylons'].append(unit)
-                            print("Pylon Detected")
-                        elif unit.type_id in [UnitTypeId.PROBE, UnitTypeId.SCV, UnitTypeId.DRONE]:
-                            unit_categories['enemyWorkerUnits'].append(unit)
-                        elif unit.type_id == UnitTypeId.PHOTONCANNON:
-                            unit_categories['cannons'].append(unit)
-                            print("Cannon Detected")
-                        elif unit.type_id == UnitTypeId.ZERGLING:
-                            unit_categories['zerglings'].append(unit)
-                            print("Zergling Detected")
-
-                if unit_categories['pylons'] or len(unit_categories['enemyWorkerUnits']) >= 4 or unit_categories['cannons']:
-                    bot.defend_worker_cannon_rush(unit_categories['enemyWorkerUnits'], unit_categories['cannons'])
-                    print("cannon rush")
-                elif len(unit_categories['zerglings']) > 2:
-                    bot._used_cheese_response = True
-                    print("Defending against zergling rush")
-
-            # If there's a threat and we have a main army, send the army to defend
-            if main_army:
+            # Begin two-threshold (hysteresis) defense logic:
+            threat = assess_threat(bot, enemy_units, main_army)
+            
+            if bot.time < 3 * 60 and bot._used_cheese_response:
+                high_threshold = 2
+                low_threshold = 1
+            else:
+                high_threshold = 5
+                low_threshold = 2
+            
+            if bot._under_attack:
+                if threat < low_threshold:
+                    bot._under_attack = False
+            else:
+                if threat >= high_threshold:
+                    bot._under_attack = True
+            
+            if bot._under_attack:
                 threat_position, num_units = cy_find_units_center_mass(enemy_units, 10.0)
                 threat_position = Point2(threat_position)
-                if bot.time < 3 * 60 and bot._used_cheese_response:
-                    if assess_threat(bot, enemy_units, main_army) >= 2:
-                        bot._under_attack = True
-                elif bot._under_attack and assess_threat(bot, enemy_units, main_army) < 2:
-                    bot._under_attack = False
-                elif not bot._under_attack and assess_threat(bot, enemy_units, main_army) >= 5:
-                    bot._under_attack = True
-                else:
-                    bot._under_attack = False
-                if bot._under_attack:
-                    control_main_army(bot, main_army, threat_position, bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
-                    if bot._one_base_reaction_completed:
-                        bot.use_overcharge(main_army)
+                control_main_army(bot, main_army, threat_position, bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
+                if bot._one_base_reaction_completed:
+                    bot.use_overcharge(main_army)
 
 
 def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
     """
     Handles the attack toggles logic.
     """
-    current_supply = bot.get_total_supply(main_army)
-    if current_supply <= bot._begin_attack_at_supply:
-        bot._commenced_attack = False
-    elif bot._commenced_attack and not bot._under_attack:
-        control_main_army(bot, main_army, attack_target, bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
-    elif current_supply >= bot._begin_attack_at_supply:
-        bot._commenced_attack = True
+    # Assess the threat level of enemy units
+    #TODO measure the value of my army vs the value of the eneny to attack instead of attack supply - use get_cached_enemy_army, own_forces and enemy_forces
+    enemy_threat_level = assess_threat(bot, bot.enemy_units, main_army)
+
+    # If the army is already attacking, decide based on threat level
+    if bot._commenced_attack:
+        if enemy_threat_level < 5:
+            # Continue attacking the original target
+            control_main_army(bot, main_army, attack_target, bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
+        else:
+            # Redirect to engage the enemy if threat is high
+            enemy_center, _ = cy_find_units_center_mass(bot.enemy_units, 10.0)
+            control_main_army(bot, main_army, Point2(enemy_center), bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
+    else:
+        # Handle attack toggles logic as before
+        current_supply = bot.get_total_supply(main_army)
+        if current_supply <= bot._begin_attack_at_supply:
+            bot._commenced_attack = False
+        elif bot._commenced_attack and not bot._under_attack:
+            control_main_army(bot, main_army, attack_target, bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
 
 
 def attack_target(bot, main_army_position: Point2) -> Point2:
@@ -287,9 +296,9 @@ def attack_target(bot, main_army_position: Point2) -> Point2:
         # Prioritize the closest enemy structure to the main army
         closest_structure = cy_closest_to(main_army_position, bot.enemy_structures).position
         
-        # Check if the closest structure is far away and if so, fallback to a stable target
-        if closest_structure.distance_to(main_army_position) > 30.0:
-            return fallback_target(bot)
+        # # Check if the closest structure is far away and if so, fallback to a stable target
+        # if closest_structure.distance_to(main_army_position) > 50.0:
+        #     return fallback_target(bot)
         
         return Point2(closest_structure.position)
         
@@ -312,3 +321,32 @@ def fallback_target(bot) -> Point2:
         bot.current_base_target = next(bot.expansions_generator)
     
     return bot.current_base_target
+
+
+def regroup_army(bot, main_army: Units) -> None:
+    """Regroups the main army if units are too scattered and the bot is not in a combat state.
+
+    Conditions:
+      - The average distance of units from the center of mass is greater than 10 units.
+      - The bot is not currently under attack and has not commenced an attack.
+    Action:
+      - Command the main army to move to the natural expansion location (bot.natural_expansion).
+    """
+    if not main_army or main_army.amount == 0:
+        return
+
+    # Calculate the center of mass of the main army
+    center, _ = cy_find_units_center_mass(main_army, 10.0)
+    center = Point2(center)
+
+    # Compute the average distance from the center
+    total_distance = 0.0
+    for unit in main_army:
+        total_distance += unit.position.distance_to(center)
+    avg_distance = total_distance / main_army.amount
+
+    # If the army is scattered (avg distance > 10) and not in combat, regroup
+    if avg_distance > 10 and not bot._under_attack and not bot._commenced_attack:
+        # Command the main army to regroup by using control_main_army with the natural expansion as target
+        control_main_army(bot, main_army, bot.natural_expansion.towards(bot.game_info.map_center, 2), bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
+        print("Regrouping army")
