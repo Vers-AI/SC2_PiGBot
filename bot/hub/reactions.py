@@ -93,7 +93,7 @@ def early_threat_sensor(bot):
         bot._used_cheese_response = True
     
     # Scouting for Enemy 1 base build 
-    elif 2.5 * 60 < bot.time < 3.5 * 60 and not bot.mediator.get_enemy_expanded:
+    elif 2.5 * 60 < bot.time < 3.5 * 60 and not (bot.mediator.get_enemy_expanded or bot._used_one_base_response):
         # Get enemy natural location
         enemy_natural = bot.mediator.get_enemy_nat
         grid: np.ndarray = bot.mediator.get_ground_grid
