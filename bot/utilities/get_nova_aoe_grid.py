@@ -6,10 +6,10 @@ battlefield as a 2D matrix of cells, where each cell can later be updated with i
 calculations based on enemy and friendly unit positions.
 """
 import math
+import numpy as np
 
 from map_analyzer import MapData
-import numpy as np
-from sc2.position import Point2
+
 
 
 def get_nova_aoe_grid(map_data: MapData) -> np.ndarray:
