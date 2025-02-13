@@ -14,7 +14,9 @@ from ares.behaviors.combat.group import (
     AMoveGroup, PathGroupToTarget
 )
 from ares.managers.squad_manager import UnitSquad
-from ares.consts import UnitRole, UnitTreeQueryType
+from ares.consts import UnitRole
+from ares.dicts.unit_data import UNIT_DATA
+
 
 from cython_extensions import (
    
@@ -23,7 +25,7 @@ from cython_extensions import (
 )
 
 
-# If you reference these from your bot.py, just import them directly from here
+#Units to ignore
 COMMON_UNIT_IGNORE_TYPES: set[UnitTypeId] = {
     UnitTypeId.EGG,
     UnitTypeId.LARVA,
@@ -166,6 +168,7 @@ def assess_threat(bot, enemy_units: Units, own_forces: Units) -> int:
     You can refine logic to suit your needs.
     """
     threat_level = 0
+    #TODO swap this with UNIT_DATA from Ares and change the weight calculation but filter
     threat_weights = {
         UnitTypeId.MARINE: 1.5, UnitTypeId.ZEALOT: 1.5, UnitTypeId.ZERGLING: 1.0,
         UnitTypeId.ADEPT: 2.0, UnitTypeId.STALKER: 2.0, UnitTypeId.ROACH: 2.5,
