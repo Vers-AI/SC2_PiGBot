@@ -45,27 +45,7 @@ from bot.utilities.get_nova_aoe_grid import get_nova_aoe_grid
 from bot.utilities.use_disruptor_nova import UseDisruptorNova, DummyNovaUnit
 from map_analyzer import MapData
 
-# These are units to ignore when picking targets or performing certain queries
-COMMON_UNIT_IGNORE_TYPES: set[UnitTypeId] = {
-    UnitTypeId.EGG,
-    UnitTypeId.LARVA,
-    UnitTypeId.CREEPTUMORBURROWED,
-    UnitTypeId.CREEPTUMORQUEEN,
-    UnitTypeId.CREEPTUMOR,
-    UnitTypeId.MULE,
-    UnitTypeId.PROBE,
-    UnitTypeId.SCV,
-    UnitTypeId.DRONE,
-    UnitTypeId.OVERLORD,
-    UnitTypeId.OVERSEER,
-    UnitTypeId.LOCUSTMP,
-    UnitTypeId.LOCUSTMPFLYING,
-    UnitTypeId.ADEPTPHASESHIFT,
-    UnitTypeId.CHANGELING,
-    UnitTypeId.CHANGELINGMARINE,
-    UnitTypeId.CHANGELINGZEALOT,
-    UnitTypeId.CHANGELINGZERGLING,
-}
+
 
 
 class PiG_Bot(AresBot):
