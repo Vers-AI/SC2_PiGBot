@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING
 from behaviors.combat.individual.combat_individual_behavior import CombatIndividualBehavior
 from ares.managers.manager_mediator import ManagerMediator
 from bot.utilities.get_nova_aoe_grid import get_nova_aoe_grid, apply_influence_in_radius
+from ares.dicts.unit_data import UNIT_DATA
+
 
 if TYPE_CHECKING:
     from ares import AresBot
@@ -50,10 +52,11 @@ class UseDisruptorNova(CombatIndividualBehavior):
         influence_grid = get_nova_aoe_grid(grid)
 
         # Apply influence from enemy and friendly units using map_data in apply_influence_in_radius
+        # TODO Change the influence = army_value from UNIT_DATA - filtering out any units in the COMMON_UNIT_IGNORE_TYPES from combat.py
         for enemy in enemy_units:
-            influence_grid = apply_influence_in_radius(influence_grid, (enemy.position.x, enemy.position.y), radius=3, influence=5, map_data=self.map_data)
+            influence_grid = apply_influence_in_radius(influence_grid, (enemy.position.x, enemy.position.y), radius=enemy.radius, influence=5, map_data=self.map_data)
         for friendly in friendly_units:
-            influence_grid = apply_influence_in_radius(influence_grid, (friendly.position.x, friendly.position.y), radius=3, influence=-5, map_data=self.map_data)
+            influence_grid = apply_influence_in_radius(influence_grid, (friendly.position.x, friendly.position.y), radius=friendly.radius, influence=-5, map_data=self.map_data)
 
         # Find the position with the maximum influence
         max_influence = float('-inf')
