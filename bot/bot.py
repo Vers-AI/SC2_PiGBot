@@ -40,6 +40,10 @@ from bot.hub.reactions import (
     defend_worker_cannon_rush,
     one_base_reaction
 )
+#debugs
+from bot.utilities.get_nova_aoe_grid import get_nova_aoe_grid
+from bot.utilities.use_disruptor_nova import UseDisruptorNova, DummyNovaUnit
+from map_analyzer import MapData
 
 # These are units to ignore when picking targets or performing certain queries
 COMMON_UNIT_IGNORE_TYPES: set[UnitTypeId] = {
@@ -80,6 +84,8 @@ class PiG_Bot(AresBot):
         """
         super().__init__(game_step_override)
 
+        
+
         # State tracking
         self.unit_roles = {}
         self.scout_targets = {}
@@ -105,6 +111,10 @@ class PiG_Bot(AresBot):
         await super().on_start()
         print("Game started")
 
+        # Debug on start
+        self.map_data: MapData  = self.mediator.get_map_data_object
+        self.use_disruptor_nova = UseDisruptorNova(cooldown=21.4, nova_duration=2.1, map_data=self.map_data)
+
         self.current_base_target = self.enemy_start_locations[0]
 
         # Sort expansions by proximity to the enemy's start
@@ -112,6 +122,8 @@ class PiG_Bot(AresBot):
             key=lambda loc: loc.distance_to(self.enemy_start_locations[0])
         )
         self.scout_targets = self.expansion_locations_list
+        
+
 
         # Reserve expansions and set flags
         self.natural_expansion: Point2 = self.expansion_locations_list[-2]
@@ -188,6 +200,24 @@ class PiG_Bot(AresBot):
         if self.minerals > 2800 and not self.build_order_runner.build_completed:
             self.build_order_runner.set_build_completed()
 
+    # Debug: Draw the influence grid
+        
+        # Example setup for testing the dummy nova
+        disruptor_unit = DummyNovaUnit(position=Point2((10, 10)))  # Simulated disruptor position
+        enemy_units = []  # Populate with simulated enemy units
+        friendly_units = []  # Populate with simulated friendly units
+    
+        # Execute the nova ability
+        if self.use_disruptor_nova.can_use(self.time):
+            self.use_disruptor_nova.execute(disruptor_unit, enemy_units, friendly_units, self.time)
+    
+        # Update active novas
+        self.use_disruptor_nova.update_info()
+        self.use_disruptor_nova.run_step(enemy_units, friendly_units)
+
+        influence_grid = get_nova_aoe_grid(self.map_data)
+        self.map_data.draw_influence_in_game(influence_grid, lower_threshold=-10)
+
     async def on_unit_created(self, unit: Unit) -> None:
         """
         Called whenever a new unit spawns. Assign roles based on type.
@@ -204,6 +234,8 @@ class PiG_Bot(AresBot):
             self.mediator.assign_role(tag=unit.tag, role=UnitRole.DROP_SHIP)
             unit.move(Point2(self.natural_expansion.towards(self.game_info.map_center, 1)))
             return
+
+        
 
         # Default: Attacking role
         self.mediator.assign_role(tag=unit.tag, role=UnitRole.ATTACKING)
