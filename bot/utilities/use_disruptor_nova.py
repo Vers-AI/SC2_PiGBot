@@ -44,7 +44,7 @@ class UseDisruptorNova(CombatIndividualBehavior):
     def select_best_target(self, enemy_units: list, friendly_units: list) -> tuple:
         """Determine the best target position based on grid influence data."""
         # Assume self.map_data provides the required map information and grid
-        grid = self.map_data.get_pyastar_grid()
+        grid = self.map_data
 
         # Initialize the influence grid
         influence_grid = get_nova_aoe_grid(grid)
