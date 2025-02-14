@@ -5,7 +5,7 @@ and friendly positions. This serves as a basis for integration with the Ares com
 """
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
-
+from sc2.ids.unit_typeid import UnitTypeId as UnitID
 
 from behaviors.combat.individual.combat_individual_behavior import CombatIndividualBehavior
 from ares.managers.manager_mediator import ManagerMediator
@@ -54,9 +54,11 @@ class UseDisruptorNova(CombatIndividualBehavior):
         # Apply influence from enemy and friendly units using map_data in apply_influence_in_radius
         # TODO Change the influence = army_value from UNIT_DATA - filtering out any units in the COMMON_UNIT_IGNORE_TYPES from combat.py
         for enemy in enemy_units:
-            influence_grid = apply_influence_in_radius(influence_grid, (enemy.position.x, enemy.position.y), radius=enemy.radius, influence=5, map_data=self.map_data)
+            army_value = UNIT_DATA[enemy.UnitID]['army_value'] if enemy.UnitID in UNIT_DATA else 0
+            influence_grid = apply_influence_in_radius(influence_grid, (enemy.position.x, enemy.position.y), radius=enemy.radius, influence=army_value, map_data=self.map_data)
         for friendly in friendly_units:
-            influence_grid = apply_influence_in_radius(influence_grid, (friendly.position.x, friendly.position.y), radius=friendly.radius, influence=-5, map_data=self.map_data)
+            army_value = UNIT_DATA[friendly.UnitID]['army_value'] if friendly.UnitID in UNIT_DATA else 0
+            influence_grid = apply_influence_in_radius(influence_grid, (friendly.position.x, friendly.position.y), radius=friendly.radius, influence=-army_value, map_data=self.map_data)
 
         # Find the position with the maximum influence
         max_influence = float('-inf')
