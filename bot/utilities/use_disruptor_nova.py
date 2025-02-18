@@ -52,7 +52,6 @@ class UseDisruptorNova(CombatIndividualBehavior):
         influence_grid = get_nova_aoe_grid(grid)
 
         # Apply influence from enemy and friendly units using map_data in apply_influence_in_radius
-        # TODO Change the influence = army_value from UNIT_DATA - filtering out any units in the COMMON_UNIT_IGNORE_TYPES from combat.py
         for enemy in enemy_units:
             army_value = UNIT_DATA[enemy.UnitID]['army_value'] if enemy.UnitID in UNIT_DATA else 0
             influence_grid = apply_influence_in_radius(influence_grid, (enemy.position.x, enemy.position.y), radius=enemy.radius, influence=army_value, map_data=self.map_data)
@@ -112,15 +111,17 @@ class UseDisruptorNova(CombatIndividualBehavior):
         print(f"Nova Frames Left: {self.frames_left}, Distance Left: {self.distance_left}")
         print(f"Current Position: {self.unit.position}, Target Position: {self.best_target_pos}")
 
-    def execute(self, disruptor_unit, enemy_units: list, friendly_units: list, current_time: float) -> bool:
-        """Attempt to execute Disruptor Nova ability. Initializes nova state and simulates firing the nova."""
+    def execute(self, disruptor_unit, enemy_units: list, friendly_units: list, current_time: float):
+        """Attempt to execute Disruptor Nova ability. Initializes nova state and simulates firing the nova.
+        Returns self (the nova instance) if fired successfully, or None if not.
+        """
         if not self.can_use(current_time):
-            return False
+            return None
 
         # Use select_best_target method to choose an initial target
         target = self.select_best_target(enemy_units, friendly_units)
         if target is None:
-            return False
+            return None
 
         print(f"Firing Disruptor Nova at target: {target}")
 
@@ -132,7 +133,7 @@ class UseDisruptorNova(CombatIndividualBehavior):
 
         # Record the time the nova was fired
         self.last_used = current_time
-        return True
+        return self
 
     def simulate_nova_creation(self, disruptor_unit, target):
         """Simulate the creation of a nova projectile unit. Returns a DummyNovaUnit instance."""
