@@ -44,6 +44,7 @@ from bot.hub.reactions import (
 from bot.utilities.get_nova_aoe_grid import get_nova_aoe_grid
 from bot.utilities.use_disruptor_nova import UseDisruptorNova, DummyNovaUnit
 from map_analyzer import MapData
+from bot.utilities.nova_manager import NovaManager
 
 
 
@@ -63,8 +64,6 @@ class PiG_Bot(AresBot):
         Initializes the bot with various flags and references needed by Ares.
         """
         super().__init__(game_step_override)
-
-        
 
         # State tracking
         self.unit_roles = {}
@@ -94,6 +93,7 @@ class PiG_Bot(AresBot):
         # Debug on start
         self.map_data: MapData  = self.mediator.get_map_data_object
         self.use_disruptor_nova = UseDisruptorNova(cooldown=21.4, nova_duration=2.1, map_data=self.map_data)
+        self.nova_manager = NovaManager()  # Initialize the NovaManager
 
         self.current_base_target = self.enemy_start_locations[0]
 
@@ -195,15 +195,17 @@ class PiG_Bot(AresBot):
         self.use_disruptor_nova.update_info()
         self.use_disruptor_nova.run_step(enemy_units, friendly_units)
 
-        influence_grid = get_nova_aoe_grid(self.map_data)
-        self.map_data.draw_influence_in_game(influence_grid, lower_threshold=-10)
+        # Update nova behaviors
+        enemy_units = getattr(self, 'enemy_units', [])
+        friendly_units = getattr(self, 'friendly_units', [])
+        self.nova_manager.update(enemy_units, friendly_units)
 
     async def on_unit_created(self, unit: Unit) -> None:
         """
         Called whenever a new unit spawns. Assign roles based on type.
         """
         await super().on_unit_created(unit)
-
+        #TODO create a role for Spellcasters 
         if unit.type_id in ALL_STRUCTURES or unit.type_id in WORKER_TYPES:
             return
 
