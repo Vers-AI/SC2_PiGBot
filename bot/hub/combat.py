@@ -17,6 +17,9 @@ from ares.managers.squad_manager import UnitSquad
 from ares.consts import UnitRole
 from ares.dicts.unit_data import UNIT_DATA
 
+from bot.utilities.use_disruptor_nova import UseDisruptorNova
+from bot.utilities.get_nova_aoe_grid import get_nova_aoe_grid
+
 
 from cython_extensions import (
    
@@ -54,6 +57,7 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
     """
     pos_of_main_squad: Point2 = bot.mediator.get_position_of_main_squad(role=UnitRole.ATTACKING)
     grid: np.ndarray = bot.mediator.get_ground_grid
+    nova_grid: np.ndarray = get_nova_aoe_grid(bot.mediator.map_data)
     
     if main_army:
         bot.total_health_shield_percentage = (
@@ -76,9 +80,10 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
 
         # Basic engagement logic
         if all_close:
-            # Separate melee and ranged
+            # Separate melee, ranged and spell casters
             melee = [u for u in units if u.ground_range <= 3]
-            ranged = [u for u in units if u.ground_range > 3]
+            ranged = [u for u in units if u.ground_range > 3 and u.energy == 0]
+            spellcasters = [u for u in units if u.energy > 0 or not u.can_attack]
             # Simple picking logic
             enemy_target = cy_pick_enemy_target(all_close)
 
@@ -96,7 +101,25 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                 melee_maneuver = CombatManeuver()
                 melee_maneuver.add(AMoveGroup(group=melee, group_tags={u.tag for u in melee}, target=enemy_target.position))
                 bot.register_behavior(melee_maneuver)
-
+            
+            if spellcasters:
+                disruptors= [spellcaster for spellcaster in spellcasters if spellcaster.type_id == UnitTypeId.DISRUPTOR]
+                for disruptor in disruptors:
+                    # Compute the nova influence grid
+                    nova_grid = get_nova_aoe_grid(bot.mediator.map_data)
+                    
+                    # Check for enemy clustering
+                    if nova_grid.max() > 1:
+                        # Attempt to fire nova
+                        nova = bot.use_disruptor_nova.execute(disruptor, all_close, units, bot.time)
+                        if nova:
+                            # Add nova to NovaManager
+                            bot.nova_manager.add_nova(nova)
+                            
+                            # Draw influence grid if debug mode is enabled
+                            if bot.debug:
+                                bot.mediator.map_data.draw_influence_in_game(nova_grid, lower_threshold=1)
+                
         else:
             # No enemies nearby—regroup or move to final target
             dist_squad_main = pos_of_main_squad.distance_to(squad_position)
@@ -253,6 +276,7 @@ def threat_detection(bot, main_army: Units) -> None:
             else:
                 if threat >= high_threshold:
                     bot._under_attack = True
+                    #TODO switch the role of the main army to to Defending
             
             if bot._under_attack:
                 threat_position, num_units = cy_find_units_center_mass(enemy_units, 10.0)
