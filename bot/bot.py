@@ -92,8 +92,8 @@ class PiG_Bot(AresBot):
 
         # Debug on start
         self.map_data: MapData  = self.mediator.get_map_data_object
-        self.use_disruptor_nova = UseDisruptorNova(cooldown=21.4, nova_duration=2.1, map_data=self.map_data)
-        self.nova_manager = NovaManager()  # Initialize the NovaManager
+        self.use_disruptor_nova = UseDisruptorNova(cooldown=21.4, nova_duration=2.1, map_data=self.map_data, bot=self)
+        self.nova_manager = NovaManager(bot=self, map_data=self.map_data)  # Initialize the NovaManager
 
         self.current_base_target = self.enemy_start_locations[0]
 
@@ -182,23 +182,24 @@ class PiG_Bot(AresBot):
 
     # Debug: Draw the influence grid
         
-        # Example setup for testing the dummy nova
-        disruptor_unit = DummyNovaUnit(position=Point2((10, 10)))  # Simulated disruptor position
-        enemy_units = []  # Populate with simulated enemy units
-        friendly_units = []  # Populate with simulated friendly units
+        # # Example setup for testing the dummy nova
+        # disruptor_unit = DummyNovaUnit(position=Point2((10, 10)))  # Simulated disruptor position
+        # enemy_units = []  # Populate with simulated enemy units
+        # friendly_units = []  # Populate with simulated friendly units
     
-        # Execute the nova ability
-        if self.use_disruptor_nova.can_use(self.time):
-            self.use_disruptor_nova.execute(disruptor_unit, enemy_units, friendly_units, self.time)
+        # # Execute the nova ability
+        # if self.use_disruptor_nova.can_use(self.time):
+        #     self.use_disruptor_nova.execute(disruptor_unit, enemy_units, friendly_units, self.time)
     
-        # Update active novas
-        self.use_disruptor_nova.update_info()
-        self.use_disruptor_nova.run_step(enemy_units, friendly_units)
+        # # Update active novas
+        # self.use_disruptor_nova.update_info()
+        # self.use_disruptor_nova.run_step(enemy_units, friendly_units)
 
         # Update nova behaviors
         enemy_units = getattr(self, 'enemy_units', [])
         friendly_units = getattr(self, 'friendly_units', [])
         self.nova_manager.update(enemy_units, friendly_units)
+        
 
     async def on_unit_created(self, unit: Unit) -> None:
         """
@@ -217,7 +218,10 @@ class PiG_Bot(AresBot):
             unit.move(Point2(self.natural_expansion.towards(self.game_info.map_center, 1)))
             return
 
-        
+        if unit.type_id == UnitTypeId.DISRUPTORPHASED:
+            # When a DISRUPTORPHASED unit (the nova) is created, send it to the NovaManager
+            self.nova_manager.add_nova(unit)
+            return
 
         # Default: Attacking role
         self.mediator.assign_role(tag=unit.tag, role=UnitRole.ATTACKING)
