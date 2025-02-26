@@ -6,12 +6,15 @@ and friendly positions. This serves as a basis for integration with the Ares com
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from sc2.ids.unit_typeid import UnitTypeId as UnitID
+from sc2.ids.ability_id import AbilityId
+
 
 from behaviors.combat.individual.combat_individual_behavior import CombatIndividualBehavior
+from ares.behaviors.combat.individual import UseAbility
 from ares.managers.manager_mediator import ManagerMediator
 from bot.utilities.get_nova_aoe_grid import get_nova_aoe_grid, apply_influence_in_radius
 from ares.dicts.unit_data import UNIT_DATA
-
+import time
 
 if TYPE_CHECKING:
     from ares import AresBot
@@ -28,7 +31,7 @@ class DummyNovaUnit:
 
 
 class UseDisruptorNova(CombatIndividualBehavior):
-    def __init__(self, cooldown: float, nova_duration: float, map_data):
+    def __init__(self, cooldown: float, nova_duration: float, map_data, bot):
         """Initialize with the given cooldown and nova duration in seconds."""
         self.cooldown = cooldown
         self.nova_duration = nova_duration
@@ -38,6 +41,7 @@ class UseDisruptorNova(CombatIndividualBehavior):
         self.distance_left = 0.0
         self.unit = None  # References the Purification Nova ability which is a unit not a spell
         self.map_data = map_data
+        self.bot = bot  # Store bot instance
 
     def can_use(self, current_time: float) -> bool:
         """Return True if the ability can be used based on its cooldown."""
@@ -115,6 +119,7 @@ class UseDisruptorNova(CombatIndividualBehavior):
         """Attempt to execute Disruptor Nova ability. Initializes nova state and simulates firing the nova.
         Returns self (the nova instance) if fired successfully, or None if not.
         """
+        print("Executing Disruptor Nova...")
         if not self.can_use(current_time):
             return None
 
@@ -122,11 +127,15 @@ class UseDisruptorNova(CombatIndividualBehavior):
         target = self.select_best_target(enemy_units, friendly_units)
         if target is None:
             return None
-
+        self.bot.register_behavior(
+            UseAbility(
+                AbilityId.EFFECT_PURIFICATIONNOVA, disruptor_unit, target
+            )
+        )
         print(f"Firing Disruptor Nova at target: {target}")
 
         # Simulate nova creation (in a real scenario, this would come from the game API)
-        nova_unit = self.simulate_nova_creation(disruptor_unit, target)
+        nova_unit = self.nova_creation(disruptor_unit, target)
 
         # Initialize nova tracking with the nova unit
         self.load_info(nova_unit)
@@ -135,6 +144,19 @@ class UseDisruptorNova(CombatIndividualBehavior):
         self.last_used = current_time
         return self
 
-    def simulate_nova_creation(self, disruptor_unit, target):
-        """Simulate the creation of a nova projectile unit. Returns a DummyNovaUnit instance."""
-        return DummyNovaUnit(target)
+    def nova_creation(self, disruptor_unit, target):
+        """Wait for the nova creation event by polling the NovaManager for a nova unit near the target position."""
+        timeout = 5  # seconds
+        poll_interval = 0.1  # seconds
+        elapsed_time = 0
+
+        while elapsed_time < timeout:
+            # Poll the NovaManager for a nova unit near the target
+            for nova in self.bot.nova_manager.get_active_novas():
+                if nova.position.distance_to(target) < 1.0:  # Assuming a small threshold for proximity
+                    return nova
+            time.sleep(poll_interval)
+            elapsed_time += poll_interval
+
+        print("Warning: Nova creation event timed out.")
+        return None
