@@ -8,7 +8,7 @@ from sc2.ids.ability_id import AbilityId
 
 from ares.behaviors.combat import CombatManeuver
 from ares.behaviors.combat.individual import (
-    KeepUnitSafe, PathUnitToTarget, StutterUnitBack
+    KeepUnitSafe, PathUnitToTarget, StutterUnitBack, UseAbility
 )
 from ares.behaviors.combat.group import (
     AMoveGroup, PathGroupToTarget
@@ -105,20 +105,23 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
             if spellcasters:
                 disruptors= [spellcaster for spellcaster in spellcasters if spellcaster.type_id == UnitTypeId.DISRUPTOR]
                 for disruptor in disruptors:
-                    # Compute the nova influence grid
-                    nova_grid = get_nova_aoe_grid(bot.mediator.map_data)
+                    # # Compute the nova influence grid
+                    # nova_grid = get_nova_aoe_grid(bot.mediator.map_data)
                     
-                    # Check for enemy clustering
-                    if nova_grid.max() > 1:
-                        # Attempt to fire nova
-                        nova = bot.use_disruptor_nova.execute(disruptor, all_close, units, bot.time)
-                        if nova:
-                            # Add nova to NovaManager
-                            bot.nova_manager.add_nova(nova)
-                            
-                            # Draw influence grid if debug mode is enabled
-                            if bot.debug:
-                                bot.mediator.map_data.draw_influence_in_game(nova_grid, lower_threshold=1)
+                    # # Check for enemy clustering
+                    # if nova_grid.max() > 1:
+                    #     # Attempt to fire nova
+                        
+                    bot.use_disruptor_nova.execute(disruptor, all_close, units, bot.time)
+                    nova = False
+                    # TODO add some way to trigger that a nova has been fired
+                    if nova:
+                        # Add nova to NovaManager
+                        bot.nova_manager.add_nova(nova)
+                        
+                        # Draw influence grid if debug mode is enabled
+                        if bot.debug:
+                            bot.mediator.map_data.draw_influence_in_game(nova_grid, lower_threshold=1)
                 
         else:
             # No enemies nearby—regroup or move to final target
