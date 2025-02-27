@@ -5,6 +5,7 @@ from sc2.units import Units
 from sc2.unit import Unit
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.ability_id import AbilityId
+from ares.consts import UnitTreeQueryType
 
 from ares.behaviors.combat import CombatManeuver
 from ares.behaviors.combat.individual import (
@@ -57,7 +58,6 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
     """
     pos_of_main_squad: Point2 = bot.mediator.get_position_of_main_squad(role=UnitRole.ATTACKING)
     grid: np.ndarray = bot.mediator.get_ground_grid
-    nova_grid: np.ndarray = get_nova_aoe_grid(bot.mediator.map_data)
     
     if main_army:
         bot.total_health_shield_percentage = (
@@ -86,7 +86,6 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
             spellcasters = [u for u in units if u.energy > 0 or not u.can_attack]
             # Simple picking logic
             enemy_target = cy_pick_enemy_target(all_close)
-
             # Ranged micro example
             for r_unit in ranged:
                 ranged_maneuver = CombatManeuver()
@@ -105,23 +104,8 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
             if spellcasters:
                 disruptors= [spellcaster for spellcaster in spellcasters if spellcaster.type_id == UnitTypeId.DISRUPTOR]
                 for disruptor in disruptors:
-                    # # Compute the nova influence grid
-                    # nova_grid = get_nova_aoe_grid(bot.mediator.map_data)
+                    bot.use_disruptor_nova.execute(disruptor, all_close, units)
                     
-                    # # Check for enemy clustering
-                    # if nova_grid.max() > 1:
-                    #     # Attempt to fire nova
-                        
-                    bot.use_disruptor_nova.execute(disruptor, all_close, units, bot.time)
-                    nova = False
-                    # TODO add some way to trigger that a nova has been fired
-                    if nova:
-                        # Add nova to NovaManager
-                        bot.nova_manager.add_nova(nova)
-                        
-                        # Draw influence grid if debug mode is enabled
-                        if bot.debug:
-                            bot.mediator.map_data.draw_influence_in_game(nova_grid, lower_threshold=1)
                 
         else:
             # No enemies nearby—regroup or move to final target
