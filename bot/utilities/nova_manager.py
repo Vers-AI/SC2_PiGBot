@@ -1,5 +1,8 @@
-from typing import List
-from bot.utilities.use_disruptor_nova import UseDisruptorNova
+from typing import List, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot.utilities.use_disruptor_nova import UseDisruptorNova
+
 
 class NovaManager:
     """Manager for tracking and updating active Disruptor Nova abilities."""
@@ -12,7 +15,10 @@ class NovaManager:
         self.active_novas: List = []
 
     def add_nova(self, nova) -> None:
-        """Add a nova instance to the manager. If the nova object does not have the expected methods (e.g., update_info), wrap it in a UseDisruptorNova instance."""
+        """Add a nova instance to the manager."""
+        # Import here to avoid circular import
+        from bot.utilities.use_disruptor_nova import UseDisruptorNova
+        
         if not hasattr(nova, 'update_info'):
             nova_instance = UseDisruptorNova(10, 5, self.map_data, self.bot)
             nova_instance.load_info(nova)
