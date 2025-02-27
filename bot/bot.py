@@ -6,7 +6,7 @@ import numpy as np
 
 # Ares imports (framework-specific)
 from ares import AresBot
-from ares.consts import ALL_STRUCTURES, WORKER_TYPES, UnitRole
+from ares.consts import ALL_STRUCTURES, WORKER_TYPES, UnitRole 
 
 from ares.managers.squad_manager import UnitSquad
 from ares.managers.manager_mediator import ManagerMediator
@@ -42,7 +42,7 @@ from bot.hub.reactions import (
 )
 #debugs
 from bot.utilities.get_nova_aoe_grid import get_nova_aoe_grid
-from bot.utilities.use_disruptor_nova import UseDisruptorNova, DummyNovaUnit
+from bot.utilities.use_disruptor_nova import UseDisruptorNova
 from map_analyzer import MapData
 from bot.utilities.nova_manager import NovaManager
 
@@ -160,7 +160,7 @@ class PiG_Bot(AresBot):
         # Optionally control main army or warp prism outside macro
         if self._commenced_attack and main_army:
             control_main_army(self, main_army, attack_target(self, main_army_position=self.main_army_position), squads)
-        
+
         # Warp Prism following main army
         warp_prism_follower(self, warp_prism, main_army)
 
@@ -186,7 +186,7 @@ class PiG_Bot(AresBot):
         # disruptor_unit = DummyNovaUnit(position=Point2((10, 10)))  # Simulated disruptor position
         # enemy_units = []  # Populate with simulated enemy units
         # friendly_units = []  # Populate with simulated friendly units
-    
+        
         # # Execute the nova ability
         # if self.use_disruptor_nova.can_use(self.time):
         #     self.use_disruptor_nova.execute(disruptor_unit, enemy_units, friendly_units, self.time)
@@ -217,7 +217,7 @@ class PiG_Bot(AresBot):
             self.mediator.assign_role(tag=unit.tag, role=UnitRole.DROP_SHIP)
             unit.move(Point2(self.natural_expansion.towards(self.game_info.map_center, 1)))
             return
-
+        
         if unit.type_id == UnitTypeId.DISRUPTORPHASED:
             # When a DISRUPTORPHASED unit (the nova) is created, send it to the NovaManager
             self.nova_manager.add_nova(unit)
