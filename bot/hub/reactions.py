@@ -51,7 +51,7 @@ def cheese_reaction(bot):
     """
     Builds pylon/gateway/shield battery to defend early cheese.
     """
-    print(f"Current build: {bot.build_order_runner.chosen_opening}")
+    #print(f"Current build: {bot.build_order_runner.chosen_opening}")
     bot.build_order_runner.switch_opening("Cheese_Reaction_Build")
 
     # Cancel a fast-expanding Nexus if it's started and we detect cheese
