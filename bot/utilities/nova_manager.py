@@ -7,10 +7,10 @@ if TYPE_CHECKING:
 class NovaManager:
     """Manager for tracking and updating active Disruptor Nova abilities."""
 
-    def __init__(self, bot, map_data):
-        # Store bot and map_data for wrapping incoming nova units
+    def __init__(self, bot, mediator):
+        # Store bot and mediator for wrapping incoming nova units
         self.bot = bot
-        self.map_data = map_data
+        self.mediator = mediator
         # List to hold active nova instances
         self.active_novas: List = []
 
@@ -20,7 +20,7 @@ class NovaManager:
         from bot.utilities.use_disruptor_nova import UseDisruptorNova
         
         if not hasattr(nova, 'update_info'):
-            nova_instance = UseDisruptorNova(self.map_data, self.bot)
+            nova_instance = UseDisruptorNova(mediator=self.mediator, bot=self.bot)
             nova_instance.load_info(nova)
             self.active_novas.append(nova_instance)
         else:
@@ -29,16 +29,19 @@ class NovaManager:
     def update(self, enemy_units: list, friendly_units: list) -> None:
         """Update all active nova instances and remove expired ones."""
         expired = []
+        
         for nova in self.active_novas:
-            # Update nova state
+            # Decrement the frame counter and update remaining distance
             nova.update_info()
-            # Run the nova behavior step (which updates target and moves nova)
+            
+            # Run the nova's step logic
             nova.run_step(enemy_units, friendly_units)
-            # Check if nova has expired
+            
+            # If timer has expired, mark for removal
             if nova.frames_left <= 0:
                 expired.append(nova)
-
-        # Remove expired novas
+        
+        # Remove expired nova instances
         for nova in expired:
             self.active_novas.remove(nova)
 

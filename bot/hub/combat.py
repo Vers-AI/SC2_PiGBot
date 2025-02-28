@@ -19,8 +19,6 @@ from ares.consts import UnitRole
 from ares.dicts.unit_data import UNIT_DATA
 
 from bot.utilities.use_disruptor_nova import UseDisruptorNova
-from bot.utilities.get_nova_aoe_grid import get_nova_aoe_grid
-
 
 from cython_extensions import (
    

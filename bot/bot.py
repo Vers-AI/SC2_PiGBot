@@ -41,7 +41,6 @@ from bot.hub.reactions import (
     one_base_reaction
 )
 #debugs
-from bot.utilities.get_nova_aoe_grid import get_nova_aoe_grid
 from bot.utilities.use_disruptor_nova import UseDisruptorNova
 from map_analyzer import MapData
 from bot.utilities.nova_manager import NovaManager
@@ -92,8 +91,8 @@ class PiG_Bot(AresBot):
 
         # Debug on start
         self.map_data: MapData  = self.mediator.get_map_data_object
-        self.use_disruptor_nova = UseDisruptorNova(map_data=self.map_data, bot=self)
-        self.nova_manager = NovaManager(bot=self, map_data=self.map_data)  # Initialize the NovaManager
+        self.use_disruptor_nova = UseDisruptorNova(mediator=self.mediator, bot=self)
+        self.nova_manager = NovaManager(bot=self, mediator=self.mediator)  # Initialize the NovaManager
 
         self.current_base_target = self.enemy_start_locations[0]
 
