@@ -10,7 +10,6 @@ from sc2.ids.ability_id import AbilityId
 
 
 from behaviors.combat.individual.combat_individual_behavior import CombatIndividualBehavior
-from ares.behaviors.combat.individual import UseAbility
 from ares.managers.manager_mediator import ManagerMediator
 from bot.utilities.get_nova_aoe_grid import get_nova_aoe_grid, apply_influence_in_radius
 from ares.dicts.unit_data import UNIT_DATA
@@ -22,67 +21,75 @@ if TYPE_CHECKING:
     from ares import AresBot
 
 class UseDisruptorNova(CombatIndividualBehavior):
-    def __init__(self, cooldown: float, nova_duration: float, map_data, bot: 'AresBot'):
+    def __init__(self, map_data, bot: 'AresBot'):
         """Initialize with the given cooldown and nova duration in seconds."""
-        self.cooldown = cooldown
-        self.nova_duration = nova_duration
-        self.last_used = -cooldown  # Allow immediate use on start
+        self.cooldown = 21.4
+        self.nova_duration = 2.1
         self.best_target_pos = None
         self.frames_left = 48  # Example starting frame count
         self.distance_left = 0.0
         self.unit = None  # References the Purification Nova ability which is a unit not a spell
         self.map_data = map_data
         self.bot = bot  # Store bot instance
-
+    
     def can_use(self, disruptor_unit) -> bool:
         """Return True if the ability can be used based on its cooldown."""
         return (AbilityId.EFFECT_PURIFICATIONNOVA in disruptor_unit.abilities)
 
     def select_best_target(self, enemy_units: List['Unit'], friendly_units: List['Unit']) -> Optional[Point2]:
-        """Determine the best target position based on grid influence data."""
+        """
+        Select the best target for the Disruptor Nova based on enemy and friendly unit positions.
+        
+        Uses an influence grid where enemy units add positive influence and friendly units add negative influence.
+        The target position will be the location with maximum positive influence.
+        
+        Returns:
+            Point2: The position to target, or None if no good target is found.
+        """
         if not enemy_units:
             return None
         
         # Calculate influence grid
-        influence_grid = get_nova_aoe_grid(self.map_data)
+        self.influence_grid = get_nova_aoe_grid(self.map_data)
         
         # Apply enemy influence
         for enemy in enemy_units:
             # Determine army value
             army_value = UNIT_DATA[enemy.type_id]['army_value'] if enemy.type_id in UNIT_DATA else 1
             
-            # Game coordinates to cell coordinates
-            # Find closest enemy with highest army value cluster
-            for friendly in friendly_units:
-                # Apply negative influence for friendly units to avoid friendly fire
-                apply_influence_in_radius(
-                    grid=influence_grid,
-                    center=(enemy.position.x, enemy.position.y),
-                    radius=2.5,  # Nova radius
-                    influence=army_value,
-                    map_data=self.map_data
-                )
-                
-                # Apply negative influence for friendly units to avoid friendly fire
-                apply_influence_in_radius(
-                    grid=influence_grid,
-                    center=(friendly.position.x, friendly.position.y),
-                    radius=2.5,  # Nova radius
-                    influence=-army_value * 2,  # Double negative to heavily discourage hitting friendlies
-                    map_data=self.map_data
-                )
+            # Apply positive influence for enemy units
+            apply_influence_in_radius(
+                grid=self.influence_grid,
+                center=(int(enemy.position.x), int(enemy.position.y)),  # Ensure integer coordinates
+                radius=2.5,  # Nova radius
+                influence=army_value,
+                map_data=self.map_data
+            )
         
+        # Apply negative influence for friendly units (separate loop)
+        for friendly in friendly_units:
+            # Determine army value
+            army_value = UNIT_DATA[friendly.type_id]['army_value'] if friendly.type_id in UNIT_DATA else 1
+            
+            # Apply negative influence for friendly units to avoid friendly fire
+            apply_influence_in_radius(
+                grid=self.influence_grid,
+                center=(int(friendly.position.x), int(friendly.position.y)),  # Ensure integer coordinates
+                radius=2.5,  # Nova radius
+                influence=-army_value * 2,  # Double negative to heavily discourage hitting friendlies
+                map_data=self.map_data
+            )
+                
         # Find the position with the maximum influence
-        max_influence = np.max(influence_grid)
+        max_influence = np.max(self.influence_grid)
         if max_influence <= 0:
             return None
             
         # Get the coordinates of the maximum influence
-        max_indices = np.unravel_index(np.argmax(influence_grid), influence_grid.shape)
+        max_indices = np.unravel_index(np.argmax(self.influence_grid), self.influence_grid.shape)
         
-        # Since grid coordinates roughly match the game coordinates, we can directly use them
-        # If needed, adjust based on your map's resolution
-        best_position = Point2((max_indices[0], max_indices[1]))
+        # Convert indices to Point2
+        best_position = Point2((max_indices[1], max_indices[0]))  # Swap coordinates (column, row) to (x, y)
         
         # Find closest enemy to the best position
         closest_enemy = None
@@ -133,6 +140,36 @@ class UseDisruptorNova(CombatIndividualBehavior):
         """Output debugging information."""
         print(f"Nova Frames Left: {self.frames_left}, Distance Left: {self.distance_left}")
         print(f"Current Position: {self.unit.position}, Target Position: {self.best_target_pos}")
+        
+        # Get max and min values, excluding zeros
+        non_zero_mask = self.influence_grid != 0
+        if np.any(non_zero_mask):
+            max_value = np.max(self.influence_grid[non_zero_mask])
+            min_value = np.min(self.influence_grid[non_zero_mask])
+            print(f"Max influence: {max_value}, Min influence: {min_value}")
+        
+        # Use a threshold that ignores zero values but shows both positive and negative influences
+        # Positive threshold for enemy influence (green)
+        self.bot.map_data.draw_influence_in_game(
+            grid=self.influence_grid,
+            lower_threshold=0.1,  # Show any positive influence above this threshold
+            upper_threshold=50,   # Cap for better visualization
+            color=(0, 255, 0)     # Green for positive influence
+        )
+        
+        # Negative threshold for friendly unit influence (red)
+        # Create a copy of the grid with only negative values
+        negative_grid = self.influence_grid.copy()
+        negative_grid[negative_grid >= 0] = 0  # Zero out non-negative values
+        negative_grid = -negative_grid  # Invert for visualization (make negative values positive)
+        
+        # Draw the negative influence in red
+        self.bot.map_data.draw_influence_in_game(
+            grid=negative_grid,
+            lower_threshold=0.1,  # Show any negative influence above this threshold (now positive after inversion)
+            upper_threshold=50,   # Cap for better visualization
+            color=(255, 0, 0)     # Red for negative influence
+        )
 
     def execute(self, disruptor_unit, enemy_units: List['Unit'], friendly_units: List['Unit']):
         """Attempt to execute Disruptor Nova ability. Initializes nova state and simulates firing the nova.
@@ -152,14 +189,6 @@ class UseDisruptorNova(CombatIndividualBehavior):
 
         # Debug info
         print(f"Firing Disruptor Nova at target: {target}")
-
-        # Simulate nova creation (in a real scenario, this would come from the game API)
-        # TODO add a way to pass the nova unit into self.load_info after its created to steer it
-        # Initialize nova tracking with the nova unit
-        #self.load_info(nova_unit)
-
-        # Record the time the nova was fired
-        self.last_used = time.time()
 
         # Return self to indicate success
         return self
