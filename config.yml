@@ -16,9 +16,11 @@ GameStep: 4
 DebugGameStep: 2
 
 DebugOptions:
-    # one of: Air, AirVsGround, Ground, GroundAvoidance, AirAvoidance
-    ActiveGrid: Ground
+    # one of: Air, AirVsGround, Ground, GroundAvoidance, AirAvoidance, GroundToAir, TacticalGround
+    ActiveGrid: TacticalGround
     ChatDebug: True
     DebugSpawn: True
     ShowPathingCost: False
     ResourceDebug: False
+Features:
+    TacticalGroundGrid: True
