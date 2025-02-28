@@ -104,8 +104,8 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
             if spellcasters:
                 disruptors= [spellcaster for spellcaster in spellcasters if spellcaster.type_id == UnitTypeId.DISRUPTOR]
                 for disruptor in disruptors:
-                    bot.use_disruptor_nova.execute(disruptor, all_close, units)
-                    
+                        bot.use_disruptor_nova.execute(disruptor, all_close, units)
+                        bot.register_behavior(KeepUnitSafe(disruptor, grid))
                 
         else:
             # No enemies nearby—regroup or move to final target
