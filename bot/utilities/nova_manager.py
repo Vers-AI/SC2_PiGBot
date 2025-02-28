@@ -20,7 +20,7 @@ class NovaManager:
         from bot.utilities.use_disruptor_nova import UseDisruptorNova
         
         if not hasattr(nova, 'update_info'):
-            nova_instance = UseDisruptorNova(10, 5, self.map_data, self.bot)
+            nova_instance = UseDisruptorNova(self.map_data, self.bot)
             nova_instance.load_info(nova)
             self.active_novas.append(nova_instance)
         else:

@@ -92,7 +92,7 @@ class PiG_Bot(AresBot):
 
         # Debug on start
         self.map_data: MapData  = self.mediator.get_map_data_object
-        self.use_disruptor_nova = UseDisruptorNova(cooldown=21.4, nova_duration=2.1, map_data=self.map_data, bot=self)
+        self.use_disruptor_nova = UseDisruptorNova(map_data=self.map_data, bot=self)
         self.nova_manager = NovaManager(bot=self, map_data=self.map_data)  # Initialize the NovaManager
 
         self.current_base_target = self.enemy_start_locations[0]
@@ -180,20 +180,7 @@ class PiG_Bot(AresBot):
         if self.minerals > 2800 and not self.build_order_runner.build_completed:
             self.build_order_runner.set_build_completed()
 
-    # Debug: Draw the influence grid
-        
-        # # Example setup for testing the dummy nova
-        # disruptor_unit = DummyNovaUnit(position=Point2((10, 10)))  # Simulated disruptor position
-        # enemy_units = []  # Populate with simulated enemy units
-        # friendly_units = []  # Populate with simulated friendly units
-        
-        # # Execute the nova ability
-        # if self.use_disruptor_nova.can_use(self.time):
-        #     self.use_disruptor_nova.execute(disruptor_unit, enemy_units, friendly_units, self.time)
-    
-        # # Update active novas
-        # self.use_disruptor_nova.update_info()
-        # self.use_disruptor_nova.run_step(enemy_units, friendly_units)
+   
 
         # Update nova behaviors
         enemy_units = getattr(self, 'enemy_units', [])
@@ -206,7 +193,6 @@ class PiG_Bot(AresBot):
         Called whenever a new unit spawns. Assign roles based on type.
         """
         await super().on_unit_created(unit)
-        #TODO create a role for Spellcasters 
         if unit.type_id in ALL_STRUCTURES or unit.type_id in WORKER_TYPES:
             return
 
