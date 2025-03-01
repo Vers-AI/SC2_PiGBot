@@ -10,6 +10,7 @@ from ares.consts import ALL_STRUCTURES, WORKER_TYPES, UnitRole
 
 from ares.managers.squad_manager import UnitSquad
 from ares.managers.manager_mediator import ManagerMediator
+from map_analyzer import MapData
 
 
 # SC2-related imports
