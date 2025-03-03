@@ -168,7 +168,7 @@ class UseDisruptorNova(CombatIndividualBehavior):
         """Attempt to execute Disruptor Nova ability. Initializes nova state and simulates firing the nova.
         Returns self (the nova instance) if fired successfully, or None if not.
         """
-        # Check if ability can be used
+        # Check if ability can be used (already handles cooldown via SC2 API)
         if not self.can_use(disruptor_unit):
             return None
 
@@ -176,12 +176,28 @@ class UseDisruptorNova(CombatIndividualBehavior):
         target = self.select_best_target(enemy_units, friendly_units)
         if not target:
             return None
-
-        # Send the command to fire the nova ability at the target
-        disruptor_unit(AbilityId.EFFECT_PURIFICATIONNOVA, target)
-
+            
+        # Calculate maximum distance the Nova can travel during its lifetime
+        nova_speed = 5.95  # Nova movement speed in game units per second
+        nova_lifetime = 2.1  # Nova lifetime in seconds
+        max_travel_distance = nova_speed * nova_lifetime
+        
+        # Calculate the current distance to the target
+        current_distance = disruptor_unit.position.distance_to(target)
+        
         # Debug info
-        print(f"Firing Disruptor Nova at target: {target}")
-
-        # Return self to indicate success
-        return self
+        print(f"Target distance: {current_distance:.2f}, Max travel distance: {max_travel_distance:.2f}")
+        
+        # Check if the target is within range
+        if current_distance <= max_travel_distance:
+            # Target is within range, fire the Nova
+            disruptor_unit(AbilityId.EFFECT_PURIFICATIONNOVA, target)
+            print(f"Firing Disruptor Nova at target: {target}")
+            return self
+        else:
+            # Target is out of range, move the Disruptor closer
+            # Find a position that moves toward the target but not all the way
+            move_position = disruptor_unit.position.towards(target, 5.0)
+            disruptor_unit.move(move_position)
+            print(f"Target out of range. Moving Disruptor to: {move_position}")
+            return None
