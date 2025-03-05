@@ -19,6 +19,7 @@ from ares.consts import UnitRole
 from ares.dicts.unit_data import UNIT_DATA
 
 from bot.utilities.use_disruptor_nova import UseDisruptorNova
+from bot.utilities.nova_manager import NovaManager
 
 from cython_extensions import (
    
@@ -83,7 +84,6 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
             ranged = [u for u in units if u.ground_range > 3 and (u.energy == 0 and u.can_attack)]
             spellcasters = [u for u in units if u.energy > 0 or not u.can_attack]
             # Simple picking logic
-            print("Melee: ", melee, "Ranged: ", ranged, "Spellcasters: ", spellcasters)
             enemy_target = cy_pick_enemy_target(all_close)
             # Ranged micro example
             for r_unit in ranged:
@@ -103,11 +103,16 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
             if spellcasters:
                 disruptors= [spellcaster for spellcaster in spellcasters if spellcaster.type_id == UnitTypeId.DISRUPTOR]
                 for disruptor in disruptors:
-                        # Execute the Nova ability if it's available
-                        bot.use_disruptor_nova.execute(disruptor, all_close, units)
+                    # Execute the Nova ability if it's available, using the Nova manager for coordination
+                    try:
+                        nova_manager = bot.nova_manager if hasattr(bot, 'nova_manager') else None
+                        print(f"DEBUG: Using nova_manager: {nova_manager is not None}")
+                        result = bot.use_disruptor_nova.execute(disruptor, all_close, units, nova_manager)
+                        print(f"DEBUG: Disruptor execute result: {result is not None}")
                         bot.register_behavior(KeepUnitSafe(disruptor, grid))
+                    except Exception as e:
+                        print(f"DEBUG ERROR in disruptor handling: {e}")
                     
-                
         else:
             # No enemies nearby—regroup or move to final target
             dist_squad_main = pos_of_main_squad.distance_to(squad_position)

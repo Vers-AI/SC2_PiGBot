@@ -126,6 +126,22 @@ class PiG_Bot(AresBot):
         warp_prism = self.mediator.get_units_from_role(role=UnitRole.DROP_SHIP)
         scout_units = self.mediator.get_units_from_role(role=UnitRole.SCOUTING)
 
+        # Update Nova Manager with current units
+        if hasattr(self, 'nova_manager'):
+            try:
+                # Get all visible enemy units within a reasonable search range
+                enemy_units = self.enemy_units.filter(lambda u: u.is_visible)
+                friendly_units = self.units
+                
+                # Update the Nova Manager with current units
+                self.nova_manager.update_units(enemy_units, friendly_units)
+                
+                # Run the update method to handle active Novas
+                self.nova_manager.update(enemy_units, friendly_units)
+                print(f"DEBUG: Updated NovaManager with {len(enemy_units)} enemy units and {len(friendly_units)} friendly units")
+            except Exception as e:
+                print(f"DEBUG ERROR updating NovaManager: {e}")
+
         # Create Squad
         squads: list[UnitSquad] = self.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15)
 
@@ -183,10 +199,9 @@ class PiG_Bot(AresBot):
    
 
         # Update nova behaviors
-        enemy_units = getattr(self, 'enemy_units', [])
-        friendly_units = getattr(self, 'friendly_units', [])
+        enemy_units = self.all_enemy_units
+        friendly_units = self.units
         self.nova_manager.update(enemy_units, friendly_units)
-        
 
     async def on_unit_created(self, unit: Unit) -> None:
         """
@@ -213,6 +228,19 @@ class PiG_Bot(AresBot):
         self.mediator.assign_role(tag=unit.tag, role=UnitRole.ATTACKING)
         unit.attack(Point2(self.natural_expansion.towards(self.game_info.map_center, 2)))
 
+    async def on_unit_destroyed(self, unit_tag: int) -> None:
+        """Track when units get destroyed."""
+        await super(PiG_Bot, self).on_unit_destroyed(unit_tag)
+
+    async def on_unit_type_changed(self, unit: Unit, previous_type: UnitTypeId) -> None:
+        """Called when a unit changes type, like Disruptor firing a Nova."""
+        await super(PiG_Bot, self).on_unit_type_changed(unit, previous_type)
+        
+        # Detect when a Disruptor fires a Nova (it changes type temporarily)
+        if previous_type == UnitTypeId.DISRUPTOR and unit.type_id == UnitTypeId.DISRUPTORPHASED:
+            # Add this nova to our manager for tracking
+            self.nova_manager.add_nova(unit)
+            
     async def on_unit_took_damage(self, unit: Unit, amount_damage_taken: float) -> None:
         """
         Allows us to cancel building structures if they're badly damaged, 
