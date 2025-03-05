@@ -138,7 +138,6 @@ class PiG_Bot(AresBot):
                 
                 # Run the update method to handle active Novas
                 self.nova_manager.update(enemy_units, friendly_units)
-                print(f"DEBUG: Updated NovaManager with {len(enemy_units)} enemy units and {len(friendly_units)} friendly units")
             except Exception as e:
                 print(f"DEBUG ERROR updating NovaManager: {e}")
 
