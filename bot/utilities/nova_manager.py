@@ -20,19 +20,19 @@ class NovaManager:
         # Set to track current Nova targets and avoid overlapping
         self.current_targets: Set[Tuple[int, int]] = set()
         # Exclusion radius (in grid cells)
-        self.exclusion_radius = 3  # Reduced from 5 to 3 to be less restrictive
+        self.exclusion_radius = 2.5  # Reduced from 3 to 2.5 for even more flexibility
         # Nova speed and lifetime constants
         self.nova_speed = 5.95  # Nova movement speed in game units per second
         self.nova_lifetime = 2.1  # Nova lifetime in seconds
         self.enemy_units = []
         self.friendly_units = []
 
-        print("DEBUG: NovaManager initialized with exclusion radius of 3 grid cells")
+        print(f"DEBUG: NovaManager initialized with exclusion radius of {self.exclusion_radius} grid cells")
 
         # Test to verify we can access the tactical grid
         try:
             # Get the tactical ground grid as a method
-            grid = self.mediator.get_tactical_ground_grid()
+            grid = self.mediator.get_tactical_ground_grid
             if grid is not None:
                 print(f"DEBUG: Successfully accessed tactical grid with shape {grid.shape}")
             else:
@@ -88,41 +88,40 @@ class NovaManager:
         
     def register_nova_target(self, position: Point2) -> bool:
         """
-        Register a new Nova target position, checking for overlap with existing targets.
-        
-        Args:
-            position: The target position (Point2)
-            
-        Returns:
-            bool: True if successfully registered, False if too close to existing target
+        Register a new Nova target position. Returns True if successful, False if the position
+        is too close to an existing target.
         """
+        if not position:
+            print("DEBUG: Cannot register None position")
+            return False
+            
+        # Convert world position to grid position
         try:
-            # Validate input
-            if position is None:
-                print("DEBUG: register_nova_target called with None position")
+            # Access tactical ground grid as an attribute, not a method
+            grid = self.mediator.get_tactical_ground_grid
+            if grid is None:
+                print("DEBUG: Tactical grid is None in register_nova_target")
                 return False
                 
-            # Convert Point2 to grid coordinates
-            # For simplicity, assuming grid coordinates match game coordinates
-            grid_x = int(position.x)
-            grid_y = int(position.y)
+            # Convert world position to grid coordinates
+            grid_x, grid_y = int(position.x), int(position.y)
             
-            # Check if too close to existing target
+            # Check against existing targets
             for existing_x, existing_y in self.current_targets:
-                distance_squared = (existing_x - grid_x) ** 2 + (existing_y - grid_y) ** 2
-                exclusion_distance_squared = (self.exclusion_radius * 2) ** 2
+                # Calculate squared distance between the two points
+                distance = ((existing_x - grid_x) ** 2 + (existing_y - grid_y) ** 2) ** 0.5
+                min_required_distance = self.exclusion_radius * 2
                 
-                if distance_squared <= exclusion_distance_squared:
-                    actual_distance = np.sqrt(distance_squared)
-                    exclusion_distance = self.exclusion_radius * 2
+                if distance <= min_required_distance:
                     print(f"DEBUG: Nova target registration failed - target at ({grid_x}, {grid_y}) too close to existing target at ({existing_x}, {existing_y})")
-                    print(f"DEBUG: Distance: {actual_distance:.2f}, Minimum required: {exclusion_distance:.2f}")
+                    print(f"DEBUG: Distance: {distance:.2f}, Minimum required: {min_required_distance:.2f}")
                     return False
-                
-            # Add to current targets
+            
+            # If we get here, the position is valid, so register it
             self.current_targets.add((grid_x, grid_y))
             print(f"DEBUG: Registered Nova target at ({grid_x}, {grid_y}), now tracking {len(self.current_targets)} targets")
             return True
+            
         except Exception as e:
             print(f"DEBUG ERROR in register_nova_target: {e}")
             return False

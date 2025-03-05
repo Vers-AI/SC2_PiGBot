@@ -178,7 +178,7 @@ class UseDisruptorNova(CombatIndividualBehavior):
             print(f"DEBUG Error in select_best_target: {e}")
             return None
 
-    def update_target_position(self, enemy_units: List['Unit'], friendly_units: List['Unit'], nova_manager) -> bool:
+    def update_target_position(self, enemy_units: List['Unit'], friendly_units: List['Unit'], nova_manager):
         """
         Check if a better target has become available within the Nova's remaining travel range.
         
@@ -195,7 +195,7 @@ class UseDisruptorNova(CombatIndividualBehavior):
             
         try:
             # Check if there's enough time to change course
-            if self.frames_left < 10:  # Don't change course if almost expired
+            if self.frames_left < 5:  
                 return False
                 
             # Get the current position of the Nova
@@ -227,30 +227,37 @@ class UseDisruptorNova(CombatIndividualBehavior):
                     if distance <= max_travel_distance:
                         out_of_reach_mask[y, x] = False
             
+            # Temporarily unregister our current target to avoid its exclusion zone
+            current_target_temporarily_unregistered = False
+            if self.best_target_pos:
+                try:
+                    nova_manager.unregister_nova_target(self.best_target_pos)
+                    current_target_temporarily_unregistered = True
+                    print(f"DEBUG: Temporarily unregistered target at {self.best_target_pos} for search")
+                except Exception as e:
+                    print(f"DEBUG ERROR unregistering target for search: {e}")
+            
             # Get the exclusion mask from the nova manager
             try:
                 exclusion_mask = nova_manager.get_exclusion_mask(grid)
                 combined_mask = np.logical_or(exclusion_mask, out_of_reach_mask)
             except Exception as e:
-                print(f"ERROR getting exclusion mask: {e}")
+                print(f"DEBUG ERROR getting exclusion mask: {e}")
                 combined_mask = out_of_reach_mask
-            
-            # Only keep the exclusion around our current target
-            if self.best_target_pos:
-                try:
-                    nova_manager.unregister_nova_target(self.best_target_pos)
-                except Exception as e:
-                    print(f"ERROR unregistering target: {e}")
             
             # Find the new best target
             new_target = self.select_best_target(enemy_units, friendly_units, combined_mask)
             
-            # Re-register our current target regardless of outcome
-            if self.best_target_pos:
+            # Re-register our current target if we temporarily unregistered it
+            if current_target_temporarily_unregistered and self.best_target_pos:
                 try:
-                    nova_manager.register_nova_target(self.best_target_pos)
+                    registered = nova_manager.register_nova_target(self.best_target_pos)
+                    if registered:
+                        print(f"DEBUG: Re-registered target at {self.best_target_pos}")
+                    else:
+                        print(f"DEBUG: Failed to re-register target at {self.best_target_pos}")
                 except Exception as e:
-                    print(f"ERROR re-registering target: {e}")
+                    print(f"DEBUG ERROR re-registering target: {e}")
             
             # If we found a significantly better target, switch to it
             if new_target and self.best_target_influence > 0:
@@ -261,25 +268,28 @@ class UseDisruptorNova(CombatIndividualBehavior):
                     # Calculate how much better the new target is (as a percentage)
                     improvement = (self.best_target_influence - old_influence) / self.best_target_influence
                     
-                    # Only switch if the improvement is significant (>20%)
-                    if improvement > 0.2:
+                    # Only switch if the improvement is significant (>10%)
+                    if improvement > 0.1:
                         # Update our target
+                        print(f"DEBUG: Updating Nova target from {self.best_target_pos} to {new_target} (improvement: {improvement:.2f})")
                         self.best_target_pos = new_target
                         # Try to register the new target
                         try:
-                            nova_manager.register_nova_target(new_target)
+                            registered = nova_manager.register_nova_target(new_target)
+                            if not registered:
+                                print(f"DEBUG: Failed to register new target at {new_target}, but will still move there")
                         except Exception as e:
-                            print(f"ERROR registering new target: {e}")
+                            print(f"DEBUG ERROR registering new target: {e}")
                         return True
                 except Exception as e:
-                    print(f"ERROR calculating improvement: {e}")
+                    print(f"DEBUG ERROR calculating improvement: {e}")
             
             return False
             
         except Exception as e:
-            print(f"Error in update_target_position: {e}")
+            print(f"DEBUG ERROR in update_target_position: {e}")
             return False
-            
+
     def execute(self, disruptor_unit, enemy_units: List['Unit'], friendly_units: List['Unit'], nova_manager=None):
         """Attempt to execute Disruptor Nova ability. Initializes nova state and simulates firing the nova.
         Returns self (the nova instance) if fired successfully, or None if not.
@@ -382,8 +392,8 @@ class UseDisruptorNova(CombatIndividualBehavior):
         # Update the frame counter
         self.frames_left -= 1
         
-        # Check if we should update our target (only every 5 frames to reduce computational load)
-        if nova_manager and self.frames_left % 5 == 0:
+        # Check if we should update our target - do this every frame to be more responsive
+        if nova_manager:
             self.update_target_position(enemy_units, friendly_units, nova_manager)
 
         # If a valid target was found and it differs from the current position, command the nova to move
