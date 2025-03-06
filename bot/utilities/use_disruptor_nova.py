@@ -66,12 +66,15 @@ class UseDisruptorNova(CombatIndividualBehavior):
                 # Fall back to position-based targeting without grid influence
                 return self._select_target_position_based(enemy_units, friendly_units, exclusion_mask)
             else:
-                # Replace positive infinite values with a reasonable but large finite value
-                # and negative infinite values with a reasonably large negative value
-                # This avoids the extreme 10000.0 value which causes false targeting
-                grid = np.where(np.isposinf(grid), 500.0, grid)  # 500 is significantly higher than normal influence (>200)
-                grid = np.where(np.isneginf(grid), -500.0, grid)
+                # The get_grid method already handles the infinite values by replacing them with
+                # appropriate extreme values representing enemy and friendly areas
+                # No need to replace them again here
                 print(f"DEBUG select_best_target: Grid info - shape={grid.shape}, min={np.min(grid)}, max={np.max(grid)}")
+                
+                # Tactical grid meanings:
+                # 200 = Neutral value
+                # >200 = Enemy influence (higher = more enemy presence)
+                # <200 = Friendly influence (lower = more friendly presence)
             
             # Apply the exclusion mask if provided
             if exclusion_mask is not None:
@@ -84,6 +87,8 @@ class UseDisruptorNova(CombatIndividualBehavior):
                     
                     # Create a working copy of the grid with exclusions applied
                     working_grid = grid.copy()
+                    # Store the grid for visualization debugging before applying exclusions
+                    self.influence_grid = working_grid.copy()
                     # Set excluded areas to -np.inf so they won't be selected
                     working_grid[exclusion_mask] = -np.inf
                     print(f"DEBUG select_best_target: Applied exclusion mask, valid grid area: {np.sum(~exclusion_mask)} cells")
@@ -94,6 +99,9 @@ class UseDisruptorNova(CombatIndividualBehavior):
             else:
                 # No exclusion mask, use the grid as is
                 working_grid = grid.copy()
+                
+                # Store the grid for visualization debugging
+                self.influence_grid = working_grid.copy()
             
             # Create additional masks for friendly/enemy areas to enhance the grid
             try:
@@ -208,28 +216,59 @@ class UseDisruptorNova(CombatIndividualBehavior):
                     grid_median = np.median(working_grid[valid_mask])
                     print(f"DEBUG select_best_target: Grid stats - min: {grid_min:.1f}, max: {grid_max:.1f}, median: {grid_median:.1f}")
                     
-                    # Count cells with high influence (likely enemies)
-                    enemy_cells = np.sum(working_grid > 200)
-                    # Count cells with lower influence (likely friendlies or neutral)
-                    friendly_cells = np.sum((working_grid < 200) & (working_grid > -200) & valid_mask)
-                    # Count cells with strong negative influence (likely heavily penalized friendly areas)
-                    heavy_friendly_cells = np.sum(working_grid <= -200)
+                    # Grid value interpretation:
+                    # 200 = Neutral value
+                    # >200 = Enemy influence (higher = more enemy presence)
+                    # <200 = Friendly influence (lower = more friendly presence)
                     
-                    print(f"DEBUG select_best_target: Cell classification - Enemy influence cells: {enemy_cells}, ")
-                    print(f"                           Friendly/neutral cells: {friendly_cells}, Heavily penalized friendly areas: {heavy_friendly_cells}")
+                    # Count cells in different categories
+                    strong_enemy_cells = np.sum(working_grid > 250)  # Strong enemy presence
+                    moderate_enemy_cells = np.sum((working_grid > 200) & (working_grid <= 250))  # Moderate enemy presence
+                    neutral_cells = np.sum((working_grid >= 190) & (working_grid <= 210) & valid_mask)  # Near neutral
+                    moderate_friendly_cells = np.sum((working_grid < 200) & (working_grid >= 150) & valid_mask)  # Moderate friendly presence
+                    strong_friendly_cells = np.sum(working_grid < 150)  # Strong friendly presence
+                    
+                    # Total enemies and friendlies
+                    total_enemy_cells = strong_enemy_cells + moderate_enemy_cells
+                    total_friendly_cells = moderate_friendly_cells + strong_friendly_cells
+                    
+                    print(f"DEBUG select_best_target: Grid value distribution:")
+                    print(f"  Enemy cells: {total_enemy_cells} (Strong: {strong_enemy_cells}, Moderate: {moderate_enemy_cells})")
+                    print(f"  Neutral cells: {neutral_cells}")
+                    print(f"  Friendly cells: {total_friendly_cells} (Moderate: {moderate_friendly_cells}, Strong: {strong_friendly_cells})")
                 
                 # Find best position
                 best_y, best_x = np.unravel_index(np.argmax(working_grid), working_grid.shape)
                 best_influence = working_grid[best_y, best_x]
                 print(f"DEBUG select_best_target: Best candidate position at ({best_x}, {best_y}) with influence {best_influence:.1f}")
                 
+                # Calculate adaptive thresholds based on the grid distribution
+                valid_mask = ~np.isinf(working_grid)
+                if np.any(valid_mask):
+                    grid_values = working_grid[valid_mask]
+                    p25 = np.percentile(grid_values, 25)
+                    p50 = np.percentile(grid_values, 50)  # median
+                    p75 = np.percentile(grid_values, 75)
+                    iqr = p75 - p25
+                    
+                    # Set dynamic thresholds based on distribution
+                    lower_threshold = max(210, p50 + 5)  # At least 210 (above neutral)
+                    upper_threshold = p75 + 2 * iqr  # Using statistical outlier approach
+                    
+                    print(f"DEBUG select_best_target: Using adaptive thresholds - Range: {lower_threshold:.1f} to {upper_threshold:.1f}")
+                    print(f"DEBUG select_best_target: Grid percentiles - 25%: {p25:.1f}, 50%: {p50:.1f}, 75%: {p75:.1f}, IQR: {iqr:.1f}")
+                else:
+                    # Fallback to fixed thresholds if we can't analyze distribution
+                    lower_threshold = 210
+                    upper_threshold = 600
+                    print(f"DEBUG select_best_target: Using fixed thresholds - Range: {lower_threshold} to {upper_threshold}")
+                
                 # Check if we have a valid target with sufficient influence
-                # Requires influence value above base (200)
-                # Also ensure the position is not unrealistically high which would indicate a false target
-                # 210 threshold ensures some enemy presence (base is 200)
-                if 210 < best_influence < 600:  # Upper bound prevents false positives from infinity replacement
+                # Adaptive thresholds ensure some enemy presence above neutral (200)
+                # while preventing unrealistically high values which might indicate targeting issues
+                if lower_threshold < best_influence < upper_threshold:
                     best_pos = Point2((float(best_x), float(best_y)))
-                    print(f"DEBUG select_best_target: Grid-based approach found target at {best_pos} with influence {best_influence}")
+                    print(f"DEBUG select_best_target: Grid-based approach found target at {best_pos} with influence {best_influence:.1f}")
                     
                     # Store for future comparisons
                     self.best_target_pos = best_pos
@@ -451,15 +490,90 @@ class UseDisruptorNova(CombatIndividualBehavior):
                 valid_positions_mask = ~combined_mask
                 
                 if np.any(valid_positions_mask):
-                    # Handle infinite values to prevent targeting issues
+                    # Create working copy of the grid
                     grid_copy = grid.copy()
-                    # Replace infinite values with reasonable values
-                    grid_copy = np.where(np.isposinf(grid_copy), 500.0, grid_copy)
-                    grid_copy = np.where(np.isneginf(grid_copy), -500.0, grid_copy)
+                    
+                    # Analyze the grid value distribution
+                    valid_data = grid_copy[~np.isinf(grid_copy) & ~np.isnan(grid_copy)]
+                    if len(valid_data) > 0:
+                        min_valid = np.min(valid_data)
+                        max_valid = np.max(valid_data)
+                        median_valid = np.median(valid_data)
+                        p25 = np.percentile(valid_data, 25)
+                        p75 = np.percentile(valid_data, 75)
+                        print(f"DEBUG: Grid values - Min: {min_valid:.1f}, Median: {median_valid:.1f}, Max: {max_valid:.1f}")
+                        print(f"DEBUG: Grid percentiles - 25%: {p25:.1f}, 75%: {p75:.1f}")
+                        
+                        # Grid value interpretation:
+                        # 200 = Neutral value
+                        # >200 = Enemy influence (higher = more enemy presence)
+                        # <200 = Friendly influence (lower = more friendly presence)
+                        
+                        # Count cells in different categories
+                        strong_enemy_cells = np.sum(valid_data > 250)  # Strong enemy presence
+                        moderate_enemy_cells = np.sum((valid_data > 200) & (valid_data <= 250))  # Moderate enemy presence
+                        neutral_cells = np.sum((valid_data >= 190) & (valid_data <= 210))  # Near neutral
+                        moderate_friendly_cells = np.sum((valid_data < 200) & (valid_data >= 150))  # Moderate friendly presence
+                        strong_friendly_cells = np.sum(valid_data < 150)  # Strong friendly presence
+                        
+                        # Total enemies and friendlies
+                        total_enemy_cells = strong_enemy_cells + moderate_enemy_cells
+                        total_friendly_cells = moderate_friendly_cells + strong_friendly_cells
+                        
+                        print(f"DEBUG: Grid value distribution:")
+                        print(f"  Enemy cells: {total_enemy_cells} (Strong: {strong_enemy_cells}, Moderate: {moderate_enemy_cells})")
+                        print(f"  Neutral cells: {neutral_cells}")
+                        print(f"  Friendly cells: {total_friendly_cells} (Moderate: {moderate_friendly_cells}, Strong: {strong_friendly_cells})")
+                    else:
+                        # Default values if no valid data
+                        print("DEBUG: No valid (non-infinite, non-NaN) values in grid")
+                        median_valid = 200
+                    
+                    # Handle infinite values based on the grid's statistical properties
+                    # This approach matches what we do in get_grid() for consistency
+                    pos_inf_mask = np.isposinf(grid_copy)
+                    neg_inf_mask = np.isneginf(grid_copy)
+                    
+                    # Get valid values (non-infinite, non-NaN) for reference
+                    valid_mask = ~np.isinf(grid_copy) & ~np.isnan(grid_copy)
+                    
+                    if np.any(valid_mask):
+                        # Calculate appropriate values based on grid statistics
+                        valid_values = grid_copy[valid_mask]
+                        
+                        # For positive infinity (enemy areas/unpathable), use a high percentile plus margin
+                        extreme_enemy_value = np.percentile(valid_values, 95) + 50
+                        # Ensure it's well above neutral (200)
+                        extreme_enemy_value = max(extreme_enemy_value, 250)
+                        
+                        # For negative infinity (friendly areas/unpathable), use a low percentile minus margin
+                        extreme_friendly_value = np.percentile(valid_values, 5) - 50
+                        # Ensure it's well below neutral (200)
+                        extreme_friendly_value = min(extreme_friendly_value, 150)
+                    else:
+                        # Default values if no valid cells for reference
+                        extreme_enemy_value = 300  # Well above neutral
+                        extreme_friendly_value = 100  # Well below neutral
+                    
+                    # Replace positive infinities (enemy areas) with extreme enemy value
+                    if np.any(pos_inf_mask):
+                        grid_copy = np.where(pos_inf_mask, extreme_enemy_value, grid_copy)
+                        print(f"DEBUG: Replaced {np.sum(pos_inf_mask)} positive infinite values with {extreme_enemy_value:.1f}")
+                    
+                    # Replace negative infinities (friendly areas) with extreme friendly value
+                    if np.any(neg_inf_mask):
+                        grid_copy = np.where(neg_inf_mask, extreme_friendly_value, grid_copy)
+                        print(f"DEBUG: Replaced {np.sum(neg_inf_mask)} negative infinite values with {extreme_friendly_value:.1f}")
+                    
+                    # Replace NaN values if any exist
+                    nan_mask = np.isnan(grid_copy)
+                    if np.any(nan_mask):
+                        grid_copy = np.where(nan_mask, median_valid, grid_copy)
+                        print(f"DEBUG: Replaced {np.sum(nan_mask)} NaN values with median value {median_valid}")
                     
                     # Apply the mask to the grid - set invalid positions to a large negative value
                     # so they won't be selected as maximum
-                    masked_grid = np.where(valid_positions_mask, grid_copy, -500.0)
+                    masked_grid = np.where(valid_positions_mask, grid_copy, -1000.0)  # Even stronger exclusion
                     
                     # Find position with maximum influence in the valid area
                     max_y, max_x = np.unravel_index(np.argmax(masked_grid), grid.shape)
@@ -530,9 +644,22 @@ class UseDisruptorNova(CombatIndividualBehavior):
                     # Get the influence at the current target position
                     current_influence = grid[current_y, current_x]
                     
-                    # Handle infinite values to prevent NaN in calculations
+                    # Get valid values to derive appropriate replacement values for infinities
+                    valid_mask = ~np.isinf(grid) & ~np.isnan(grid)
+                    
+                    # Calculate appropriate values for replacing infinities
+                    if np.any(valid_mask):
+                        valid_values = grid[valid_mask]
+                        extreme_enemy_value = max(np.percentile(valid_values, 95) + 50, 250)
+                        extreme_friendly_value = min(np.percentile(valid_values, 5) - 50, 150)
+                    else:
+                        # Default values if no valid reference
+                        extreme_enemy_value = 300
+                        extreme_friendly_value = 100
+                    
+                    # Handle infinite values in current target influence
                     if np.isinf(current_influence):
-                        current_influence = 500.0 if current_influence > 0 else -500.0
+                        current_influence = extreme_enemy_value if current_influence > 0 else extreme_friendly_value
                     
                     # For the new target, use the influence we found if available
                     if new_influence is None:
@@ -540,24 +667,64 @@ class UseDisruptorNova(CombatIndividualBehavior):
                         new_x = min(max(int(new_target.x), 0), grid.shape[1] - 1)
                         new_influence = grid[new_y, new_x]
                         
-                        # Handle infinite values
+                        # Handle infinite values consistently
                         if np.isinf(new_influence):
-                            new_influence = 500.0 if new_influence > 0 else -500.0
+                            new_influence = extreme_enemy_value if new_influence > 0 else extreme_friendly_value
                     
                     # Store the influence value for future comparisons
                     self.best_target_influence = new_influence
                     
-                    # Calculate how much better the new target is (as a percentage)
-                    # Use a robust calculation to avoid division by zero or NaN
-                    if abs(current_influence) < 1.0:
-                        improvement = 1.0 if new_influence > current_influence else -1.0
-                    else:
-                        improvement = (new_influence - current_influence) / abs(current_influence)
+                    # Calculate how much better the new target is
+                    # Use adaptive approach based on grid distribution
+                    try:
+                        # Ensure we don't have infinite values for comparison
+                        # We should already have handled this earlier, but double-check for safety
+                        if np.isinf(current_influence) or np.isinf(new_influence):
+                            # Use the extreme values we calculated earlier
+                            current_influence = extreme_enemy_value if np.isposinf(current_influence) else extreme_friendly_value if np.isneginf(current_influence) else current_influence
+                            new_influence = extreme_enemy_value if np.isposinf(new_influence) else extreme_friendly_value if np.isneginf(new_influence) else new_influence
+                            print(f"DEBUG: Applied extreme values to infinite influences in improvement calculation")
+                        
+                        # Calculate absolute and relative improvement metrics
+                        absolute_improvement = new_influence - current_influence
+                        
+                        # Use robust relative calculation to avoid division issues
+                        if abs(current_influence) < 1.0:
+                            relative_improvement = 1.0 if absolute_improvement > 0 else -1.0
+                        else:
+                            relative_improvement = absolute_improvement / abs(current_influence)
+                        
+                        # Get an idea of typical grid fluctuations
+                        valid_data = grid[~np.isinf(grid) & ~np.isnan(grid)]
+                        if len(valid_data) > 100:  # Only if we have enough data points
+                            std_dev = np.std(valid_data)
+                            # Calculate improvement in terms of standard deviations (z-score)
+                            z_improvement = absolute_improvement / std_dev if std_dev > 0 else 0
+                            significant_threshold = 0.5  # In standard deviations
+                            print(f"DEBUG: Grid std_dev: {std_dev:.2f}, Z-score improvement: {z_improvement:.2f}")
+                        else:
+                            # Default to relative improvement if not enough data
+                            z_improvement = 0
+                            significant_threshold = 0.15  # 15% relative improvement
+                        
+                        print(f"DEBUG: Comparing target influences: current={current_influence:.1f}, new={new_influence:.1f}")
+                        print(f"DEBUG: Improvements - Absolute: {absolute_improvement:.1f}, Relative: {relative_improvement:.2f}")
+                        
+                        # Decision criteria - use z-score if available, otherwise relative improvement
+                        if z_improvement > significant_threshold or (z_improvement == 0 and relative_improvement > 0.15):
+                            # Target is significantly better
+                            improvement_is_significant = True
+                        else:
+                            improvement_is_significant = False
+                            
+                        print(f"DEBUG: Target improvement is {'significant' if improvement_is_significant else 'not significant enough'}")
+                    except Exception as e:
+                        print(f"DEBUG ERROR calculating target improvement: {e}")
+                        # Default to simple comparison if statistical approach fails
+                        improvement_is_significant = new_influence > (current_influence * 1.15)  # 15% better
                     
-                    print(f"DEBUG: Comparing target influences: current={current_influence}, new={new_influence}, improvement={improvement:.2f}")
-                    
-                    # Only switch if the improvement is significant (>15%) and target isn't too close to another Nova
-                    if improvement > 0.15:
+                    # Only switch if the improvement is significant and target isn't too close to another Nova
+                    if improvement_is_significant:
                         # Ensure the new target is not too close to other Nova targets
                         # Minimum distance of 5 units between Nova targets
                         too_close = False
@@ -580,7 +747,7 @@ class UseDisruptorNova(CombatIndividualBehavior):
                         # Only proceed with the update if spacing is adequate
                         if not too_close:
                             # Update our target
-                            print(f"DEBUG: Updating Nova target from {self.best_target_pos} to {new_target} (improvement: {improvement:.2f})")
+                            print(f"DEBUG: Updating Nova target from {self.best_target_pos} to {new_target} (absolute improvement: {absolute_improvement:.2f}, relative: {relative_improvement:.2f})")
                             self.best_target_pos = new_target
                             
                             # Try to register the new target
@@ -767,16 +934,48 @@ class UseDisruptorNova(CombatIndividualBehavior):
         print(f"Nova Frames Left: {self.frames_left}, Distance Left: {self.distance_left}")
         print(f"Current Position: {self.unit.position}, Target Position: {self.best_target_pos}")
         
-        # Skip visualization if influence grid isn't available
+        # For debugging, let's get a fresh grid if we don't have one stored
         if not hasattr(self, 'influence_grid'):
-            print("No influence grid available for visualization")
-            return
+            print("Getting fresh grid for visualization")
+            try:
+                grid = self.get_grid()
+                if grid is not None:
+                    self.influence_grid = grid.copy()
+                    print(f"Successfully obtained grid with shape {grid.shape}")
+                else:
+                    print("No grid available for visualization")
+                    return
+            except Exception as e:
+                print(f"Error getting grid for visualization: {e}")
+                return
         
         try:
             # Get max and min values to understand the range of influence
             max_value = np.max(self.influence_grid)
             min_value = np.min(self.influence_grid)
-            print(f"Grid range - Max: {max_value}, Min: {min_value}, Neutral: 200")
+            
+            # Calculate percentiles for better understanding of distribution
+            valid_grid = self.influence_grid[~np.isinf(self.influence_grid)]
+            if len(valid_grid) > 0:
+                p10 = np.percentile(valid_grid, 10)
+                p25 = np.percentile(valid_grid, 25)
+                p50 = np.percentile(valid_grid, 50)  # median
+                p75 = np.percentile(valid_grid, 75)
+                p90 = np.percentile(valid_grid, 90)
+                
+                # Count values in different ranges
+                below150 = np.sum(valid_grid < 150)
+                range150_190 = np.sum((valid_grid >= 150) & (valid_grid < 190))
+                range190_210 = np.sum((valid_grid >= 190) & (valid_grid <= 210))
+                range210_250 = np.sum((valid_grid > 210) & (valid_grid <= 250))
+                above250 = np.sum(valid_grid > 250)
+                
+                print(f"Grid range - Max: {max_value}, Min: {min_value}, Neutral: 200")
+                print(f"Grid percentiles - 10%: {p10:.1f}, 25%: {p25:.1f}, 50%: {p50:.1f}, 75%: {p75:.1f}, 90%: {p90:.1f}")
+                print(f"Value distribution - Below 150: {below150}, 150-190: {range150_190}, 190-210: {range190_210}, 210-250: {range210_250}, Above 250: {above250}")
+            else:
+                print(f"Grid range - Max: {max_value}, Min: {min_value}, Neutral: 200")
+                print("No valid (non-infinite) values in grid for percentile analysis")
             
             # Create enemy influence visualization (values > 200)
             enemy_grid = self.influence_grid.copy()
@@ -889,18 +1088,70 @@ class UseDisruptorNova(CombatIndividualBehavior):
                 # Make a copy to avoid modifying the original
                 grid_copy = grid.copy()
                 
-                # Handle infinite values to ensure reliable targeting
-                if np.any(np.isinf(grid_copy)):
-                    inf_count = np.sum(np.isinf(grid_copy))
-                    grid_copy = np.where(np.isposinf(grid_copy), 500.0, grid_copy)
-                    grid_copy = np.where(np.isneginf(grid_copy), -500.0, grid_copy)
-                    print(f"DEBUG: Replaced {inf_count} infinite values in grid")
+                # Analyze valid values in the grid before modification
+                valid_mask = ~np.isinf(grid_copy) & ~np.isnan(grid_copy)
+                if np.any(valid_mask):
+                    valid_values = grid_copy[valid_mask]
+                    min_valid = np.min(valid_values)
+                    max_valid = np.max(valid_values)
+                    median_valid = np.median(valid_values)
+                    p10 = np.percentile(valid_values, 10)
+                    p90 = np.percentile(valid_values, 90)
+                    print(f"DEBUG: Valid grid values - Min: {min_valid}, Max: {max_valid}, Median: {median_valid}")
+                    print(f"DEBUG: Percentiles - 10%: {p10}, 90%: {p90}")
+                    
+                    # Count values in different ranges
+                    below190 = np.sum(valid_values < 190)
+                    neutral_range = np.sum((valid_values >= 190) & (valid_values <= 210))
+                    above210 = np.sum(valid_values > 210)
+                    print(f"DEBUG: Value distribution - Below 190: {below190}, 190-210: {neutral_range}, Above 210: {above210}")
+                    
+                    # Calculate extreme enemy and friendly values for our scaled representation
+                    extreme_enemy_value = max(250.0, max_valid + 10)  # Ensure it's at least 250
+                    extreme_friendly_value = min(150.0, min_valid - 10)  # Ensure it's at most 150
+                else:
+                    print("DEBUG: No valid (non-infinite, non-NaN) values in grid")
+                    median_valid = 200  # Neutral value
+                    extreme_enemy_value = 300     # Very high enemy influence
+                    extreme_friendly_value = 100  # Very high friendly influence
                 
-                # Also replace NaN values if any exist
-                if np.any(np.isnan(grid_copy)):
-                    nan_count = np.sum(np.isnan(grid_copy))
-                    grid_copy = np.where(np.isnan(grid_copy), 0.0, grid_copy)
-                    print(f"DEBUG: Replaced {nan_count} NaN values in grid")
+                # Count different types of infinite values
+                pos_inf_mask = np.isposinf(grid_copy)
+                neg_inf_mask = np.isneginf(grid_copy)
+                pos_inf_count = np.sum(pos_inf_mask)
+                neg_inf_count = np.sum(neg_inf_mask)
+                
+                if pos_inf_count > 0 or neg_inf_count > 0:
+                    print(f"DEBUG: Found {pos_inf_count} positive infinite values and {neg_inf_count} negative infinite values")
+                    
+                    # Instead of replacing infinities with random values, we'll use scaled extreme values
+                    # that preserve the meaning while making them usable for numerical comparisons
+                    
+                    if pos_inf_count > 0:
+                        # Positive infinity represents unpathable terrain or extreme enemy influence
+                        # Use a very high value (well above neutral 200)
+                        grid_copy = np.where(pos_inf_mask, extreme_enemy_value, grid_copy)
+                        print(f"DEBUG: Replaced positive infinite values with extreme enemy value: {extreme_enemy_value}")
+                    
+                    if neg_inf_count > 0:
+                        # Negative infinity represents unpathable terrain or extreme friendly influence
+                        # Use a very low value (well below neutral 200)
+                        grid_copy = np.where(neg_inf_mask, extreme_friendly_value, grid_copy)
+                        print(f"DEBUG: Replaced negative infinite values with extreme friendly value: {extreme_friendly_value}")
+                
+                # Replace NaN values if any exist
+                nan_mask = np.isnan(grid_copy)
+                if np.any(nan_mask):
+                    nan_count = np.sum(nan_mask)
+                    grid_copy = np.where(nan_mask, median_valid, grid_copy)
+                    print(f"DEBUG: Replaced {nan_count} NaN values with median value {median_valid}")
+                
+                # Store the grid for visualization and analysis
+                self.influence_grid = grid_copy
+                
+                # Final check of value distribution after all replacements
+                print(f"DEBUG: Final grid values - Min: {np.min(grid_copy)}, Max: {np.max(grid_copy)}")
+                print(f"DEBUG: Unique values count: {len(np.unique(grid_copy))}")
                 
                 return grid_copy
             else:
