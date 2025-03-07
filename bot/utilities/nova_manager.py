@@ -106,8 +106,8 @@ class NovaManager:
                     return True
                     
                 # If within exclusion radius but not identical, reject as too close
-                if distance < self.nova_radius:
-                    print(f"DEBUG: Nova target at {position} is too close to existing target")
+                if distance < self.exclusion_radius:
+                    print(f"DEBUG: Nova target at {position} is too close to existing target at {target_position}, distance: {distance:.2f}")
                     return False
             
             # Add position to dictionary of current targets
@@ -241,13 +241,4 @@ class NovaManager:
         # Return whether the target is reachable
         return current_distance <= max_travel_distance
 
-    def update_units(self, enemy_units, friendly_units):
-        """
-        Update the internal record of enemy and friendly units for this frame.
-        
-        Args:
-            enemy_units: List of enemy units
-            friendly_units: List of friendly units
-        """
-        self.enemy_units = enemy_units
-        self.friendly_units = friendly_units
+    
