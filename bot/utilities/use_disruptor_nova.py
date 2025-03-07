@@ -13,6 +13,9 @@ from ares.behaviors.combat.individual import PathUnitToTarget
 from ares.managers.manager_mediator import ManagerMediator
 import numpy as np
 from sc2.position import Point2
+import math
+
+from cython_extensions import cy_all_points_below_max_value
 
 
 if TYPE_CHECKING:
@@ -24,891 +27,422 @@ class UseDisruptorNova(CombatIndividualBehavior):
         self.cooldown = 21.4
         self.nova_duration = 2.1
         self.best_target_pos = None
-        self.frames_left = 48  # Example starting frame count
+        self.best_target_influence = 0
+        self.unit = None
+        self.target_pos = None
+        self.executing = False
+        self.frames_left = 0
         self.distance_left = 0.0
-        self.unit = None  # References the Purification Nova ability which is a unit not a spell
         self.mediator = mediator
         self.bot = bot  # Store bot instance
+        self.should_debug_visuals = False  # Set to True for visual debugging
         
         # Do NOT store any references to grids here, get them fresh when needed
-        self.best_target_influence = 0
-        self.should_debug_visuals = False  # Set to True for visual debugging
+        self.influence_grid = None
         
         # Print initialization message
         print("DEBUG: UseDisruptorNova initialized")
+        
     
     def can_use(self, disruptor_unit) -> bool:
         """Return True if the ability can be used based on its cooldown."""
         return (AbilityId.EFFECT_PURIFICATIONNOVA in disruptor_unit.abilities)
 
-    def select_best_target(self, enemy_units: List['Unit'], friendly_units: List['Unit'], exclusion_mask=None) -> Optional[Point2]:
-        """Select the best target position for the nova.
-        Uses a hybrid approach: grid influence values combined with enemy unit positioning.
-        Implemented with optimized vectorized operations for performance.
+    def select_best_target(self, disruptor_unit, enemy_units: List['Unit'], friendly_units: List['Unit'], nova_manager=None):
+        """
+        Select the best target position for the nova.
+        Uses the tactical grid to find optimal target areas.
         
         Args:
+            disruptor_unit: The Disruptor unit that will fire the Nova
             enemy_units: List of enemy units to consider as targets
             friendly_units: List of friendly units to avoid damaging
-            exclusion_mask: Optional boolean mask where True indicates areas to avoid (already targeted by other Novas)
-        
+            nova_manager: Optional NovaManager for target coordination
+            
         Returns:
             The Point2 target position or None if no valid target found
         """
         if not enemy_units:
             print("DEBUG select_best_target: No enemy units to target")
             return None
-
+            
         try:
-            # Get the tactical grid which contains influence values
-            grid = self.get_grid()
+            # Define the maximum search radius to limit computational load
+            MAX_SEARCH_RADIUS = 15.0  # Units beyond this distance won't be considered
+            
+            # Filter units by distance to the disruptor to improve performance
+            if disruptor_unit:
+                disruptor_pos = disruptor_unit.position
+                nearby_enemies = [unit for unit in enemy_units if unit.position.distance_to(disruptor_pos) <= MAX_SEARCH_RADIUS]
+                
+                print(f"DEBUG select_best_target: Filtered {len(nearby_enemies)} nearby enemies out of {len(enemy_units)} total")
+                
+                if not nearby_enemies:
+                    print("DEBUG select_best_target: No nearby enemy units to target")
+                    return None
+            else:
+                # If no disruptor unit is provided, use all units (less efficient)
+                nearby_enemies = enemy_units
+            
+            # Get the tactical grid from the mediator
+            grid = self.mediator.get_tactical_ground_grid
+            
             if grid is None:
-                print("DEBUG select_best_target: Warning - tactical grid is None")
-                # Fall back to position-based targeting without grid influence
-                return self._select_target_position_based(enemy_units, friendly_units, exclusion_mask)
-            else:
-                # The get_grid method already handles the infinite values by replacing them with
-                # appropriate extreme values representing enemy and friendly areas
-                # No need to replace them again here
-                print(f"DEBUG select_best_target: Grid info - shape={grid.shape}, min={np.min(grid)}, max={np.max(grid)}")
-                
-                # Tactical grid meanings:
-                # 200 = Neutral value
-                # >200 = Enemy influence (higher = more enemy presence)
-                # <200 = Friendly influence (lower = more friendly presence)
+                print("DEBUG select_best_target: Tactical grid is None")
+                return None
             
-            # Apply the exclusion mask if provided
-            if exclusion_mask is not None:
+            # Find the position with the highest influence value
+            # We'll check each enemy position and a small area around them
+            best_pos = None
+            best_influence = float('-inf')
+            
+            for enemy in nearby_enemies:
                 try:
-                    # Check shape compatibility
-                    if exclusion_mask.shape != grid.shape:
-                        print(f"DEBUG select_best_target: Warning - exclusion mask shape {exclusion_mask.shape} doesn't match grid shape {grid.shape}")
-                        # Fall back to position-based targeting
-                        return self._select_target_position_based(enemy_units, friendly_units, exclusion_mask)
+                    # Check the enemy position and a small area around it
+                    enemy_pos = enemy.position
                     
-                    # Create a working copy of the grid with exclusions applied
-                    working_grid = grid.copy()
-                    # Store the grid for visualization debugging before applying exclusions
-                    self.influence_grid = working_grid.copy()
-                    # Set excluded areas to -np.inf so they won't be selected
-                    working_grid[exclusion_mask] = -np.inf
-                    print(f"DEBUG select_best_target: Applied exclusion mask, valid grid area: {np.sum(~exclusion_mask)} cells")
-                except Exception as e:
-                    print(f"DEBUG ERROR applying exclusion mask: {e}")
-                    # Fall back to position-based targeting
-                    return self._select_target_position_based(enemy_units, friendly_units, exclusion_mask)
-            else:
-                # No exclusion mask, use the grid as is
-                working_grid = grid.copy()
-                
-                # Store the grid for visualization debugging
-                self.influence_grid = working_grid.copy()
-            
-            # Create additional masks for friendly/enemy areas to enhance the grid
-            try:
-                # Create enemy boost mask - areas with enemies get boosted influence
-                enemy_boost_mask = np.zeros_like(working_grid, dtype=bool)
-                enemy_positions = np.zeros_like(working_grid, dtype=bool)
-                nova_radius = 1.5  # Nova blast radius
-                
-                # Mark enemy positions in the grid
-                for enemy in enemy_units:
-                    # Convert to grid coordinates
-                    enemy_y = min(max(int(enemy.position.y), 0), working_grid.shape[0] - 1)
-                    enemy_x = min(max(int(enemy.position.x), 0), working_grid.shape[1] - 1)
-                    enemy_positions[enemy_y, enemy_x] = True
-                
-                # Create boost areas around enemies using distance transform
-                if np.any(enemy_positions):
-                    # Create coordinate grids
-                    y_indices, x_indices = np.indices(working_grid.shape)
-                    
-                    # For each enemy, boost a circular area around it
-                    for enemy in enemy_units:
-                        enemy_y = min(max(int(enemy.position.y), 0), working_grid.shape[0] - 1)
-                        enemy_x = min(max(int(enemy.position.x), 0), working_grid.shape[1] - 1)
-                        
-                        # Calculate distance to this enemy from all points (vectorized)
-                        distances = np.sqrt(((y_indices - enemy_y) ** 2) + ((x_indices - enemy_x) ** 2))
-                        
-                        # Points within nova_radius of enemy get boosted
-                        enemy_boost_mask = np.logical_or(enemy_boost_mask, distances <= nova_radius)
-                    
-                    # Sample enemy influence values before boost for debugging
-                    if np.any(enemy_boost_mask):
-                        enemy_sample_indices = np.where(enemy_boost_mask)
-                        # Take up to 5 sample points to report influence values
-                        sample_size = min(5, len(enemy_sample_indices[0]))
-                        sample_indices = [(enemy_sample_indices[0][i], enemy_sample_indices[1][i]) for i in range(sample_size)]
-                        enemy_influence_samples = [(pos, working_grid[pos]) for pos in sample_indices]
-                        print(f"DEBUG select_best_target: Enemy influence before boost at sample points: {enemy_influence_samples}")
-                    
-                    # The grid already has higher values (>200) for enemies, but we'll add a smaller boost 
-                    # to further prioritize areas with multiple enemies
-                    working_grid[enemy_boost_mask] += 50  # Smaller boost since grid already has enemy influence
-                    
-                    # Debug enemy influence after boost
-                    if np.any(enemy_boost_mask):
-                        enemy_sample_indices = np.where(enemy_boost_mask)
-                        sample_size = min(5, len(enemy_sample_indices[0]))
-                        sample_indices = [(enemy_sample_indices[0][i], enemy_sample_indices[1][i]) for i in range(sample_size)]
-                        enemy_influence_after = [(pos, working_grid[pos]) for pos in sample_indices]
-                        print(f"DEBUG select_best_target: Applied small boost to {np.sum(enemy_boost_mask)} cells near enemies")
-                        print(f"DEBUG select_best_target: Enemy influence after boost at sample points: {enemy_influence_after}")
-                
-                # Create friendly penalty map instead of complete avoidance
-                friendly_penalty_map = np.zeros_like(working_grid)
-                friendly_positions = []
-                
-                # Track friendly positions for penalty calculation
-                for friendly in friendly_units:
-                    friendly_y = min(max(int(friendly.position.y), 0), working_grid.shape[0] - 1)
-                    friendly_x = min(max(int(friendly.position.x), 0), working_grid.shape[1] - 1)
-                    friendly_positions.append((friendly_y, friendly_x))
-                
-                # Calculate penalty for each friendly unit - more penalty for more friendlies
-                if friendly_positions:
-                    for friendly_y, friendly_x in friendly_positions:
-                        # Create coordinate grids for distance calculation
-                        y_indices, x_indices = np.indices(working_grid.shape)
-                        
-                        # Calculate distance to this friendly from all points
-                        distances = np.sqrt(((y_indices - friendly_y) ** 2) + ((x_indices - friendly_x) ** 2))
-                        
-                        # Apply penalty to areas that would hit this friendly unit
-                        # Note: Grid already has values <200 for friendlies, additional 150 penalty per friendly
-                        friendly_penalty_map = np.where(distances <= nova_radius, 
-                                                      friendly_penalty_map + 150, 
-                                                      friendly_penalty_map)
-                    
-                    # Sample friendly areas before applying penalty for debugging
-                    friendly_areas = np.where(friendly_penalty_map > 0)
-                    if len(friendly_areas[0]) > 0:
-                        sample_size = min(5, len(friendly_areas[0]))
-                        sample_indices = [(friendly_areas[0][i], friendly_areas[1][i]) for i in range(sample_size)]
-                        friendly_influence_before = [(pos, working_grid[pos]) for pos in sample_indices]
-                        print(f"DEBUG select_best_target: Friendly influence before penalty at sample points: {friendly_influence_before}")
-                        print(f"DEBUG select_best_target: Penalty values at these points: {[(pos, friendly_penalty_map[pos]) for pos in sample_indices]}")
-                    
-                    # Apply the penalty to the working grid
-                    working_grid -= friendly_penalty_map
-                    
-                    # Debug friendly areas after applying penalty
-                    if len(friendly_areas[0]) > 0:
-                        friendly_influence_after = [(pos, working_grid[pos]) for pos in sample_indices]
-                        print(f"DEBUG select_best_target: Applied friendly penalties to {np.sum(friendly_penalty_map > 0)} cells")
-                        print(f"DEBUG select_best_target: Friendly influence after penalty at sample points: {friendly_influence_after}")
-                
-                # Mask out the edges of the grid (including origin and nearby cells)
-                # to prevent false targeting at grid boundaries when no real target is available
-                edge_width = 2  # Width of edge border to exclude
-                original_edge_values = working_grid[:edge_width, :].copy()
-                working_grid[:edge_width, :] = -np.inf  # Top edge
-                working_grid[:, :edge_width] = -np.inf  # Left edge
-                working_grid[-edge_width:, :] = -np.inf  # Bottom edge
-                working_grid[:, -edge_width:] = -np.inf  # Right edge
-                print(f"DEBUG select_best_target: Masked out edge cells to prevent false targeting")
-                
-                # Get grid statistics for debugging
-                valid_mask = ~np.isinf(working_grid)
-                if np.any(valid_mask):
-                    grid_min = np.min(working_grid[valid_mask])
-                    grid_max = np.max(working_grid[valid_mask])
-                    grid_median = np.median(working_grid[valid_mask])
-                    print(f"DEBUG select_best_target: Grid stats - min: {grid_min:.1f}, max: {grid_max:.1f}, median: {grid_median:.1f}")
-                    
-                    # Grid value interpretation:
-                    # 200 = Neutral value
-                    # >200 = Enemy influence (higher = more enemy presence)
-                    # <200 = Friendly influence (lower = more friendly presence)
-                    
-                    # Count cells in different categories
-                    strong_enemy_cells = np.sum(working_grid > 250)  # Strong enemy presence
-                    moderate_enemy_cells = np.sum((working_grid > 200) & (working_grid <= 250))  # Moderate enemy presence
-                    neutral_cells = np.sum((working_grid >= 190) & (working_grid <= 210) & valid_mask)  # Near neutral
-                    moderate_friendly_cells = np.sum((working_grid < 200) & (working_grid >= 150) & valid_mask)  # Moderate friendly presence
-                    strong_friendly_cells = np.sum(working_grid < 150)  # Strong friendly presence
-                    
-                    # Total enemies and friendlies
-                    total_enemy_cells = strong_enemy_cells + moderate_enemy_cells
-                    total_friendly_cells = moderate_friendly_cells + strong_friendly_cells
-                    
-                    print(f"DEBUG select_best_target: Grid value distribution:")
-                    print(f"  Enemy cells: {total_enemy_cells} (Strong: {strong_enemy_cells}, Moderate: {moderate_enemy_cells})")
-                    print(f"  Neutral cells: {neutral_cells}")
-                    print(f"  Friendly cells: {total_friendly_cells} (Moderate: {moderate_friendly_cells}, Strong: {strong_friendly_cells})")
-                
-                # Find best position
-                best_y, best_x = np.unravel_index(np.argmax(working_grid), working_grid.shape)
-                best_influence = working_grid[best_y, best_x]
-                print(f"DEBUG select_best_target: Best candidate position at ({best_x}, {best_y}) with influence {best_influence:.1f}")
-                
-                # Calculate adaptive thresholds based on the grid distribution
-                valid_mask = ~np.isinf(working_grid)
-                if np.any(valid_mask):
-                    grid_values = working_grid[valid_mask]
-                    p25 = np.percentile(grid_values, 25)
-                    p50 = np.percentile(grid_values, 50)  # median
-                    p75 = np.percentile(grid_values, 75)
-                    iqr = p75 - p25
-                    
-                    # Set dynamic thresholds based on distribution
-                    lower_threshold = max(210, p50 + 5)  # At least 210 (above neutral)
-                    upper_threshold = p75 + 2 * iqr  # Using statistical outlier approach
-                    
-                    print(f"DEBUG select_best_target: Using adaptive thresholds - Range: {lower_threshold:.1f} to {upper_threshold:.1f}")
-                    print(f"DEBUG select_best_target: Grid percentiles - 25%: {p25:.1f}, 50%: {p50:.1f}, 75%: {p75:.1f}, IQR: {iqr:.1f}")
-                else:
-                    # Fallback to fixed thresholds if we can't analyze distribution
-                    lower_threshold = 210
-                    upper_threshold = 600
-                    print(f"DEBUG select_best_target: Using fixed thresholds - Range: {lower_threshold} to {upper_threshold}")
-                
-                # Check if we have a valid target with sufficient influence
-                # Adaptive thresholds ensure some enemy presence above neutral (200)
-                # while preventing unrealistically high values which might indicate targeting issues
-                if lower_threshold < best_influence < upper_threshold:
-                    best_pos = Point2((float(best_x), float(best_y)))
-                    print(f"DEBUG select_best_target: Grid-based approach found target at {best_pos} with influence {best_influence:.1f}")
-                    
-                    # Store for future comparisons
-                    self.best_target_pos = best_pos
-                    self.best_target_influence = best_influence
-                    
-                    # Debug visualization if enabled
-                    if self.should_debug_visuals:
-                        self._visualize_grid(working_grid)
-                    
-                    return best_pos
-                else:
-                    print("DEBUG select_best_target: Grid-based approach found no valid target, falling back to position-based")
-                    # Fall back to position-based approach
-                    fallback_pos = self._select_target_position_based(enemy_units, friendly_units, exclusion_mask)
-                    if fallback_pos is not None:
-                        print(f"DEBUG select_best_target: Position-based fallback found target at {fallback_pos}")
-                    else:
-                        print("DEBUG select_best_target: Position-based fallback also failed to find a target")
-                    return fallback_pos
-            
-            except Exception as e:
-                print(f"DEBUG ERROR in grid-based targeting: {e}")
-                # Fall back to position-based targeting on error
-                fallback_pos = self._select_target_position_based(enemy_units, friendly_units, exclusion_mask)
-                if fallback_pos is not None:
-                    print(f"DEBUG select_best_target: Position-based fallback found target at {fallback_pos}")
-                else:
-                    print("DEBUG select_best_target: Position-based fallback also failed to find a target")
-                return fallback_pos
-            
-        except Exception as e:
-            print(f"DEBUG Error in select_best_target: {e}")
-            return None
-            
-    def _select_target_position_based(self, enemy_units, friendly_units, exclusion_mask=None):
-        """Legacy position-based targeting as a fallback when grid-based targeting fails.
-        
-        Args:
-            enemy_units: List of enemy units to consider as targets
-            friendly_units: List of friendly units to avoid damaging
-            exclusion_mask: Optional boolean mask for exclusion zones
-            
-        Returns:
-            Point2 target position or None
-        """
-        try:
-            print(f"DEBUG: Using fallback position-based targeting with {len(enemy_units)} enemies")
-            
-            # Get grid for boundary information, but we won't use its influence values
-            grid = self.get_grid()
-            
-            # Set up boundaries for candidate positions
-            if grid is not None:
-                grid_height, grid_width = grid.shape
-                x_min, y_min = 0, 0 
-                x_max, y_max = grid_width, grid_height
-            else:
-                # Without a grid, use estimated map boundaries
-                x_min, y_min = 0, 0
-                x_max, y_max = 200, 200
-            
-            # Generate candidate positions
-            candidate_positions = []
-            scores = []
-            resolution = 8  # Sampling resolution
-
-            # Include enemy positions and their surroundings
-            for enemy in enemy_units:
-                pos = enemy.position
-                candidate_positions.append(pos)
-                
-                # Add surrounding positions for better coverage
-                for dx, dy in [(2, 0), (-2, 0), (0, 2), (0, -2)]:
-                    candidate_positions.append(Point2((pos.x + dx, pos.y + dy)))
-                
-            # Add a systematic grid of positions 
-            for x in range(x_min, x_max, resolution):
-                for y in range(y_min, y_max, resolution):
-                    candidate_positions.append(Point2((x, y)))
-            
-            # Score each position based on enemy clustering
-            nova_radius = 1.5
-            for pos in candidate_positions:
-                # Skip excluded positions
-                if exclusion_mask is not None and grid is not None:
+                    # Check grid value at enemy position
                     try:
-                        grid_y = min(max(int(pos.y), 0), grid.shape[0] - 1)
-                        grid_x = min(max(int(pos.x), 0), grid.shape[1] - 1)
+                        # Convert game position to grid indices
+                        grid_x = int(enemy_pos.x)
+                        grid_y = int(enemy_pos.y)
                         
-                        if exclusion_mask[grid_y, grid_x]:
-                            continue
+                        # Get influence value at this position
+                        if 0 <= grid_x < grid.shape[1] and 0 <= grid_y < grid.shape[0]:
+                            influence = grid[grid_y, grid_x]
+                            
+                            # Update best position if this is better
+                            if influence > best_influence:
+                                best_influence = influence
+                                best_pos = enemy_pos
+                                print(f"DEBUG: Found better position at {best_pos} with influence {best_influence}")
                     except Exception as e:
-                        print(f"DEBUG ERROR checking exclusion: {e}")
-                
-                # Count enemies and friendlies hit
-                enemies_hit = sum(1 for enemy in enemy_units if pos.distance_to(enemy.position) <= nova_radius)
-                friendly_hit = sum(1 for friendly in friendly_units if pos.distance_to(friendly.position) <= nova_radius)
-                
-                # Use cost-benefit analysis for target selection
-                if enemies_hit > 0:
-                    # Calculate a score that balances enemy hits vs friendly hits
-                    # Each enemy is worth 150 points, each friendly costs 200 points
-                    # More lenient weights to improve chances of finding a valid target
-                    score = (enemies_hit * 150) - (friendly_hit * 200)
-                    
-                    # Record the score for all positions for debugging
-                    print(f"DEBUG: Position {pos} scores {score} (hits {enemies_hit} enemies, {friendly_hit} friendlies)")
-                    
-                    # Be more lenient with scoring - allow slight friendly fire if it hits enough enemies
-                    if score > -100:  # Even slightly negative scores are acceptable in a pinch
-                        scores.append((pos, score))
+                        print(f"DEBUG ERROR checking grid at position {enemy_pos}: {e}")
+                except Exception as e:
+                    print(f"DEBUG ERROR processing enemy unit: {e}")
             
-            # Sort by score (highest first)
-            scores.sort(key=lambda x: x[1], reverse=True)
-            
-            if scores:
-                best_pos, best_score = scores[0]
-                print(f"DEBUG: Position-based targeting selected {best_pos} with score {best_score}")
-                
-                # Store values for comparisons in other methods
+            # If we found a good position, return it
+            if best_pos is not None:
+                # Store for future comparisons
                 self.best_target_pos = best_pos
-                self.best_target_score = best_score
+                self.best_target_influence = best_influence
                 
+                print(f"DEBUG select_best_target: Found target at {best_pos} with influence {best_influence}")
                 return best_pos
             else:
-                print("DEBUG: Position-based targeting found no valid targets")
-                
-                # Last resort: if there are any enemies, target the closest enemy
-                if enemy_units:
-                    closest_enemy = min(enemy_units, key=lambda enemy: self.unit.position.distance_to(enemy.position))
-                    target_pos = closest_enemy.position
-                    print(f"DEBUG: Last resort - targeting closest enemy at {target_pos}")
-                    
-                    # Store this last resort target for reference
-                    self.best_target_pos = target_pos
-                    self.best_target_score = -1  # Negative to indicate it was last resort
-                    
-                    return target_pos
-                # Only reached if no valid targets and no enemies - return None
-                print("DEBUG: No valid position-based targets found")
+                print("DEBUG select_best_target: No suitable target found")
                 return None
-                
+        
         except Exception as e:
-            print(f"DEBUG ERROR in position-based targeting: {e}")
+            print(f"DEBUG ERROR in select_best_target: {e}")
             return None
+
+    def _target_closest_enemy(self, enemy_units):
+        """Simple fallback to target the closest enemy unit when grid-based targeting fails.
+        
+        Args:
+            enemy_units: List of enemy units to consider
+            
+        Returns:
+            Point2 target position or None if no enemies
+        """
+        # This method is no longer used - kept for reference
+        print("DEBUG: fallback targeting no longer used")
+        return None
+
+    def _select_target_position_based(self, enemy_units, friendly_units, exclusion_mask=None):
+        """Legacy position-based targeting as a fallback when grid-based targeting fails.
+        DEPRECATED: This is kept for backward compatibility but should be removed in future updates.
+        """
+        print("DEBUG: Legacy position-based targeting no longer used")
+        return None
 
     def update_target_position(self, enemy_units: List['Unit'], friendly_units: List['Unit'], nova_manager):
         """
-        Check if a better target has become available within the Nova's remaining travel range.
-        Uses vectorized operations for performance and directly leverages grid influence values.
+        Check if a better target has become available within Nova's remaining travel range.
         
         Args:
-            enemy_units: List of enemy units to consider as targets
-            friendly_units: List of friendly units to avoid damaging
-            nova_manager: The NovaManager instance
+            enemy_units: List of enemy units to consider
+            friendly_units: List of friendly units to avoid
+            nova_manager: The NovaManager for exclusion mask and target registration
             
         Returns:
-            bool: True if the target was updated, False otherwise
+            bool: True if target was updated, False otherwise
         """
         if not self.best_target_pos or not self.unit:
             return False
             
         try:
-            # Check if there's enough time to change course
-            if self.frames_left < 5:  
-                return False
-                
-            # Get the current position of the Nova
-            current_position = self.unit.position
-            
-            # Calculate the maximum distance the Nova can still travel
-            max_travel_distance = nova_manager.nova_speed * (self.frames_left / 22.4)
-            
-            # Get the tactical grid and create a copy we can modify
-            grid = self.get_grid()
+            # Get the tactical grid
+            grid = self.mediator.get_tactical_ground_grid
             if grid is None:
-                print("ERROR: Tactical grid is None")
+                print("DEBUG: Tactical grid is None in update_target_position")
                 return False
             
-            # Create coordinate grids and distance mask using vectorized operations
-            try:
-                # Create coordinate meshgrids for the entire tactical map
-                y_indices, x_indices = np.indices(grid.shape)
+            # Calculate maximum distance the Nova can still travel based on remaining frames
+            if nova_manager and hasattr(nova_manager, 'nova_speed'):
+                # Calculate max travel distance based on remaining frames
+                frames_per_second = 22.4  # SC2 runs at 22.4 frames per second
+                remaining_seconds = self.frames_left / frames_per_second
+                max_travel_distance = nova_manager.nova_speed * remaining_seconds
                 
-                # Calculate distances from current position to all points vectorized
-                # Note: This assumes grid coordinates map directly to game coordinates
-                distances = np.sqrt(((x_indices - current_position.x) ** 2) + 
-                                  ((y_indices - current_position.y) ** 2))
+                # Current Nova position is our starting point
+                current_position = self.unit.position
                 
-                # Create mask for areas out of reach (True = excluded, False = available)
-                out_of_reach_mask = distances > max_travel_distance
+                print(f"DEBUG update_target: {self.frames_left} frames left, max travel distance: {max_travel_distance:.2f}")
                 
-                print(f"DEBUG: Vectorized distance mask created with {np.sum(~out_of_reach_mask)} positions in range")
-            except Exception as e:
-                print(f"DEBUG ERROR creating vectorized distance mask: {e}")
-                return False
-            
-            # Temporarily unregister our current target to avoid its exclusion zone
-            current_target_temporarily_unregistered = False
-            if self.best_target_pos:
+                # Create a mask of positions that are too far to reach
+                distance_mask = np.zeros_like(grid, dtype=bool)
+                
+                # Use the unit's position as the center of our search radius
+                grid_center_x, grid_center_y = int(current_position.x), int(current_position.y)
+                
+                # For each point in the grid, calculate if it's too far from current position
+                grid_height, grid_width = grid.shape
+                for y in range(grid_height):
+                    for x in range(grid_width):
+                        # Calculate distance in game units
+                        distance = ((x - grid_center_x) ** 2 + (y - grid_center_y) ** 2) ** 0.5
+                        # Mark as True (excluded) if beyond max travel distance
+                        if distance > max_travel_distance:
+                            distance_mask[y, x] = True
+                
+                # Get the exclusion mask for other active Nova targets
+                exclusion_mask = None
                 try:
-                    nova_manager.unregister_nova_target(self.best_target_pos)
-                    current_target_temporarily_unregistered = True
-                    print(f"DEBUG: Temporarily unregistered target at {self.best_target_pos} for search")
+                    if nova_manager:
+                        exclusion_mask = nova_manager.get_exclusion_mask(grid, ignore_position=self.best_target_pos)
                 except Exception as e:
-                    print(f"DEBUG ERROR unregistering target for search: {e}")
-            
-            # Get the exclusion mask from the nova manager
-            try:
-                exclusion_mask = nova_manager.get_exclusion_mask(grid)
-                combined_mask = np.logical_or(exclusion_mask, out_of_reach_mask)
-            except Exception as e:
-                print(f"DEBUG ERROR getting exclusion mask: {e}")
-                combined_mask = out_of_reach_mask
-            
-            # Use the grid influence values directly to find the best target
-            try:
-                # Create mask of valid positions (inverse of combined_mask)
-                valid_positions_mask = ~combined_mask
+                    print(f"DEBUG ERROR getting exclusion mask in update: {e}")
                 
-                if np.any(valid_positions_mask):
-                    # Create working copy of the grid
-                    grid_copy = grid.copy()
+                # Make a working copy of the grid
+                working_grid = grid.copy()
+                
+                # Create a combined mask (both distance and exclusion)
+                combined_mask = distance_mask.copy()
+                if exclusion_mask is not None and exclusion_mask.shape == combined_mask.shape:
+                    combined_mask = np.logical_or(combined_mask, exclusion_mask)
+                
+                # Apply combined mask - set excluded areas to a low value
+                working_grid[combined_mask] = 100.0  # Low value (friendly influence)
+                
+                # Find best position (highest influence)
+                new_y, new_x = np.unravel_index(np.argmax(working_grid), working_grid.shape)
+                new_influence = working_grid[new_y, new_x]
+                print(f"DEBUG update_target: Best candidate at ({new_x}, {new_y}) with influence {new_influence:.1f}")
+                
+                # Only use positions with at least some enemy influence
+                if new_influence > 200:  # Values > 200 indicate enemy influence
+                    new_pos = Point2((float(new_x), float(new_y)))
                     
-                    # Analyze the grid value distribution
-                    valid_data = grid_copy[~np.isinf(grid_copy) & ~np.isnan(grid_copy)]
-                    if len(valid_data) > 0:
-                        min_valid = np.min(valid_data)
-                        max_valid = np.max(valid_data)
-                        median_valid = np.median(valid_data)
-                        p25 = np.percentile(valid_data, 25)
-                        p75 = np.percentile(valid_data, 75)
-                        print(f"DEBUG: Grid values - Min: {min_valid:.1f}, Median: {median_valid:.1f}, Max: {max_valid:.1f}")
-                        print(f"DEBUG: Grid percentiles - 25%: {p25:.1f}, 75%: {p75:.1f}")
-                        
-                        # Grid value interpretation:
-                        # 200 = Neutral value
-                        # >200 = Enemy influence (higher = more enemy presence)
-                        # <200 = Friendly influence (lower = more friendly presence)
-                        
-                        # Count cells in different categories
-                        strong_enemy_cells = np.sum(valid_data > 250)  # Strong enemy presence
-                        moderate_enemy_cells = np.sum((valid_data > 200) & (valid_data <= 250))  # Moderate enemy presence
-                        neutral_cells = np.sum((valid_data >= 190) & (valid_data <= 210))  # Near neutral
-                        moderate_friendly_cells = np.sum((valid_data < 200) & (valid_data >= 150))  # Moderate friendly presence
-                        strong_friendly_cells = np.sum(valid_data < 150)  # Strong friendly presence
-                        
-                        # Total enemies and friendlies
-                        total_enemy_cells = strong_enemy_cells + moderate_enemy_cells
-                        total_friendly_cells = moderate_friendly_cells + strong_friendly_cells
-                        
-                        print(f"DEBUG: Grid value distribution:")
-                        print(f"  Enemy cells: {total_enemy_cells} (Strong: {strong_enemy_cells}, Moderate: {moderate_enemy_cells})")
-                        print(f"  Neutral cells: {neutral_cells}")
-                        print(f"  Friendly cells: {total_friendly_cells} (Moderate: {moderate_friendly_cells}, Strong: {strong_friendly_cells})")
-                    else:
-                        # Default values if no valid data
-                        print("DEBUG: No valid (non-infinite, non-NaN) values in grid")
-                        median_valid = 200
+                    # Compare with current target
+                    should_update = False
                     
-                    # Handle infinite values based on the grid's statistical properties
-                    # This approach matches what we do in get_grid() for consistency
-                    pos_inf_mask = np.isposinf(grid_copy)
-                    neg_inf_mask = np.isneginf(grid_copy)
+                    # Update if the new influence is significantly better
+                    influence_improvement_threshold = 50.0
+                    if new_influence > self.best_target_influence + influence_improvement_threshold:
+                        should_update = True
+                        print(f"DEBUG update_target: New influence {new_influence:.1f} is better than current {self.best_target_influence:.1f}")
                     
-                    # Get valid values (non-infinite, non-NaN) for reference
-                    valid_mask = ~np.isinf(grid_copy) & ~np.isnan(grid_copy)
-                    
-                    if np.any(valid_mask):
-                        # Calculate appropriate values based on grid statistics
-                        valid_values = grid_copy[valid_mask]
-                        
-                        # For positive infinity (enemy areas/unpathable), use a high percentile plus margin
-                        extreme_enemy_value = np.percentile(valid_values, 95) + 50
-                        # Ensure it's well above neutral (200)
-                        extreme_enemy_value = max(extreme_enemy_value, 250)
-                        
-                        # For negative infinity (friendly areas/unpathable), use a low percentile minus margin
-                        extreme_friendly_value = np.percentile(valid_values, 5) - 50
-                        # Ensure it's well below neutral (200)
-                        extreme_friendly_value = min(extreme_friendly_value, 150)
-                    else:
-                        # Default values if no valid cells for reference
-                        extreme_enemy_value = 300  # Well above neutral
-                        extreme_friendly_value = 100  # Well below neutral
-                    
-                    # Replace positive infinities (enemy areas) with extreme enemy value
-                    if np.any(pos_inf_mask):
-                        grid_copy = np.where(pos_inf_mask, extreme_enemy_value, grid_copy)
-                        print(f"DEBUG: Replaced {np.sum(pos_inf_mask)} positive infinite values with {extreme_enemy_value:.1f}")
-                    
-                    # Replace negative infinities (friendly areas) with extreme friendly value
-                    if np.any(neg_inf_mask):
-                        grid_copy = np.where(neg_inf_mask, extreme_friendly_value, grid_copy)
-                        print(f"DEBUG: Replaced {np.sum(neg_inf_mask)} negative infinite values with {extreme_friendly_value:.1f}")
-                    
-                    # Replace NaN values if any exist
-                    nan_mask = np.isnan(grid_copy)
-                    if np.any(nan_mask):
-                        grid_copy = np.where(nan_mask, median_valid, grid_copy)
-                        print(f"DEBUG: Replaced {np.sum(nan_mask)} NaN values with median value {median_valid}")
-                    
-                    # Apply the mask to the grid - set invalid positions to a large negative value
-                    # so they won't be selected as maximum
-                    masked_grid = np.where(valid_positions_mask, grid_copy, -1000.0)  # Even stronger exclusion
-                    
-                    # Find position with maximum influence in the valid area
-                    max_y, max_x = np.unravel_index(np.argmax(masked_grid), grid.shape)
-                    new_target = Point2((float(max_x), float(max_y)))
-                    new_influence = masked_grid[max_y, max_x]
-                    
-                    # Check if this target is too close to any existing targets
-                    # Nova targets should be at least 5 units away from each other
-                    is_valid_target = True
-                    if nova_manager and hasattr(nova_manager, 'current_targets') and self.best_target_pos:
-                        # Get current targets as Point2 objects from the set of coordinates
-                        nova_targets = [Point2(pos) for pos in nova_manager.current_targets]
-                        for target_pos in nova_targets:
-                            if target_pos != self.best_target_pos and new_target.distance_to(target_pos) < 5.0:
-                                is_valid_target = False
-                                print(f"DEBUG: Potential target at {new_target} is too close to existing target at {target_pos}")
-                                break
-                    
-                    if is_valid_target:
-                        print(f"DEBUG: Found potential new target at {new_target} with influence {new_influence}")
-                    else:
-                        # If the target is invalid, try to find another one
-                        # Mask out the current best position and its surroundings
-                        mask_radius = 5
-                        y_indices, x_indices = np.indices(grid.shape)
-                        # Get current targets as Point2 objects from the set of coordinates
-                        nova_targets = [Point2(pos) for pos in nova_manager.current_targets]
-                        for target_pos in nova_targets:
-                            distances = np.sqrt(((x_indices - target_pos.x) ** 2) + ((y_indices - target_pos.y) ** 2))
-                            masked_grid[distances < mask_radius] = -500.0  # Exclude areas too close to existing targets
-                        
-                        # Find the next best position
-                        max_y, max_x = np.unravel_index(np.argmax(masked_grid), grid.shape)
-                        new_target = Point2((float(max_x), float(max_y)))
-                        new_influence = masked_grid[max_y, max_x]
-                        print(f"DEBUG: Found alternative target at {new_target} with influence {new_influence}")
-                else:
-                    print("DEBUG: No valid positions found in grid after applying masks")
-                    new_target = None
-                    new_influence = None
-            except Exception as e:
-                print(f"DEBUG ERROR finding best influence position: {e}")
-                new_target = None
-                new_influence = None
-            
-            # Fall back to traditional method if grid-based approach failed
-            if new_target is None:
-                new_target = self.select_best_target(enemy_units, friendly_units, combined_mask)
-            
-            # Re-register our current target if we temporarily unregistered it
-            if current_target_temporarily_unregistered and self.best_target_pos:
-                try:
-                    registered = nova_manager.register_nova_target(self.best_target_pos)
-                    if registered:
-                        print(f"DEBUG: Re-registered target at {self.best_target_pos}")
-                    else:
-                        print(f"DEBUG: Failed to re-register target at {self.best_target_pos}")
-                except Exception as e:
-                    print(f"DEBUG ERROR re-registering target: {e}")
-            
-            # If we found a significantly better target, switch to it
-            if new_target and self.best_target_pos:
-                try:
-                    # Handle grid boundary cases
-                    current_y = min(max(int(self.best_target_pos.y), 0), grid.shape[0] - 1)
-                    current_x = min(max(int(self.best_target_pos.x), 0), grid.shape[1] - 1)
-                    
-                    # Get the influence at the current target position
-                    current_influence = grid[current_y, current_x]
-                    
-                    # Get valid values to derive appropriate replacement values for infinities
-                    valid_mask = ~np.isinf(grid) & ~np.isnan(grid)
-                    
-                    # Calculate appropriate values for replacing infinities
-                    if np.any(valid_mask):
-                        valid_values = grid[valid_mask]
-                        extreme_enemy_value = max(np.percentile(valid_values, 95) + 50, 250)
-                        extreme_friendly_value = min(np.percentile(valid_values, 5) - 50, 150)
-                    else:
-                        # Default values if no valid reference
-                        extreme_enemy_value = 300
-                        extreme_friendly_value = 100
-                    
-                    # Handle infinite values in current target influence
-                    if np.isinf(current_influence):
-                        current_influence = extreme_enemy_value if current_influence > 0 else extreme_friendly_value
-                    
-                    # For the new target, use the influence we found if available
-                    if new_influence is None:
-                        new_y = min(max(int(new_target.y), 0), grid.shape[0] - 1)
-                        new_x = min(max(int(new_target.x), 0), grid.shape[1] - 1)
-                        new_influence = grid[new_y, new_x]
-                        
-                        # Handle infinite values consistently
-                        if np.isinf(new_influence):
-                            new_influence = extreme_enemy_value if new_influence > 0 else extreme_friendly_value
-                    
-                    # Store the influence value for future comparisons
-                    self.best_target_influence = new_influence
-                    
-                    # Calculate how much better the new target is
-                    # Use adaptive approach based on grid distribution
-                    try:
-                        # Ensure we don't have infinite values for comparison
-                        # We should already have handled this earlier, but double-check for safety
-                        if np.isinf(current_influence) or np.isinf(new_influence):
-                            # Use the extreme values we calculated earlier
-                            current_influence = extreme_enemy_value if np.isposinf(current_influence) else extreme_friendly_value if np.isneginf(current_influence) else current_influence
-                            new_influence = extreme_enemy_value if np.isposinf(new_influence) else extreme_friendly_value if np.isneginf(new_influence) else new_influence
-                            print(f"DEBUG: Applied extreme values to infinite influences in improvement calculation")
-                        
-                        # Calculate absolute and relative improvement metrics
-                        absolute_improvement = new_influence - current_influence
-                        
-                        # Use robust relative calculation to avoid division issues
-                        if abs(current_influence) < 1.0:
-                            relative_improvement = 1.0 if absolute_improvement > 0 else -1.0
-                        else:
-                            relative_improvement = absolute_improvement / abs(current_influence)
-                        
-                        # Get an idea of typical grid fluctuations
-                        valid_data = grid[~np.isinf(grid) & ~np.isnan(grid)]
-                        if len(valid_data) > 100:  # Only if we have enough data points
-                            std_dev = np.std(valid_data)
-                            # Calculate improvement in terms of standard deviations (z-score)
-                            z_improvement = absolute_improvement / std_dev if std_dev > 0 else 0
-                            significant_threshold = 0.5  # In standard deviations
-                            print(f"DEBUG: Grid std_dev: {std_dev:.2f}, Z-score improvement: {z_improvement:.2f}")
-                        else:
-                            # Default to relative improvement if not enough data
-                            z_improvement = 0
-                            significant_threshold = 0.15  # 15% relative improvement
-                        
-                        print(f"DEBUG: Comparing target influences: current={current_influence:.1f}, new={new_influence:.1f}")
-                        print(f"DEBUG: Improvements - Absolute: {absolute_improvement:.1f}, Relative: {relative_improvement:.2f}")
-                        
-                        # Decision criteria - use z-score if available, otherwise relative improvement
-                        if z_improvement > significant_threshold or (z_improvement == 0 and relative_improvement > 0.15):
-                            # Target is significantly better
-                            improvement_is_significant = True
-                        else:
-                            improvement_is_significant = False
+                    if should_update:
+                        # Unregister old target
+                        if nova_manager:
+                            nova_manager.unregister_nova_target(self.best_target_pos)
                             
-                        print(f"DEBUG: Target improvement is {'significant' if improvement_is_significant else 'not significant enough'}")
-                    except Exception as e:
-                        print(f"DEBUG ERROR calculating target improvement: {e}")
-                        # Default to simple comparison if statistical approach fails
-                        improvement_is_significant = new_influence > (current_influence * 1.15)  # 15% better
-                    
-                    # Only switch if the improvement is significant and target isn't too close to another Nova
-                    if improvement_is_significant:
-                        # Ensure the new target is not too close to other Nova targets
-                        # Minimum distance of 5 units between Nova targets
-                        too_close = False
-                        if nova_manager and hasattr(nova_manager, 'current_targets') and nova_manager.current_targets:
-                            min_distance = float('inf')
-                            # Get current targets as Point2 objects from the set of coordinates
-                            nova_targets = [Point2(pos) for pos in nova_manager.current_targets]
-                            for target_pos in nova_targets:
-                                if target_pos != self.best_target_pos:  # Don't compare with our own current target
-                                    dist = new_target.distance_to(target_pos)
-                                    min_distance = min(min_distance, dist)
-                                    if dist < 5.0:
-                                        too_close = True
-                                        print(f"DEBUG: New target at {new_target} is too close ({dist:.2f} units) to existing target at {target_pos}")
-                                        break
-                            
-                            if not too_close:
-                                print(f"DEBUG: New target has sufficient spacing (min distance: {min_distance:.2f} units)")
+                        # Update target
+                        old_pos = self.best_target_pos
+                        self.best_target_pos = new_pos
+                        self.best_target_influence = new_influence
                         
-                        # Only proceed with the update if spacing is adequate
-                        if not too_close:
-                            # Update our target
-                            print(f"DEBUG: Updating Nova target from {self.best_target_pos} to {new_target} (absolute improvement: {absolute_improvement:.2f}, relative: {relative_improvement:.2f})")
-                            self.best_target_pos = new_target
-                            
-                            # Try to register the new target
-                            try:
-                                registered = nova_manager.register_nova_target(new_target)
-                                if not registered:
-                                    print(f"DEBUG: Failed to register new target at {new_target}, but will still move there")
-                            except Exception as e:
-                                print(f"DEBUG ERROR registering new target: {e}")
-                        else:
-                            print(f"DEBUG: Keeping current target as new target is too close to existing Nova targets")
+                        # Register new target
+                        if nova_manager:
+                            success = nova_manager.register_nova_target(new_pos)
+                            print(f"DEBUG update_target: {'Successfully' if success else 'Failed to'} register new target")
+                        
+                        print(f"DEBUG update_target: Updated target from {old_pos} to {new_pos}")
                         return True
-                    else:
-                        print(f"DEBUG: New target improvement ({improvement:.2f}) below threshold, keeping current target")
-                except Exception as e:
-                    print(f"DEBUG ERROR calculating improvement: {e}")
-            
-            return False
-            
+                
+                return False
+                
         except Exception as e:
             print(f"DEBUG ERROR in update_target_position: {e}")
             return False
 
     def execute(self, disruptor_unit, enemy_units: List['Unit'], friendly_units: List['Unit'], nova_manager=None):
-        """Attempt to execute Disruptor Nova ability. Initializes nova state and simulates firing the nova.
-        Returns self (the nova instance) if fired successfully, or None if not.
+        """
+        Execute the Nova ability.
         
         Args:
-            disruptor_unit: The Disruptor unit to fire the Nova
-            enemy_units: List of enemy units to target
-            friendly_units: List of friendly units to avoid
-            nova_manager: Optional NovaManager for target coordination
+            disruptor_unit: The Disruptor unit
+            enemy_units: List of enemy units to consider as targets
+            friendly_units: List of friendly units to avoid damaging
+            nova_manager: The NovaManager instance
+            
+        Returns:
+            bool: True if the ability was used, False otherwise
         """
-        # Check if ability can be used (already handles cooldown via SC2 API)
-        if not self.can_use(disruptor_unit):
-            print(f"DEBUG: Disruptor {disruptor_unit.tag} cannot use Nova - ability not ready")
-            return None
-
-        # Get exclusion mask from nova manager if provided
-        exclusion_mask = None
-        if nova_manager:
-            try:
-                # Fresh call to get the grid
-                grid = self.get_grid()
-                if grid is None:
-                    print("DEBUG: Tactical grid is None in execute")
-                    return None
-                
-                # Then get the exclusion mask using the grid
-                exclusion_mask = nova_manager.get_exclusion_mask(grid)
-                print(f"DEBUG: Got exclusion mask with {np.sum(exclusion_mask)} cells excluded")
-            except Exception as e:
-                print(f"DEBUG ERROR getting exclusion mask: {e}")
-                exclusion_mask = None
-
-        # Select a target, considering exclusion zones
-        print(f"DEBUG: Selecting target for Disruptor {disruptor_unit.tag}, {len(enemy_units)} enemy units, {len(friendly_units)} friendly units")
-        target = None
         try:
-            target = self.select_best_target(enemy_units, friendly_units, exclusion_mask)
-        except Exception as e:
-            print(f"DEBUG ERROR in select_best_target: {e}")
+            print(f"DEBUG: Using nova_manager: {nova_manager is not None}")
             
-        if not target:
-            print(f"DEBUG: No valid target found for Disruptor {disruptor_unit.tag}")
-            return None
-        else:
-            print(f"DEBUG: Found target at {target}")
-            
-        # Register this target with the nova manager if provided
-        target_registered = False
-        if nova_manager:
+            # Safety check for disruptor unit
+            if disruptor_unit is None:
+                print("DEBUG: No disruptor unit provided")
+                return False
+                
+            # Check if unit is already casting Nova
+            is_casting = False
+            if hasattr(disruptor_unit, 'orders'):
+                is_casting = any(order.ability.id == 390 for order in disruptor_unit.orders)
+                    
+            if is_casting:
+                print(f"DEBUG: Disruptor unit already casting")
+                return False
+                
+            # Initialize with appropriate nova manager
+            if nova_manager:
+                nova_manager.enemy_units = enemy_units
+                nova_manager.friendly_units = friendly_units
+                
+            # Get target
+            if not self.best_target_pos:
+                # Find best target if we don't have one
+                self.select_best_target(disruptor_unit, enemy_units, friendly_units, nova_manager)
+                if not self.best_target_pos:
+                    # Couldn't find a good target
+                    print("DEBUG: No valid target found")
+                    return False
+                    
+            # Check if we're already casting the ability
+            if self.executing:
+                print(f"DEBUG: Already executing Nova ability at {self.best_target_pos}")
+                if self.unit is None:
+                    print("DEBUG: Nova unit is None but executing flag is set, resetting")
+                    self.reset()
+                    return False
+                    
+                return True
+                
+            # Calculate distance to target
             try:
-                target_registered = nova_manager.register_nova_target(target)
-                if not target_registered:
-                    print(f"DEBUG: Failed to register target with NovaManager - continuing anyway")
-                else:
-                    print(f"DEBUG: Successfully registered target with NovaManager")
+                target_distance = disruptor_unit.position.distance_to(self.best_target_pos)
             except Exception as e:
-                print(f"DEBUG ERROR registering target: {e}")
-                # Continue anyway - we'll still try to fire the nova
-
-        # Calculate which ability ID to use based on unit type (should be AbilityId.EFFECT_PURIFICATIONNOVA)
-        ability_id = AbilityId.EFFECT_PURIFICATIONNOVA
-        
-        # Calculate maximum distance the Nova can travel during its lifetime
-        nova_speed = 5.95  # Nova movement speed in game units per second
-        nova_lifetime = 2.1  # Nova lifetime in seconds
-        max_travel_distance = nova_speed * nova_lifetime
-        
-        # Calculate the current distance to the target
-        current_distance = disruptor_unit.position.distance_to(target)
-        
-        # Debug info
-        print(f"Target distance: {current_distance:.2f}, Max travel distance: {max_travel_distance:.2f}")
-        
-        # Check if the target is within range
-        if current_distance <= max_travel_distance:
-            # Target is within range, fire the Nova
-            try:
-                did_fire = disruptor_unit(ability_id, target)
-            except Exception as e:
-                print(f"DEBUG ERROR firing Nova: {e}")
-                did_fire = False
-        else:
-            # Target is out of range, move the Disruptor closer
-            # Find a position that moves toward the target but not all the way
-            move_position = disruptor_unit.position.towards(target, 5.0)
-            disruptor_unit.move(move_position)
-            print(f"Target out of range. Moving Disruptor to: {move_position}")
-            did_fire = False
+                print(f"DEBUG ERROR calculating distance: {e}")
+                return False
             
-        print(f"DEBUG: Disruptor execute result: {did_fire}")
-        
-        if did_fire:
-            # On successful fire, initialize the nova instance and add to active novas
-            self.best_target_pos = target
-            self.frames_left = 48  # 2.1 seconds duration at 22.4 frames per sec
-            # TODO: We'll need to track the actual unit in a real game
-            self.unit = None  # This would be assigned with the actual Nova unit
-            return self
-        else:
-            # If firing failed, unregister the target only if we registered it successfully
-            if nova_manager and target_registered:
+            # Max travel distance for Nova (game units)
+            nova_range = 13.0  # Maximum reasonable range for Nova ability
+            if nova_manager and hasattr(nova_manager, 'nova_speed') and hasattr(nova_manager, 'nova_lifetime'):
+                max_travel_distance = min(nova_range, nova_manager.nova_speed * nova_manager.nova_lifetime)
+            else:
+                max_travel_distance = nova_range
+            
+            print(f"Target distance: {target_distance:.2f}, Max travel distance: {max_travel_distance:.2f}")
+            
+            # Check for targets out of range
+            if target_distance > max_travel_distance + 5.0:  # Add a small buffer for pathing
+                print(f"Target out of range. Moving Disruptor to: {disruptor_unit.position.towards(self.best_target_pos, 3.0)}")
                 try:
-                    nova_manager.unregister_nova_target(target)
+                    disruptor_unit.move(disruptor_unit.position.towards(self.best_target_pos, 3.0))
                 except Exception as e:
-                    print(f"DEBUG ERROR unregistering unused target: {e}")
-            return None
+                    print(f"DEBUG ERROR moving disruptor: {e}")
+                return False
+            
+            # Target is in range, use ability
+            print(f"Using Purification Nova at {self.best_target_pos}")
+            try:
+                disruptor_unit(AbilityId.EFFECT_PURIFICATIONNOVA, self.best_target_pos)
+            except Exception as e:
+                print(f"DEBUG ERROR casting Nova: {e}")
+                return False
+            
+            # Mark as executing and set the Nova unit
+            self.executing = True
+            self.frames_left = int(nova_manager.nova_lifetime * 22.4) if nova_manager and hasattr(nova_manager, 'nova_lifetime') else 48
+            self.unit = disruptor_unit
+            
+            return True
+        except Exception as e:
+            print(f"DEBUG ERROR executing Nova: {e}")
+            
+            # Clean up resources in case of error
+            if self.best_target_pos and nova_manager:
+                print(f"DEBUG: Unregistering Nova target at {self.best_target_pos} after error")
+                try:
+                    nova_manager.unregister_nova_target(self.best_target_pos)
+                except Exception as unregister_error:
+                    print(f"DEBUG ERROR unregistering target: {unregister_error}")
+            
+            self.reset()
+            return False
+
+    def reset(self):
+        """Reset the Nova state."""
+        self.best_target_pos = None
+        self.best_target_influence = 0
+        self.target_pos = None
+        self.executing = False
+        self.frames_left = 0
+        self.unit = None
 
     def run_step(self, enemy_units: List['Unit'], friendly_units: List['Unit'], nova_manager=None):
         """Execute one step for this nova. Reduces the frame counter and possibly moves the nova.
-        Returns True if the nova is still active, False if it has expired.
-        
         Args:
-            enemy_units: List of enemy units to avoid hitting
-            friendly_units: List of friendly units to avoid hitting
-            nova_manager: Optional NovaManager for target updating
-        """
-        if self.frames_left <= 0:
-            return False
-
-        # Update the frame counter
-        self.frames_left -= 1
-        
-        # Check if we should update our target - do this every frame to be more responsive
-        if nova_manager:
-            self.update_target_position(enemy_units, friendly_units, nova_manager)
+            enemy_units: List of enemy units to consider
+            friendly_units: List of friendly units to avoid
+            nova_manager: Optional NovaManager for target coordination
             
-        # Run debug visualization every 22 frames (approximately once per second)
-        if self.frames_left % 22 == 0 and hasattr(self, 'influence_grid'):
-            self.run_debug()
-
-        # If a valid target was found and it differs from the current position, command the nova to move
-        if self.best_target_pos is not None and self.best_target_pos != self.unit.position:
-            #TODO need to find a way for nova to pathfind to the best target position
-            self.unit.move(self.best_target_pos)
-            print(f"Moving Nova to target: {self.best_target_pos}")
-
-        # Continue running until the nova expires
-        return self.frames_left > 0
+        Returns:
+            bool: True if the Nova is still active, False if it has finished
+        """
+        if not self.executing:
+            return False
+            
+        try:
+            # Decrement frame counter
+            self.frames_left -= 1
+            
+            # Update target if time remains
+            if self.frames_left > 10 and nova_manager:
+                try:
+                    self.update_target_position(enemy_units, friendly_units, nova_manager)
+                except Exception as e:
+                    print(f"DEBUG ERROR updating target position: {e}")
+            
+            # Check if Nova has expired
+            if self.frames_left <= 0:
+                print("DEBUG: Nova expired, cleaning up")
+                # Clean up on finished Nova
+                if self.best_target_pos and nova_manager:
+                    try:
+                        nova_manager.unregister_nova_target(self.best_target_pos)
+                    except Exception as e:
+                        print(f"DEBUG ERROR unregistering expired Nova target: {e}")
+                self.reset()
+                return False
+                
+            # Check if Nova unit is still tracked
+            if self.unit is None:
+                print("DEBUG: Nova unit is no longer tracked")
+                # Clean up if Nova was destroyed or removed
+                if self.best_target_pos and nova_manager:
+                    try:
+                        nova_manager.unregister_nova_target(self.best_target_pos)
+                    except Exception as e:
+                        print(f"DEBUG ERROR unregistering destroyed Nova target: {e}")
+                self.reset()
+                return False
+                
+            return True
+            
+        except Exception as e:
+            print(f"DEBUG ERROR in run_step: {e}")
+            if self.best_target_pos and nova_manager:
+                try:
+                    nova_manager.unregister_nova_target(self.best_target_pos)
+                except Exception as unregister_error:
+                    print(f"DEBUG ERROR unregistering target: {unregister_error}")
+            self.reset()
+            return False
         
     def load_info(self, unit):
         """Initialize nova tracking state when fired."""
@@ -935,19 +469,13 @@ class UseDisruptorNova(CombatIndividualBehavior):
         print(f"Current Position: {self.unit.position}, Target Position: {self.best_target_pos}")
         
         # For debugging, let's get a fresh grid if we don't have one stored
-        if not hasattr(self, 'influence_grid'):
-            print("Getting fresh grid for visualization")
-            try:
-                grid = self.get_grid()
-                if grid is not None:
-                    self.influence_grid = grid.copy()
-                    print(f"Successfully obtained grid with shape {grid.shape}")
-                else:
-                    print("No grid available for visualization")
-                    return
-            except Exception as e:
-                print(f"Error getting grid for visualization: {e}")
-                return
+        grid = self.mediator.get_tactical_ground_grid
+        if grid is not None:
+            self.influence_grid = grid.copy()
+            print(f"Successfully obtained grid with shape {grid.shape}")
+        else:
+            print("No grid available for visualization")
+            return
         
         try:
             # Get max and min values to understand the range of influence
@@ -1068,95 +596,3 @@ class UseDisruptorNova(CombatIndividualBehavior):
                 
         except Exception as e:
             print(f"DEBUG ERROR in _visualize_grid: {e}")
-
-    def get_grid(self) -> Optional[np.ndarray]:
-        """
-        Safely get the tactical ground grid.
-        
-        Returns:
-            Optional[np.ndarray]: The tactical ground grid or None if there was an error
-        """
-        try:
-            # Get the grid - this is an ndarray attribute, not a method
-            grid = self.mediator.get_tactical_ground_grid
-            print(f"DEBUG: Type of tactical ground grid: {type(grid)}")
-            
-            # Verify we have a valid ndarray
-            if isinstance(grid, np.ndarray):
-                print(f"DEBUG: Got grid with shape {grid.shape}")
-                
-                # Make a copy to avoid modifying the original
-                grid_copy = grid.copy()
-                
-                # Analyze valid values in the grid before modification
-                valid_mask = ~np.isinf(grid_copy) & ~np.isnan(grid_copy)
-                if np.any(valid_mask):
-                    valid_values = grid_copy[valid_mask]
-                    min_valid = np.min(valid_values)
-                    max_valid = np.max(valid_values)
-                    median_valid = np.median(valid_values)
-                    p10 = np.percentile(valid_values, 10)
-                    p90 = np.percentile(valid_values, 90)
-                    print(f"DEBUG: Valid grid values - Min: {min_valid}, Max: {max_valid}, Median: {median_valid}")
-                    print(f"DEBUG: Percentiles - 10%: {p10}, 90%: {p90}")
-                    
-                    # Count values in different ranges
-                    below190 = np.sum(valid_values < 190)
-                    neutral_range = np.sum((valid_values >= 190) & (valid_values <= 210))
-                    above210 = np.sum(valid_values > 210)
-                    print(f"DEBUG: Value distribution - Below 190: {below190}, 190-210: {neutral_range}, Above 210: {above210}")
-                    
-                    # Calculate extreme enemy and friendly values for our scaled representation
-                    extreme_enemy_value = max(250.0, max_valid + 10)  # Ensure it's at least 250
-                    extreme_friendly_value = min(150.0, min_valid - 10)  # Ensure it's at most 150
-                else:
-                    print("DEBUG: No valid (non-infinite, non-NaN) values in grid")
-                    median_valid = 200  # Neutral value
-                    extreme_enemy_value = 300     # Very high enemy influence
-                    extreme_friendly_value = 100  # Very high friendly influence
-                
-                # Count different types of infinite values
-                pos_inf_mask = np.isposinf(grid_copy)
-                neg_inf_mask = np.isneginf(grid_copy)
-                pos_inf_count = np.sum(pos_inf_mask)
-                neg_inf_count = np.sum(neg_inf_mask)
-                
-                if pos_inf_count > 0 or neg_inf_count > 0:
-                    print(f"DEBUG: Found {pos_inf_count} positive infinite values and {neg_inf_count} negative infinite values")
-                    
-                    # Instead of replacing infinities with random values, we'll use scaled extreme values
-                    # that preserve the meaning while making them usable for numerical comparisons
-                    
-                    if pos_inf_count > 0:
-                        # Positive infinity represents unpathable terrain or extreme enemy influence
-                        # Use a very high value (well above neutral 200)
-                        grid_copy = np.where(pos_inf_mask, extreme_enemy_value, grid_copy)
-                        print(f"DEBUG: Replaced positive infinite values with extreme enemy value: {extreme_enemy_value}")
-                    
-                    if neg_inf_count > 0:
-                        # Negative infinity represents unpathable terrain or extreme friendly influence
-                        # Use a very low value (well below neutral 200)
-                        grid_copy = np.where(neg_inf_mask, extreme_friendly_value, grid_copy)
-                        print(f"DEBUG: Replaced negative infinite values with extreme friendly value: {extreme_friendly_value}")
-                
-                # Replace NaN values if any exist
-                nan_mask = np.isnan(grid_copy)
-                if np.any(nan_mask):
-                    nan_count = np.sum(nan_mask)
-                    grid_copy = np.where(nan_mask, median_valid, grid_copy)
-                    print(f"DEBUG: Replaced {nan_count} NaN values with median value {median_valid}")
-                
-                # Store the grid for visualization and analysis
-                self.influence_grid = grid_copy
-                
-                # Final check of value distribution after all replacements
-                print(f"DEBUG: Final grid values - Min: {np.min(grid_copy)}, Max: {np.max(grid_copy)}")
-                print(f"DEBUG: Unique values count: {len(np.unique(grid_copy))}")
-                
-                return grid_copy
-            else:
-                print(f"DEBUG: tactical ground grid is not a valid ndarray, type: {type(grid)}")
-                return None
-        except Exception as e:
-            print(f"DEBUG ERROR in get_grid: {e}")
-            return None

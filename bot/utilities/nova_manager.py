@@ -24,6 +24,7 @@ class NovaManager:
         # Nova speed and lifetime constants
         self.nova_speed = 5.95  # Nova movement speed in game units per second
         self.nova_lifetime = 2.1  # Nova lifetime in seconds
+        self.nova_radius = 1.5  # Nova radius
         self.enemy_units = []
         self.friendly_units = []
 
@@ -88,70 +89,67 @@ class NovaManager:
         
     def register_nova_target(self, position: Point2) -> bool:
         """
-        Register a new Nova target position. Returns True if successful, False if the position
-        is too close to an existing target.
+        Register a position as a current Nova target.
+        
+        Args:
+            position: The position (x, y) to register as target
+            
+        Returns:
+            bool: True if registration was successful, False if target is too close to existing targets
         """
-        if not position:
-            print("DEBUG: Cannot register None position")
-            return False
-            
-        # Convert world position to grid position
         try:
-            # Access tactical ground grid as an attribute, not a method
-            grid = self.mediator.get_tactical_ground_grid
-            if grid is None:
-                print("DEBUG: Tactical grid is None in register_nova_target")
-                return False
-                
-            # Convert world position to grid coordinates
-            grid_x, grid_y = int(position.x), int(position.y)
-            
-            # Check against existing targets
-            for existing_x, existing_y in self.current_targets:
-                # Calculate squared distance between the two points
-                distance = ((existing_x - grid_x) ** 2 + (existing_y - grid_y) ** 2) ** 0.5
-                min_required_distance = self.exclusion_radius * 2
-                
-                if distance <= min_required_distance:
-                    print(f"DEBUG: Nova target registration failed - target at ({grid_x}, {grid_y}) too close to existing target at ({existing_x}, {existing_y})")
-                    print(f"DEBUG: Distance: {distance:.2f}, Minimum required: {min_required_distance:.2f}")
+            # Check if this is effectively the same as an existing target
+            for target_pos in self.current_targets:
+                target_point = Point2(target_pos)
+                distance = position.distance_to(target_point)
+                # If very close (almost the same point), consider it already registered
+                if distance < 0.5:
+                    print(f"DEBUG: Nova target at {position} already registered")
+                    return True
+                    
+                # If within exclusion radius but not identical, reject as too close
+                if distance < self.nova_radius:
+                    print(f"DEBUG: Nova target at {position} is too close to existing target at {target_pos}")
                     return False
             
-            # If we get here, the position is valid, so register it
-            self.current_targets.add((grid_x, grid_y))
-            print(f"DEBUG: Registered Nova target at ({grid_x}, {grid_y}), now tracking {len(self.current_targets)} targets")
+            # Add position to set of current targets
+            self.current_targets.add((position.x, position.y))
+            print(f"DEBUG: Registered Nova target at {position}")
             return True
-            
         except Exception as e:
-            print(f"DEBUG ERROR in register_nova_target: {e}")
+            print(f"DEBUG ERROR registering Nova target: {e}")
             return False
-            
+
     def unregister_nova_target(self, position: Point2) -> None:
         """
         Remove a Nova target position from tracking.
         
         Args:
-            position: The position of the Nova target in the game world
+            position: The position to remove
         """
         try:
-            # Validate input
-            if position is None:
-                print("DEBUG: unregister_nova_target called with None position")
+            # Find the closest existing target
+            closest_target = None
+            min_distance = float('inf')
+            
+            for target_pos in list(self.current_targets):
+                target_point = Point2(target_pos)
+                distance = position.distance_to(target_point)
+                
+                # If within a small threshold, consider it a match
+                if distance < 5.0 and distance < min_distance:
+                    closest_target = target_pos
+                    min_distance = distance
+            
+            # Remove the target if found
+            if closest_target:
+                self.current_targets.remove(closest_target)
+                print(f"DEBUG: Unregistered Nova target at {position} (matched with {closest_target})")
                 return
                 
-            # Convert Point2 to grid coordinates
-            # For simplicity, assuming grid coordinates match game coordinates
-            grid_x = int(position.x)
-            grid_y = int(position.y)
-            
-            # Remove from current targets
-            if (grid_x, grid_y) in self.current_targets:
-                self.current_targets.remove((grid_x, grid_y))
-                print(f"DEBUG: Unregistered Nova target at ({grid_x}, {grid_y}), now tracking {len(self.current_targets)} targets")
-            else:
-                print(f"DEBUG: Nova target at ({grid_x}, {grid_y}) not found in registry")
+            print(f"DEBUG: Nova target at {position} not found in registry")
         except Exception as e:
-            print(f"DEBUG ERROR in unregister_nova_target: {e}")
+            print(f"DEBUG ERROR unregistering Nova target: {e}")
 
     def get_exclusion_mask(self, grid) -> np.ndarray:
         """
@@ -172,40 +170,30 @@ class NovaManager:
                 
             # Get the shape of the grid for creating our mask
             grid_shape = grid.shape
-            print(f"DEBUG: Creating exclusion mask with shape {grid_shape}")
-                
+            
             # Create an empty mask matching the grid shape
             mask = np.zeros(grid_shape, dtype=bool)
             
             # If we don't have any current targets, return the empty mask
             if not self.current_targets:
-                print(f"DEBUG: No exclusion zones (no current targets)")
                 return mask
                 
+            # More efficient approach: create a single mask in one pass
             # Mark exclusion zones around each current target
-            for target_pos in self.current_targets:
-                try:
-                    # current_targets should now contain (x, y) tuples
-                    target_x, target_y = target_pos
-                        
-                    # Create a circular mask at this position
-                    mask_radius = self.exclusion_radius
-                    
+            if self.current_targets:
+                # Create coordinate grids once for more efficient distance calculations
+                y_indices, x_indices = np.indices(grid_shape)
+                
+                # For each target, create a circular mask and combine them all
+                for target_x, target_y in self.current_targets:
                     # Safety check for grid boundaries
                     if (0 <= target_y < grid_shape[0] and 0 <= target_x < grid_shape[1]):
-                        # Calculate grid coordinates for the circle
-                        y_indices, x_indices = np.ogrid[:grid_shape[0], :grid_shape[1]]
                         # Calculate squared distance from this position
                         dist_from_target = ((x_indices - target_x)**2 + (y_indices - target_y)**2)
-                        # Create circular mask
-                        circular_mask = dist_from_target <= mask_radius**2
-                        # Apply to our main mask
-                        mask = np.logical_or(mask, circular_mask)
-                        print(f"DEBUG: Added exclusion zone at ({target_x}, {target_y}) with radius {mask_radius}")
+                        # Create circular mask and combine with our existing mask
+                        mask = np.logical_or(mask, dist_from_target <= self.exclusion_radius**2)
                     else:
                         print(f"DEBUG: Target position ({target_x}, {target_y}) out of grid bounds {grid_shape}")
-                except Exception as e:
-                    print(f"DEBUG ERROR creating exclusion zone for target {target_pos}: {e}")
                 
             print(f"DEBUG: Generated exclusion mask with {np.sum(mask)} excluded cells")
             return mask
@@ -226,11 +214,8 @@ class NovaManager:
         Returns:
             bool: True if the Nova can reach the target, False otherwise
         """
-        # Convert frames to seconds
-        seconds_left = frames_left / 22.4  # Assuming 22.4 frames per second
-        
-        # Calculate maximum travel distance
-        max_travel_distance = self.nova_speed * seconds_left
+        # Calculate maximum travel distance - using the constant FPS value consistently
+        max_travel_distance = self.nova_speed * (frames_left / 22.4)
         
         # Calculate current distance to target
         current_distance = nova_position.distance_to(target_position)
