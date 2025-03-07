@@ -126,20 +126,7 @@ class PiG_Bot(AresBot):
         warp_prism = self.mediator.get_units_from_role(role=UnitRole.DROP_SHIP)
         scout_units = self.mediator.get_units_from_role(role=UnitRole.SCOUTING)
 
-        # Update Nova Manager with current units
-        if hasattr(self, 'nova_manager'):
-            try:
-                # Get all visible enemy units within a reasonable search range
-                enemy_units = self.enemy_units.filter(lambda u: u.is_visible)
-                friendly_units = self.units
-                
-                # Update the Nova Manager with current units
-                self.nova_manager.update_units(enemy_units, friendly_units)
-                
-                # Run the update method to handle active Novas
-                self.nova_manager.update(enemy_units, friendly_units)
-            except Exception as e:
-                print(f"DEBUG ERROR updating NovaManager: {e}")
+       
 
         # Create Squad
         squads: list[UnitSquad] = self.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15)
@@ -195,12 +182,6 @@ class PiG_Bot(AresBot):
         if self.minerals > 2800 and not self.build_order_runner.build_completed:
             self.build_order_runner.set_build_completed()
 
-   
-
-        # Update nova behaviors
-        enemy_units = self.all_enemy_units
-        friendly_units = self.units
-        self.nova_manager.update(enemy_units, friendly_units)
 
     async def on_unit_created(self, unit: Unit) -> None:
         """

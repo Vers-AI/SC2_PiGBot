@@ -112,6 +112,20 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                         bot.register_behavior(KeepUnitSafe(disruptor, grid))
                     except Exception as e:
                         print(f"DEBUG ERROR in disruptor handling: {e}")
+                # Update Nova Manager with current units
+                if hasattr(bot, 'nova_manager'):
+                    try:
+                        # Get all visible enemy units within a reasonable search range
+                        enemy_units = all_close
+                        friendly_units = units
+                        
+                        # Update the Nova Manager with current units
+                        bot.nova_manager.update_units(enemy_units, friendly_units)
+                        
+                        # Run the update method to handle active Novas
+                        bot.nova_manager.update(enemy_units, friendly_units)
+                    except Exception as e:
+                        print(f"DEBUG ERROR updating NovaManager: {e}")
                     
         else:
             # No enemies nearby—regroup or move to final target
