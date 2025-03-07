@@ -16,7 +16,7 @@ import numpy as np
 from sc2.position import Point2
 import math
 
-from cython_extensions import cy_all_points_below_max_value
+from cython_extensions import cy_find_aoe_position
 
 
 if TYPE_CHECKING:
@@ -101,71 +101,92 @@ class UseDisruptorNova(CombatIndividualBehavior):
                 print(f"DEBUG ERROR getting exclusion mask: {e}")
                 exclusion_mask = None
             
-            # Directly evaluate each enemy position as candidate
-            best_pos = None
-            best_score = float('-inf')
-            best_influence = float('-inf')
+            # Step 1: Use cy_find_aoe_position to get optimal AOE position
+            optimal_position = cy_find_aoe_position(effect_radius=nova_radius, targets=enemy_units, bonus_tags=set())
             
-            # Simple array of candidate positions - just the enemy positions
+            if optimal_position is None:
+                print("DEBUG select_best_target: cy_find_aoe_position found no suitable position")
+                return None
+            
+            # Step 2: Gather all candidate positions to evaluate
             candidate_positions = []
             
-            # First, get all the enemy positions
+            # Add the optimal position from cy_find_aoe_position
+            candidate_positions.append(Point2((optimal_position[0], optimal_position[1])))
+            
+            # Also consider individual enemy positions as candidates
             for enemy in enemy_units:
                 pos = enemy.position
-                # Check if position is in bounds and not in exclusion zone
-                grid_x, grid_y = int(pos.x), int(pos.y)
-                
-                # Skip if out of bounds
-                if not (0 <= grid_x < grid.shape[1] and 0 <= grid_y < grid.shape[0]):
-                    continue
-                    
-                # Skip if in exclusion zone
-                if exclusion_mask is not None:
-                    if (0 <= grid_x < exclusion_mask.shape[1] and 
-                        0 <= grid_y < exclusion_mask.shape[0] and 
-                        exclusion_mask[grid_y, grid_x]):
-                        continue
-                
-                # Add position to candidates
-                candidate_positions.append(pos)
+                if pos not in candidate_positions:
+                    candidate_positions.append(pos)
             
-            print(f"DEBUG select_best_target: Evaluating {len(candidate_positions)} enemy positions")
-                
-            # Evaluate each candidate position
+            print(f"DEBUG select_best_target: Evaluating {len(candidate_positions)} candidate positions")
+            
+            # Step 3: Score each position based on influence and unit counts
+            best_pos = None
+            best_score = float('-inf')
+            
             for pos in candidate_positions:
                 try:
-                    # Convert position to grid indices
+                    # Skip if position is out of grid bounds
                     grid_x, grid_y = int(pos.x), int(pos.y)
+                    if not (0 <= grid_x < grid.shape[1] and 0 <= grid_y < grid.shape[0]):
+                        continue
+                    
+                    # Skip if this position is in an exclusion zone
+                    if exclusion_mask is not None:
+                        if (0 <= grid_x < exclusion_mask.shape[1] and 
+                            0 <= grid_y < exclusion_mask.shape[0] and 
+                            exclusion_mask[grid_y, grid_x]):
+                            continue
                     
                     # Get the influence value at this position
                     influence = grid[grid_y, grid_x]
                     
-                    # Count enemies within Nova radius
+                    # Count and calculate influence of enemies within Nova radius
                     enemies_hit = 0
+                    enemy_influence = 0
                     for enemy in enemy_units:
                         if pos.distance_to(enemy.position) <= nova_radius:
                             enemies_hit += 1
+                            # Get influence at enemy position
+                            enemy_x, enemy_y = int(enemy.position.x), int(enemy.position.y)
+                            if (0 <= enemy_x < grid.shape[1] and 0 <= enemy_y < grid.shape[0]):
+                                enemy_value = grid[enemy_y, enemy_x]
+                                # Count influence only if it's higher than baseline (enemy units have higher influence)
+                                if enemy_value > 200:
+                                    enemy_influence += enemy_value - 200
                     
-                    # Check for friendly fire
+                    # Check and calculate negative impact from friendly units
                     friendly_hit = 0
+                    friendly_influence = 0
                     for friendly in friendly_units:
                         if pos.distance_to(friendly.position) <= nova_radius:
                             friendly_hit += 1
+                            # Get influence at friendly position
+                            friendly_x, friendly_y = int(friendly.position.x), int(friendly.position.y)
+                            if (0 <= friendly_x < grid.shape[1] and 0 <= friendly_y < grid.shape[0]):
+                                friendly_value = grid[friendly_y, friendly_x]
+                                # Count negative influence from hitting friendly units (friendly units have lower influence)
+                                if friendly_value < 200:
+                                    friendly_influence += 200 - friendly_value
                     
                     # Skip positions that would hit friendly units
                     if friendly_hit > 0:
                         continue
                     
-                    # Calculate final score: combine influence and enemy count
-                    # Weight enemy count more heavily to prioritize clusters
-                    score = (enemies_hit * 100) + influence
+                    # Calculate combined score:
+                    # - Weight enemy count highly
+                    # - Add enemy influence above baseline
+                    # - Subtract friendly influence below baseline (though we already skip friendly fire)
+                    score = (enemies_hit * 100) + enemy_influence - friendly_influence
                     
                     # Update best position if this is better
                     if score > best_score:
                         best_score = score
-                        best_influence = influence
                         best_pos = pos
-                        print(f"DEBUG select_best_target: Found better position at {best_pos} with score {best_score} (influence: {influence}, enemies: {enemies_hit})")
+                        print(f"DEBUG select_best_target: Found better position at {best_pos} with score {best_score} "
+                              f"(enemies: {enemies_hit}, enemy_influence: {enemy_influence}, friendly_influence: {friendly_influence})")
                 except Exception as e:
                     print(f"DEBUG ERROR scoring position {pos}: {e}")
             
@@ -176,7 +197,7 @@ class UseDisruptorNova(CombatIndividualBehavior):
             else:
                 print("DEBUG select_best_target: No suitable target found")
                 return None
-            
+        
         except Exception as e:
             print(f"DEBUG ERROR in select_best_target: {e}")
             return None

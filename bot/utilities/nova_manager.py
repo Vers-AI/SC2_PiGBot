@@ -198,14 +198,14 @@ class NovaManager:
             # Mark exclusion zones around each current target
             if self.current_targets:
                 # Create coordinate grids once for more efficient distance calculations
-                y_indices, x_indices = np.indices(grid_shape)
+                x_indices, y_indices = np.indices(grid_shape)
                 
                 # For each target, create a circular mask and combine them all
                 for _, target_position in self.current_targets.items():
                     target_x, target_y = int(target_position.x), int(target_position.y)
                     
                     # Safety check for grid boundaries
-                    if (0 <= target_y < grid_shape[0] and 0 <= target_x < grid_shape[1]):
+                    if (0 <= target_x < grid_shape[1] and 0 <= target_y < grid_shape[0]):
                         # Calculate squared distance from this position
                         dist_from_target = ((x_indices - target_x)**2 + (y_indices - target_y)**2)
                         # Create circular mask and combine with our existing mask
@@ -251,5 +251,3 @@ class NovaManager:
         """
         self.enemy_units = enemy_units
         self.friendly_units = friendly_units
-
-    
