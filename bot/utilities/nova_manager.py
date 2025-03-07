@@ -33,7 +33,7 @@ class NovaManager:
         try:
             grid = self.mediator.get_tactical_ground_grid
             if grid is not None:
-                print(f"DEBUG: Successfully accessed tactical grid with shape {grid.shape}")
+                print(f"DEBUG: Successfully accessed tactical grid")
             else:
                 print("DEBUG: Warning - tactical grid is None")
         except Exception as e:
@@ -54,74 +54,34 @@ class NovaManager:
         if hasattr(nova, 'best_target_pos') and nova.best_target_pos:
             self.register_nova_target(nova.best_target_pos)
 
+    
     def update(self, enemy_units: list, friendly_units: list) -> None:
         """Update all active nova instances and remove expired ones."""
         self.update_units(enemy_units, friendly_units)
         expired = []
         
-        # Only print debug info if we actually have active Novas
-        if self.active_novas:
-            print(f"DEBUG: Updating {len(self.active_novas)} active Novas")
-        
-        # First scan for stale Novas and add them to expired list
         for nova in self.active_novas:
-            try:
-                # Check if Nova has timed out (maximum execution time exceeded)
-                if hasattr(nova, 'execution_start_time') and hasattr(nova, 'max_execution_time'):
-                    import time
-                    current_time = time.time()
-                    # Only check Novas that have a valid start time (not 0)
-                    if nova.execution_start_time > 0 and current_time - nova.execution_start_time > nova.max_execution_time:
-                        print(f"DEBUG: Nova has exceeded maximum execution time during update, marking for expiration")
-                        expired.append(nova)
-                        continue
-            except Exception as e:
-                print(f"DEBUG ERROR checking Nova timeout: {e}")
-        
-        # Now update active Novas that aren't already marked as expired
-        for nova in [n for n in self.active_novas if n not in expired]:
-            try:
-                # Decrement the frame counter and update remaining distance
-                nova.update_info()
-                
-                # Run the nova's step logic with target adjustment
-                is_active = nova.run_step(self.enemy_units, self.friendly_units, self)
-                
-                # Check explicitly if the Nova should be removed
-                if not is_active or nova.frames_left <= 0 or not nova.executing:
-                    print(f"DEBUG: Nova marked for expiration, is_active: {is_active}, frames_left: {nova.frames_left}, executing: {nova.executing}")
-                    expired.append(nova)
-            except Exception as e:
-                print(f"DEBUG ERROR updating Nova: {e}")
-                # Mark Nova as expired if we encounter an exception during update
+            # Decrement the frame counter and update remaining distance
+            nova.update_info()
+            
+            # Run the nova's step logic with target adjustment
+            nova.run_step(self.enemy_units, self.friendly_units, self)
+            
+            # If timer has expired, mark for removal
+            if nova.frames_left <= 0:
                 expired.append(nova)
         
         # Remove expired nova instances
         for nova in expired:
-            print(f"DEBUG: Removing expired Nova from manager")
             if hasattr(nova, 'best_target_pos') and nova.best_target_pos:
+                # Use the proper unregister method to ensure consistency
                 try:
                     self.unregister_nova_target(nova.best_target_pos)
                 except Exception as e:
-                    print(f"DEBUG ERROR unregistering target for expired Nova: {e}")
-            
-            # Ensure the Nova is fully reset before removing
-            if hasattr(nova, 'reset'):
-                try:
-                    print(f"DEBUG: Resetting expired Nova before removal")
-                    nova.reset()
-                except Exception as e:
-                    print(f"DEBUG ERROR resetting expired Nova: {e}")
-                
-            try:
-                self.active_novas.remove(nova)
-            except Exception as e:
-                print(f"DEBUG ERROR removing Nova from active list: {e}")
-        
-        # Only report updated count if we had active Novas or removed some
-        if self.active_novas or expired:
-            print(f"DEBUG: Now tracking {len(self.active_novas)} active Novas after cleanup")
+                    print(f"DEBUG ERROR unregistering expired Nova target: {e}")
+            self.active_novas.remove(nova)
 
+                
     def get_active_novas(self) -> List:
         """Return the list of currently active nova instances."""
         return self.active_novas
@@ -292,70 +252,4 @@ class NovaManager:
         self.enemy_units = enemy_units
         self.friendly_units = friendly_units
 
-    def cleanup_all_novas(self) -> None:
-        """
-        Emergency cleanup method to reset all Novas and clear all targets.
-        Can be called when system state seems inconsistent.
-        """
-        print(f"DEBUG: Emergency cleanup of ALL {len(self.active_novas)} Novas")
-        
-        # First reset all Nova instances
-        reset_errors = 0
-        for nova in list(self.active_novas):
-            try:
-                if hasattr(nova, 'best_target_pos') and nova.best_target_pos:
-                    try:
-                        self.unregister_nova_target(nova.best_target_pos)
-                    except Exception as e:
-                        print(f"DEBUG: Error unregistering Nova target during emergency cleanup: {e}")
-                
-                if hasattr(nova, 'executing'):
-                    nova.executing = False
-                if hasattr(nova, 'frames_left'):
-                    nova.frames_left = 0
-                if hasattr(nova, 'reset'):
-                    nova.reset()
-            except Exception as e:
-                reset_errors += 1
-                print(f"DEBUG: Error resetting Nova during emergency cleanup: {e}")
-        
-        # Clear the active list
-        self.active_novas.clear()
-        
-        # Clear all target tracking
-        targets_count = len(self.current_targets)
-        self.current_targets.clear()
-        
-        print(f"DEBUG: Emergency cleanup complete, cleared {targets_count} targets with {reset_errors} reset errors")
-        
-        # Print current state to verify cleanup
-        self.diagnostic_report()
-        
-    def diagnostic_report(self) -> None:
-        """Provide a diagnostic report of the current NovaManager state."""
-        print(f"\nDEBUG: --- NovaManager Diagnostic Report ---")
-        print(f"Active Novas: {len(self.active_novas)}")
-        print(f"Current Targets: {len(self.current_targets)}")
-        
-        # Report on active Novas
-        for i, nova in enumerate(self.active_novas):
-            print(f"Nova {i}:")
-            print(f"  Executing: {nova.executing if hasattr(nova, 'executing') else 'N/A'}")
-            print(f"  Frames Left: {nova.frames_left if hasattr(nova, 'frames_left') else 'N/A'}")
-            print(f"  Target Position: {nova.best_target_pos if hasattr(nova, 'best_target_pos') else 'N/A'}")
-            
-            # Check for timeout
-            if hasattr(nova, 'execution_start_time') and hasattr(nova, 'max_execution_time'):
-                import time
-                current_time = time.time()
-                if nova.execution_start_time > 0:
-                    time_running = current_time - nova.execution_start_time
-                    print(f"  Execution Time: {time_running:.2f}s (Max: {nova.max_execution_time}s)")
-                    if time_running > nova.max_execution_time:
-                        print(f"  WARNING: Nova has exceeded maximum execution time!")
-        
-        # Report on current targets
-        for i, target in enumerate(self.current_targets.items()):
-            print(f"Target {i}: {target[1]}")
-            
-        print(f"DEBUG: --- End Diagnostic Report ---\n")
+    
