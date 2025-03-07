@@ -67,139 +67,115 @@ class UseDisruptorNova(CombatIndividualBehavior):
 
     def select_best_target(self, enemy_units: List['Unit'], friendly_units: List['Unit'], nova_manager) -> Optional[Point2]:
         """
-        Select the best target position for the Nova based on enemy positions and influence grid.
+        Select the best position to target with a Disruptor Nova ability.
         
         Args:
-            enemy_units: List of enemy units to consider
-            friendly_units: List of friendly units to avoid
-            nova_manager: The NovaManager for exclusion mask and target registration
+            enemy_units: List of enemy units to consider targeting
+            friendly_units: List of friendly units to avoid damaging
+            nova_manager: NovaManager instance for target coordination
             
         Returns:
-            Point2: The best target position, or None if no suitable target was found
+            Point2: The recommended target position, or None if no good position found
         """
         try:
-            # If no enemy units, there's no target
-            if not enemy_units:
-                print("DEBUG select_best_target: No enemy units to target")
-                return None
-            
-            # Get the tactical ground grid - maintain property access without parentheses
-            grid = self.mediator.get_tactical_ground_grid
-            
-            if grid is None:
-                print("DEBUG select_best_target: No tactical grid available")
-                return None
-            
-            # Nova explosion radius
             nova_radius = 1.5
+            candidate_positions = []
+            candidate_scores = []
             
-            # Get exclusion mask from nova manager
+            # First, ensure we have some units to target
+            if not enemy_units:
+                return None
+                
+            # Get tactical ground grid to access influence values - use property syntax
             try:
-                exclusion_mask = nova_manager.get_exclusion_mask(grid)
-                print(f"DEBUG select_best_target: Got exclusion mask with {np.sum(exclusion_mask)} cells excluded")
+                tactical_grid = self.mediator.get_tactical_ground_grid
+                if tactical_grid is None:
+                    print("WARNING: Tactical ground grid is None")
+                    return None
             except Exception as e:
-                print(f"DEBUG ERROR getting exclusion mask: {e}")
-                exclusion_mask = None
-            
+                print(f"ERROR accessing tactical grid: {e}")
+                return None
+                
+            # Get exclusion mask if available
+            exclusion_mask = None
+            if nova_manager:
+                try:
+                    exclusion_mask = nova_manager.get_exclusion_mask(tactical_grid)
+                except Exception as e:
+                    print(f"ERROR getting exclusion mask: {e}")
+                    
             # Step 1: Use cy_find_aoe_position to get optimal AOE position
             optimal_position = cy_find_aoe_position(effect_radius=nova_radius, targets=enemy_units, bonus_tags=set())
             
-            if optimal_position is None:
-                print("DEBUG select_best_target: cy_find_aoe_position found no suitable position")
+            if optimal_position is not None:
+                # Convert to Point2 and add to candidates
+                optimal_point = Point2((optimal_position[0], optimal_position[1]))
+                # Verify it's not in the exclusion zone
+                add_optimal = True
+                if exclusion_mask is not None:
+                    # Check if coordinates are within grid bounds
+                    x, y = int(optimal_point.x), int(optimal_point.y)
+                    if 0 <= x < exclusion_mask.shape[1] and 0 <= y < exclusion_mask.shape[0]:
+                        if exclusion_mask[y, x]:
+                            add_optimal = False
+                            print(f"Optimal position {optimal_point} is in exclusion zone")
+                
+                if add_optimal:
+                    # Calculate how many enemies would be hit
+                    enemies_hit = sum(1 for unit in enemy_units 
+                                    if unit.position.distance_to(optimal_point) <= nova_radius)
+                    candidate_positions.append(optimal_point)
+                    candidate_scores.append(enemies_hit * 200)  # Base score on units hit
+            
+            # Step 2: Find top influence positions in the grid
+            # Create a copy of the grid for manipulation
+            grid_copy = tactical_grid.copy()
+            
+            # Apply exclusion mask if available
+            if exclusion_mask is not None and exclusion_mask.shape == grid_copy.shape:
+                grid_copy[exclusion_mask] = 0  # Zero out excluded areas
+            
+            # Flatten grid, find indices of top 5 values, convert back to 2D coordinates
+            flat_indices = np.argsort(grid_copy.flatten())[-10:]  # Get indices of top 10 values
+            for idx in flat_indices:
+                # Convert flat index to 2D coordinates
+                y, x = np.unravel_index(idx, grid_copy.shape)
+                influence_value = grid_copy[y, x]
+                
+                # Only consider positions with significant influence (above 200 indicates enemy)
+                if influence_value > 200:  
+                    # Create Point2 from grid coordinates
+                    pos = Point2((x, y))
+                    
+                    # Calculate how many enemies would be hit
+                    enemies_hit = sum(1 for unit in enemy_units 
+                                    if unit.position.distance_to(pos) <= nova_radius)
+                    
+                    # Check if it would hit any friendly units
+                    friendly_hit = any(unit.position.distance_to(pos) <= nova_radius 
+                                     for unit in friendly_units)
+                    
+                    # If it doesn't hit friendlies, add to candidates
+                    if not friendly_hit and enemies_hit > 0:
+                        candidate_positions.append(pos)
+                        # Score based on influence value and enemy count
+                        candidate_scores.append(influence_value + (enemies_hit * 100))
+            
+            # If we have no candidates, return None
+            if not candidate_positions:
+                print("No valid candidate positions found")
                 return None
+                
+            # Find the position with the highest score
+            best_idx = np.argmax(candidate_scores)
+            best_position = candidate_positions[best_idx]
+            best_score = candidate_scores[best_idx]
             
-            # Step 2: Gather all candidate positions to evaluate
-            candidate_positions = []
+            print(f"Selected best position {best_position} with score {best_score}")
+            return best_position
             
-            # Add the optimal position from cy_find_aoe_position
-            candidate_positions.append(Point2((optimal_position[0], optimal_position[1])))
-            
-            # Also consider individual enemy positions as candidates
-            for enemy in enemy_units:
-                pos = enemy.position
-                if pos not in candidate_positions:
-                    candidate_positions.append(pos)
-            
-            print(f"DEBUG select_best_target: Evaluating {len(candidate_positions)} candidate positions")
-            
-            # Step 3: Score each position based on influence and unit counts
-            best_pos = None
-            best_score = float('-inf')
-            
-            for pos in candidate_positions:
-                try:
-                    # Skip if position is out of grid bounds
-                    grid_x, grid_y = int(pos.x), int(pos.y)
-                    if not (0 <= grid_x < grid.shape[1] and 0 <= grid_y < grid.shape[0]):
-                        continue
-                    
-                    # Skip if this position is in an exclusion zone
-                    if exclusion_mask is not None:
-                        if (0 <= grid_x < exclusion_mask.shape[1] and 
-                            0 <= grid_y < exclusion_mask.shape[0] and 
-                            exclusion_mask[grid_y, grid_x]):
-                            continue
-                    
-                    # Get the influence value at this position
-                    influence = grid[grid_y, grid_x]
-                    
-                    # Count and calculate influence of enemies within Nova radius
-                    enemies_hit = 0
-                    enemy_influence = 0
-                    for enemy in enemy_units:
-                        if pos.distance_to(enemy.position) <= nova_radius:
-                            enemies_hit += 1
-                            # Get influence at enemy position
-                            enemy_x, enemy_y = int(enemy.position.x), int(enemy.position.y)
-                            if (0 <= enemy_x < grid.shape[1] and 0 <= enemy_y < grid.shape[0]):
-                                enemy_value = grid[enemy_y, enemy_x]
-                                # Count influence only if it's higher than baseline (enemy units have higher influence)
-                                if enemy_value > 200:
-                                    enemy_influence += enemy_value - 200
-                    
-                    # Check and calculate negative impact from friendly units
-                    friendly_hit = 0
-                    friendly_influence = 0
-                    for friendly in friendly_units:
-                        if pos.distance_to(friendly.position) <= nova_radius:
-                            friendly_hit += 1
-                            # Get influence at friendly position
-                            friendly_x, friendly_y = int(friendly.position.x), int(friendly.position.y)
-                            if (0 <= friendly_x < grid.shape[1] and 0 <= friendly_y < grid.shape[0]):
-                                friendly_value = grid[friendly_y, friendly_x]
-                                # Count negative influence from hitting friendly units (friendly units have lower influence)
-                                if friendly_value < 200:
-                                    friendly_influence += 200 - friendly_value
-                    
-                    # Skip positions that would hit friendly units
-                    if friendly_hit > 0:
-                        continue
-                    
-                    # Calculate combined score:
-                    # - Weight enemy count highly
-                    # - Add enemy influence above baseline
-                    # - Subtract friendly influence below baseline (though we already skip friendly fire)
-                    score = (enemies_hit * 100) + enemy_influence - friendly_influence
-                    
-                    # Update best position if this is better
-                    if score > best_score:
-                        best_score = score
-                        best_pos = pos
-                        print(f"DEBUG select_best_target: Found better position at {best_pos} with score {best_score} "
-                              f"(enemies: {enemies_hit}, enemy_influence: {enemy_influence}, friendly_influence: {friendly_influence})")
-                except Exception as e:
-                    print(f"DEBUG ERROR scoring position {pos}: {e}")
-            
-            # If we found a good position, return it
-            if best_pos:
-                print(f"DEBUG select_best_target: Selected target at {best_pos} with score {best_score}")
-                return best_pos
-            else:
-                print("DEBUG select_best_target: No suitable target found")
-                return None
-        
         except Exception as e:
-            print(f"DEBUG ERROR in select_best_target: {e}")
+            print(f"DEBUG ERROR selecting best target for Nova: {e}")
             return None
 
     def update_target_position(self, enemy_units: List['Unit'], friendly_units: List['Unit'], nova_manager):
