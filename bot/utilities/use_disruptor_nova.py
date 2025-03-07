@@ -65,96 +65,80 @@ class UseDisruptorNova(CombatIndividualBehavior):
         """Return True if the ability can be used based on its cooldown."""
         return (AbilityId.EFFECT_PURIFICATIONNOVA in disruptor_unit.abilities)
 
-    def select_best_target(self, enemy_units, friendly_units, exclusion_mask=None):
+    def select_best_target(self, enemy_units: List['Unit'], friendly_units: List['Unit'], nova_manager) -> Optional[Point2]:
         """
-        Select the best target position for the nova based on the provided units.
-        Uses influence values to find optimal target areas while considering enemy clusters
-        and avoiding friendly fire.
+        Select the best target position for the Nova based on enemy positions and influence grid.
         
         Args:
-            enemy_units: Units collection of enemy units to consider as targets
-            friendly_units: Units collection of friendly units to avoid damaging
-            exclusion_mask: Optional mask of areas to exclude from targeting
+            enemy_units: List of enemy units to consider
+            friendly_units: List of friendly units to avoid
+            nova_manager: The NovaManager for exclusion mask and target registration
             
         Returns:
-            The Point2 target position or None if no valid target found
+            Point2: The best target position, or None if no suitable target was found
         """
         try:
-            # Check if we have enemy units to target
-            if not enemy_units or len(enemy_units) == 0:
+            # If no enemy units, there's no target
+            if not enemy_units:
                 print("DEBUG select_best_target: No enemy units to target")
                 return None
-                
-            # Get the tactical grid from the mediator
+            
+            # Get the tactical ground grid - maintain property access without parentheses
             grid = self.mediator.get_tactical_ground_grid
             
             if grid is None:
-                print("DEBUG select_best_target: Tactical grid is None")
+                print("DEBUG select_best_target: No tactical grid available")
                 return None
-                
-            # Log exclusion mask status if provided
-            if exclusion_mask is not None:
-                try:
-                    excluded_cells = np.sum(exclusion_mask)
-                    print(f"DEBUG select_best_target: Using exclusion mask with {excluded_cells} cells excluded")
-                except Exception as e:
-                    print(f"DEBUG ERROR in exclusion mask sum: {e}")
             
-            # Define Nova radius for targeting
-            nova_radius = 1.5  # Units within this radius will be hit
+            # Nova explosion radius
+            nova_radius = 1.5
             
-            # Create candidate positions from enemy units and their surroundings
-            candidate_positions = []
+            # Get exclusion mask from nova manager
+            try:
+                exclusion_mask = nova_manager.get_exclusion_mask(grid)
+                print(f"DEBUG select_best_target: Got exclusion mask with {np.sum(exclusion_mask)} cells excluded")
+            except Exception as e:
+                print(f"DEBUG ERROR getting exclusion mask: {e}")
+                exclusion_mask = None
             
-            # First, include enemy positions and their surroundings as candidates
-            for enemy in enemy_units:
-                try:
-                    pos = enemy.position
-                    candidate_positions.append(pos)
-                    
-                    # Also add some surrounding positions for better coverage
-                    for dx, dy in [(2, 0), (-2, 0), (0, 2), (0, -2)]:
-                        candidate_positions.append(Point2((pos.x + dx, pos.y + dy)))
-                except Exception as e:
-                    print(f"DEBUG ERROR adding candidate position: {e}")
-            
-            # Score each candidate position
+            # Directly evaluate each enemy position as candidate
             best_pos = None
             best_score = float('-inf')
             best_influence = float('-inf')
-     
+            
+            # Simple array of candidate positions - just the enemy positions
+            candidate_positions = []
+            
+            # First, get all the enemy positions
+            for enemy in enemy_units:
+                pos = enemy.position
+                # Check if position is in bounds and not in exclusion zone
+                grid_x, grid_y = int(pos.x), int(pos.y)
+                
+                # Skip if out of bounds
+                if not (0 <= grid_x < grid.shape[1] and 0 <= grid_y < grid.shape[0]):
+                    continue
+                    
+                # Skip if in exclusion zone
+                if exclusion_mask is not None:
+                    if (0 <= grid_x < exclusion_mask.shape[1] and 
+                        0 <= grid_y < exclusion_mask.shape[0] and 
+                        exclusion_mask[grid_y, grid_x]):
+                        continue
+                
+                # Add position to candidates
+                candidate_positions.append(pos)
+            
+            print(f"DEBUG select_best_target: Evaluating {len(candidate_positions)} enemy positions")
+                
+            # Evaluate each candidate position
             for pos in candidate_positions:
                 try:
-                    # Skip if this position is in an exclusion zone
-                    if exclusion_mask is not None:
-                        try:
-                            # Convert position to grid indices
-                            grid_x = int(pos.x)
-                            grid_y = int(pos.y)
-                            
-                            if (0 <= grid_y < exclusion_mask.shape[0] and 
-                                0 <= grid_x < exclusion_mask.shape[1] and 
-                                exclusion_mask[grid_y, grid_x]):
-                                continue  # Skip this position as it's excluded
-                        except Exception as e:
-                            print(f"DEBUG ERROR checking exclusion at {pos}: {e}")
-                    
                     # Convert position to grid indices
-                    grid_x = int(pos.x)
-                    grid_y = int(pos.y)
+                    grid_x, grid_y = int(pos.x), int(pos.y)
                     
-                    if (0 <= grid_y < grid.shape[0] and 
-                        0 <= grid_x < grid.shape[1]):
-                        # Get the raw influence value
-                        raw_influence = grid[grid_y, grid_x]
-                        
-                        # Check if the value is infinite
-                        if np.isinf(raw_influence):
-                            print(f"DEBUG: Found infinite influence value at position {pos}")
-                            # Skip this position or use a default value
-                            influence = 0
-                        else:
-                            influence = raw_influence
+                    # Get the influence value at this position
+                    influence = grid[grid_y, grid_x]
                     
                     # Count enemies within Nova radius
                     enemies_hit = 0
@@ -172,7 +156,6 @@ class UseDisruptorNova(CombatIndividualBehavior):
                     if friendly_hit > 0:
                         continue
                     
-                    
                     # Calculate final score: combine influence and enemy count
                     # Weight enemy count more heavily to prioritize clusters
                     score = (enemies_hit * 100) + influence
@@ -184,20 +167,16 @@ class UseDisruptorNova(CombatIndividualBehavior):
                         best_pos = pos
                         print(f"DEBUG select_best_target: Found better position at {best_pos} with score {best_score} (influence: {influence}, enemies: {enemies_hit})")
                 except Exception as e:
-                    print(f"DEBUG ERROR evaluating position {pos}: {e}")
+                    print(f"DEBUG ERROR scoring position {pos}: {e}")
             
             # If we found a good position, return it
-            if best_pos is not None:
-                # Store for future comparisons
-                self.best_target_pos = best_pos
-                self.best_target_influence = best_influence
-                
+            if best_pos:
                 print(f"DEBUG select_best_target: Selected target at {best_pos} with score {best_score}")
                 return best_pos
             else:
                 print("DEBUG select_best_target: No suitable target found")
                 return None
-        
+            
         except Exception as e:
             print(f"DEBUG ERROR in select_best_target: {e}")
             return None
@@ -247,7 +226,7 @@ class UseDisruptorNova(CombatIndividualBehavior):
                     print(f"DEBUG ERROR getting exclusion mask in update_target: {e}")
             
             # Select the best target position
-            new_target = self.select_best_target(nearby_enemies, friendly_units, exclusion_mask)
+            new_target = self.select_best_target(nearby_enemies, friendly_units, nova_manager)
             
             if new_target and new_target != self.best_target_pos:
                 print(f"DEBUG update_target: Target changed from {self.best_target_pos} to {new_target}")
@@ -320,7 +299,7 @@ class UseDisruptorNova(CombatIndividualBehavior):
         print(f"DEBUG: Selecting target for Disruptor {disruptor_unit.tag}, {len(enemy_units)} enemy units, {len(friendly_units)} friendly units")
         target = None
         try:
-            target = self.select_best_target(enemy_units, friendly_units, exclusion_mask)
+            target = self.select_best_target(enemy_units, friendly_units, nova_manager)
         except Exception as e:
             print(f"DEBUG ERROR in select_best_target: {e}")
             
@@ -345,13 +324,33 @@ class UseDisruptorNova(CombatIndividualBehavior):
 
         # Calculate which ability ID to use based on unit type (should be AbilityId.EFFECT_PURIFICATIONNOVA)
         ability_id = AbilityId.EFFECT_PURIFICATIONNOVA
-
-        # Attempt to use the Nova ability
-        did_fire = False
-        try:
-            did_fire = disruptor_unit(ability_id, target)
-        except Exception as e:
-            print(f"DEBUG ERROR firing Nova: {e}")
+        
+        # Calculate maximum distance the Nova can travel during its lifetime
+        nova_speed = 5.95  # Nova movement speed in game units per second
+        nova_lifetime = 2.1  # Nova lifetime in seconds
+        max_travel_distance = nova_speed * nova_lifetime
+        
+        # Calculate the current distance to the target
+        current_distance = disruptor_unit.position.distance_to(target)
+        
+        # Debug info
+        print(f"Target distance: {current_distance:.2f}, Max travel distance: {max_travel_distance:.2f}")
+        
+        # Check if the target is within range
+        if current_distance <= max_travel_distance:
+            # Target is within range, fire the Nova
+            try:
+                did_fire = disruptor_unit(ability_id, target)
+            except Exception as e:
+                print(f"DEBUG ERROR firing Nova: {e}")
+                did_fire = False
+        else:
+            # Target is out of range, move the Disruptor closer
+            # Find a position that moves toward the target but not all the way
+            move_position = disruptor_unit.position.towards(target, 5.0)
+            disruptor_unit.move(move_position)
+            print(f"Target out of range. Moving Disruptor to: {move_position}")
+            did_fire = False
             
         print(f"DEBUG: Disruptor execute result: {did_fire}")
         
@@ -359,7 +358,6 @@ class UseDisruptorNova(CombatIndividualBehavior):
             # On successful fire, initialize the nova instance and add to active novas
             self.best_target_pos = target
             self.frames_left = 48  # 2.1 seconds duration at 22.4 frames per sec
-            self.unit = None  # This would be assigned with the actual Nova unit
             return self
         else:
             # If firing failed, unregister the target only if we registered it successfully
@@ -497,7 +495,7 @@ class UseDisruptorNova(CombatIndividualBehavior):
     def run_debug(self):
         """Output debugging information."""
         print(f"Nova Frames Left: {self.frames_left}, Distance Left: {self.distance_left}")
-        print(f"Current Position: {self.unit.position if hasattr(self.unit, 'position') else self.last_known_position}, Target Position: {self.best_target_pos}")
+        print(f"Current Position: {self.unit.position}, Target Position: {self.best_target_pos}")
         
         # For debugging, let's get a fresh grid if we don't have one stored
         self.influence_grid = self.mediator.get_tactical_ground_grid
