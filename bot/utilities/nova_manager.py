@@ -17,8 +17,8 @@ class NovaManager:
         self.mediator = mediator
         # List to hold active nova instances
         self.active_novas: List = []
-        # Set to track current Nova targets and avoid overlapping
-        self.current_targets: Set[Tuple[int, int]] = set()
+        # Store full target positions instead of just coordinates for better matching
+        self.current_targets: Dict[Tuple[float, float], Point2] = {}
         # Exclusion radius (in grid cells)
         self.exclusion_radius = 2.5  # Reduced from 3 to 2.5 for even more flexibility
         # Nova speed and lifetime constants
@@ -30,9 +30,7 @@ class NovaManager:
 
         print(f"DEBUG: NovaManager initialized with exclusion radius of {self.exclusion_radius} grid cells")
 
-        # Test to verify we can access the tactical grid
         try:
-            # Get the tactical ground grid as a method
             grid = self.mediator.get_tactical_ground_grid
             if grid is not None:
                 print(f"DEBUG: Successfully accessed tactical grid with shape {grid.shape}")
@@ -43,7 +41,6 @@ class NovaManager:
 
     def add_nova(self, nova) -> None:
         """Add a nova instance to the manager."""
-        # Import here to avoid circular import
         from bot.utilities.use_disruptor_nova import UseDisruptorNova
         
         if not hasattr(nova, 'update_info'):
@@ -62,26 +59,68 @@ class NovaManager:
         self.update_units(enemy_units, friendly_units)
         expired = []
         
+        # Only print debug info if we actually have active Novas
+        if self.active_novas:
+            print(f"DEBUG: Updating {len(self.active_novas)} active Novas")
+        
+        # First scan for stale Novas and add them to expired list
         for nova in self.active_novas:
-            # Decrement the frame counter and update remaining distance
-            nova.update_info()
-            
-            # Run the nova's step logic with target adjustment
-            nova.run_step(self.enemy_units, self.friendly_units, self)
-            
-            # If timer has expired, mark for removal
-            if nova.frames_left <= 0:
+            try:
+                # Check if Nova has timed out (maximum execution time exceeded)
+                if hasattr(nova, 'execution_start_time') and hasattr(nova, 'max_execution_time'):
+                    import time
+                    current_time = time.time()
+                    # Only check Novas that have a valid start time (not 0)
+                    if nova.execution_start_time > 0 and current_time - nova.execution_start_time > nova.max_execution_time:
+                        print(f"DEBUG: Nova has exceeded maximum execution time during update, marking for expiration")
+                        expired.append(nova)
+                        continue
+            except Exception as e:
+                print(f"DEBUG ERROR checking Nova timeout: {e}")
+        
+        # Now update active Novas that aren't already marked as expired
+        for nova in [n for n in self.active_novas if n not in expired]:
+            try:
+                # Decrement the frame counter and update remaining distance
+                nova.update_info()
+                
+                # Run the nova's step logic with target adjustment
+                is_active = nova.run_step(self.enemy_units, self.friendly_units, self)
+                
+                # Check explicitly if the Nova should be removed
+                if not is_active or nova.frames_left <= 0 or not nova.executing:
+                    print(f"DEBUG: Nova marked for expiration, is_active: {is_active}, frames_left: {nova.frames_left}, executing: {nova.executing}")
+                    expired.append(nova)
+            except Exception as e:
+                print(f"DEBUG ERROR updating Nova: {e}")
+                # Mark Nova as expired if we encounter an exception during update
                 expired.append(nova)
         
         # Remove expired nova instances
         for nova in expired:
+            print(f"DEBUG: Removing expired Nova from manager")
             if hasattr(nova, 'best_target_pos') and nova.best_target_pos:
-                # Convert target position to grid coordinates
-                grid_x, grid_y = int(nova.best_target_pos.x), int(nova.best_target_pos.y)
-                # Remove from tracked targets
-                if (grid_x, grid_y) in self.current_targets:
-                    self.current_targets.remove((grid_x, grid_y))
-            self.active_novas.remove(nova)
+                try:
+                    self.unregister_nova_target(nova.best_target_pos)
+                except Exception as e:
+                    print(f"DEBUG ERROR unregistering target for expired Nova: {e}")
+            
+            # Ensure the Nova is fully reset before removing
+            if hasattr(nova, 'reset'):
+                try:
+                    print(f"DEBUG: Resetting expired Nova before removal")
+                    nova.reset()
+                except Exception as e:
+                    print(f"DEBUG ERROR resetting expired Nova: {e}")
+                
+            try:
+                self.active_novas.remove(nova)
+            except Exception as e:
+                print(f"DEBUG ERROR removing Nova from active list: {e}")
+        
+        # Only report updated count if we had active Novas or removed some
+        if self.active_novas or expired:
+            print(f"DEBUG: Now tracking {len(self.active_novas)} active Novas after cleanup")
 
     def get_active_novas(self) -> List:
         """Return the list of currently active nova instances."""
@@ -99,22 +138,23 @@ class NovaManager:
         """
         try:
             # Check if this is effectively the same as an existing target
-            for target_pos in self.current_targets:
-                target_point = Point2(target_pos)
-                distance = position.distance_to(target_point)
+            for target_key, target_position in list(self.current_targets.items()):
+                distance = position.distance_to(target_position)
                 # If very close (almost the same point), consider it already registered
                 if distance < 0.5:
-                    print(f"DEBUG: Nova target at {position} already registered")
+                    # No need to log here - reduces spam
                     return True
                     
                 # If within exclusion radius but not identical, reject as too close
                 if distance < self.nova_radius:
-                    print(f"DEBUG: Nova target at {position} is too close to existing target at {target_pos}")
+                    print(f"DEBUG: Nova target at {position} is too close to existing target")
                     return False
             
-            # Add position to set of current targets
-            self.current_targets.add((position.x, position.y))
-            print(f"DEBUG: Registered Nova target at {position}")
+            # Add position to dictionary of current targets
+            # Use a tuple of rounded coordinates as the key for consistent lookup
+            rounded_key = (round(position.x, 2), round(position.y, 2))
+            self.current_targets[rounded_key] = position
+            print(f"DEBUG: Registered Nova target at {position}, key: {rounded_key}")
             return True
         except Exception as e:
             print(f"DEBUG ERROR registering Nova target: {e}")
@@ -128,26 +168,42 @@ class NovaManager:
             position: The position to remove
         """
         try:
-            # Find the closest existing target
-            closest_target = None
+            # Use rounded position for lookup to handle small differences
+            rounded_pos = (round(position.x, 2), round(position.y, 2))
+            
+            # Try direct lookup with rounded position first
+            if rounded_pos in self.current_targets:
+                # Get the original Point2 to report in logging
+                actual_pos = self.current_targets[rounded_pos]
+                del self.current_targets[rounded_pos]
+                print(f"DEBUG: Directly unregistered Nova target at {position}, match: {actual_pos}")
+                return
+                
+            # If no direct match, find closest match
+            closest_key = None
             min_distance = float('inf')
             
-            for target_pos in list(self.current_targets):
-                target_point = Point2(target_pos)
-                distance = position.distance_to(target_point)
+            for target_key, target_position in list(self.current_targets.items()):
+                distance = position.distance_to(target_position)
                 
-                # If within a small threshold, consider it a match
-                if distance < 5.0 and distance < min_distance:
-                    closest_target = target_pos
+                # If within a reasonable threshold, consider it a match
+                if distance < 15.0 and distance < min_distance:
+                    closest_key = target_key
                     min_distance = distance
             
             # Remove the target if found
-            if closest_target:
-                self.current_targets.remove(closest_target)
-                print(f"DEBUG: Unregistered Nova target at {position} (matched with {closest_target})")
+            if closest_key:
+                actual_pos = self.current_targets[closest_key]
+                del self.current_targets[closest_key]
+                print(f"DEBUG: Unregistered Nova target at {position}, closest match: {actual_pos}, distance: {min_distance:.2f}")
                 return
                 
-            print(f"DEBUG: Nova target at {position} not found in registry")
+            # If we get here without finding a target, look through all targets with a debug message
+            if self.current_targets:
+                print(f"DEBUG: Could not find target near {position} to unregister. Current targets:")
+                for key, target in self.current_targets.items():
+                    print(f"  Target {key}: {target}, distance: {position.distance_to(target):.2f}")
+            
         except Exception as e:
             print(f"DEBUG ERROR unregistering Nova target: {e}")
 
@@ -185,7 +241,9 @@ class NovaManager:
                 y_indices, x_indices = np.indices(grid_shape)
                 
                 # For each target, create a circular mask and combine them all
-                for target_x, target_y in self.current_targets:
+                for _, target_position in self.current_targets.items():
+                    target_x, target_y = int(target_position.x), int(target_position.y)
+                    
                     # Safety check for grid boundaries
                     if (0 <= target_y < grid_shape[0] and 0 <= target_x < grid_shape[1]):
                         # Calculate squared distance from this position
@@ -194,7 +252,7 @@ class NovaManager:
                         mask = np.logical_or(mask, dist_from_target <= self.exclusion_radius**2)
                     else:
                         print(f"DEBUG: Target position ({target_x}, {target_y}) out of grid bounds {grid_shape}")
-                
+                 
             print(f"DEBUG: Generated exclusion mask with {np.sum(mask)} excluded cells")
             return mask
         except Exception as e:
@@ -233,3 +291,71 @@ class NovaManager:
         """
         self.enemy_units = enemy_units
         self.friendly_units = friendly_units
+
+    def cleanup_all_novas(self) -> None:
+        """
+        Emergency cleanup method to reset all Novas and clear all targets.
+        Can be called when system state seems inconsistent.
+        """
+        print(f"DEBUG: Emergency cleanup of ALL {len(self.active_novas)} Novas")
+        
+        # First reset all Nova instances
+        reset_errors = 0
+        for nova in list(self.active_novas):
+            try:
+                if hasattr(nova, 'best_target_pos') and nova.best_target_pos:
+                    try:
+                        self.unregister_nova_target(nova.best_target_pos)
+                    except Exception as e:
+                        print(f"DEBUG: Error unregistering Nova target during emergency cleanup: {e}")
+                
+                if hasattr(nova, 'executing'):
+                    nova.executing = False
+                if hasattr(nova, 'frames_left'):
+                    nova.frames_left = 0
+                if hasattr(nova, 'reset'):
+                    nova.reset()
+            except Exception as e:
+                reset_errors += 1
+                print(f"DEBUG: Error resetting Nova during emergency cleanup: {e}")
+        
+        # Clear the active list
+        self.active_novas.clear()
+        
+        # Clear all target tracking
+        targets_count = len(self.current_targets)
+        self.current_targets.clear()
+        
+        print(f"DEBUG: Emergency cleanup complete, cleared {targets_count} targets with {reset_errors} reset errors")
+        
+        # Print current state to verify cleanup
+        self.diagnostic_report()
+        
+    def diagnostic_report(self) -> None:
+        """Provide a diagnostic report of the current NovaManager state."""
+        print(f"\nDEBUG: --- NovaManager Diagnostic Report ---")
+        print(f"Active Novas: {len(self.active_novas)}")
+        print(f"Current Targets: {len(self.current_targets)}")
+        
+        # Report on active Novas
+        for i, nova in enumerate(self.active_novas):
+            print(f"Nova {i}:")
+            print(f"  Executing: {nova.executing if hasattr(nova, 'executing') else 'N/A'}")
+            print(f"  Frames Left: {nova.frames_left if hasattr(nova, 'frames_left') else 'N/A'}")
+            print(f"  Target Position: {nova.best_target_pos if hasattr(nova, 'best_target_pos') else 'N/A'}")
+            
+            # Check for timeout
+            if hasattr(nova, 'execution_start_time') and hasattr(nova, 'max_execution_time'):
+                import time
+                current_time = time.time()
+                if nova.execution_start_time > 0:
+                    time_running = current_time - nova.execution_start_time
+                    print(f"  Execution Time: {time_running:.2f}s (Max: {nova.max_execution_time}s)")
+                    if time_running > nova.max_execution_time:
+                        print(f"  WARNING: Nova has exceeded maximum execution time!")
+        
+        # Report on current targets
+        for i, target in enumerate(self.current_targets.items()):
+            print(f"Target {i}: {target[1]}")
+            
+        print(f"DEBUG: --- End Diagnostic Report ---\n")

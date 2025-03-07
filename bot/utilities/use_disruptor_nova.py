@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, List, Optional
 from sc2.ids.ability_id import AbilityId
 
+import traceback
 
 from behaviors.combat.individual.combat_individual_behavior import CombatIndividualBehavior
 from ares.behaviors.combat.individual import PathUnitToTarget
@@ -22,13 +23,14 @@ if TYPE_CHECKING:
     from ares import AresBot
 
 class UseDisruptorNova(CombatIndividualBehavior):
-    def __init__(self, mediator: ManagerMediator, bot: 'AresBot'):
+    def __init__(self, mediator: ManagerMediator, bot: 'AresBot', position_update_frequency: int = 10):
         """Initialize with the given cooldown and nova duration in seconds."""
         self.cooldown = 21.4
         self.nova_duration = 2.1
         self.best_target_pos = None
         self.best_target_influence = 0
         self.unit = None
+        self.original_target_pos = None
         self.target_pos = None
         self.executing = False
         self.frames_left = 0
@@ -43,6 +45,21 @@ class UseDisruptorNova(CombatIndividualBehavior):
         # Print initialization message
         print("DEBUG: UseDisruptorNova initialized")
         
+        # Add movement cooldown tracking
+        self.last_movement_frame = 0
+        self.movement_cooldown = 5  # Only issue move commands every 5 frames
+        
+        # Add a timestamp to track when this Nova was started
+        self.execution_start_time = 0
+        self.max_execution_time = 10.0  # Maximum time in seconds a Nova should be executing
+        
+        # Position tracking and movement management
+        self.max_distance_tracking_factor = 35.0  # Maximum distance to consider for tracking by the Nova
+        self.frame_counter = 0  # To track frames since execution for position updates
+        self.position_update_frequency = position_update_frequency  # How often to update position
+        self.current_position = None  # Current Nova position
+        self.initial_unit_position = None  # Position when the Nova was created
+        self.last_target_update_time = 0  # Last time we updated the target position
     
     def can_use(self, disruptor_unit) -> bool:
         """Return True if the ability can be used based on its cooldown."""
@@ -90,16 +107,24 @@ class UseDisruptorNova(CombatIndividualBehavior):
             if grid is None:
                 print("DEBUG select_best_target: Tactical grid is None")
                 return None
+                
+            # Get exclusion mask for other active Nova targets
+            exclusion_mask = None
+            try:
+                if nova_manager:
+                    exclusion_mask = nova_manager.get_exclusion_mask(grid)
+            except Exception as e:
+                print(f"DEBUG ERROR getting exclusion mask: {e}")
             
             # Find the position with the highest influence value
-            # We'll check each enemy position and a small area around them
             best_pos = None
             best_influence = float('-inf')
             
             for enemy in nearby_enemies:
                 try:
-                    # Check the enemy position and a small area around it
+                    # Check the enemy position
                     enemy_pos = enemy.position
+                    print(f"DEBUG: Checking enemy at {enemy_pos}")
                     
                     # Check grid value at enemy position
                     try:
@@ -107,17 +132,24 @@ class UseDisruptorNova(CombatIndividualBehavior):
                         grid_x = int(enemy_pos.x)
                         grid_y = int(enemy_pos.y)
                         
+                        # Skip if this position is in an exclusion zone
+                        if exclusion_mask is not None:
+                            if exclusion_mask[grid_y, grid_x]:
+                                print(f"DEBUG: Enemy at {enemy_pos} is in an exclusion zone - skipping")
+                                continue
+                        
                         # Get influence value at this position
-                        if 0 <= grid_x < grid.shape[1] and 0 <= grid_y < grid.shape[0]:
-                            influence = grid[grid_y, grid_x]
-                            
-                            # Update best position if this is better
-                            if influence > best_influence:
-                                best_influence = influence
-                                best_pos = enemy_pos
-                                print(f"DEBUG: Found better position at {best_pos} with influence {best_influence}")
+                        influence = grid[grid_y, grid_x]
+                        print(f"DEBUG: Enemy at {enemy_pos} has influence {influence}")
+                        
+                        # Use a very low threshold to accept almost any target
+                        # We'd rather have some target than none
+                        if influence > best_influence:
+                            best_influence = influence
+                            best_pos = enemy_pos
+                            print(f"DEBUG: Found better position at {best_pos} with influence {best_influence}")
                     except Exception as e:
-                        print(f"DEBUG ERROR checking grid at position {enemy_pos}: {e}")
+                        print(f"DEBUG ERROR getting influence value: {e}")
                 except Exception as e:
                     print(f"DEBUG ERROR processing enemy unit: {e}")
             
@@ -136,26 +168,6 @@ class UseDisruptorNova(CombatIndividualBehavior):
         except Exception as e:
             print(f"DEBUG ERROR in select_best_target: {e}")
             return None
-
-    def _target_closest_enemy(self, enemy_units):
-        """Simple fallback to target the closest enemy unit when grid-based targeting fails.
-        
-        Args:
-            enemy_units: List of enemy units to consider
-            
-        Returns:
-            Point2 target position or None if no enemies
-        """
-        # This method is no longer used - kept for reference
-        print("DEBUG: fallback targeting no longer used")
-        return None
-
-    def _select_target_position_based(self, enemy_units, friendly_units, exclusion_mask=None):
-        """Legacy position-based targeting as a fallback when grid-based targeting fails.
-        DEPRECATED: This is kept for backward compatibility but should be removed in future updates.
-        """
-        print("DEBUG: Legacy position-based targeting no longer used")
-        return None
 
     def update_target_position(self, enemy_units: List['Unit'], friendly_units: List['Unit'], nova_manager):
         """
@@ -191,58 +203,94 @@ class UseDisruptorNova(CombatIndividualBehavior):
                 
                 print(f"DEBUG update_target: {self.frames_left} frames left, max travel distance: {max_travel_distance:.2f}")
                 
-                # Create a mask of positions that are too far to reach
-                distance_mask = np.zeros_like(grid, dtype=bool)
+                # Filter enemy units by distance to the Nova unit
+                MAX_SEARCH_RADIUS = max_travel_distance + 2.0  # Add a small buffer
+                nearby_enemies = [unit for unit in enemy_units if unit.position.distance_to(current_position) <= MAX_SEARCH_RADIUS]
                 
-                # Use the unit's position as the center of our search radius
-                grid_center_x, grid_center_y = int(current_position.x), int(current_position.y)
-                
-                # For each point in the grid, calculate if it's too far from current position
-                grid_height, grid_width = grid.shape
-                for y in range(grid_height):
-                    for x in range(grid_width):
-                        # Calculate distance in game units
-                        distance = ((x - grid_center_x) ** 2 + (y - grid_center_y) ** 2) ** 0.5
-                        # Mark as True (excluded) if beyond max travel distance
-                        if distance > max_travel_distance:
-                            distance_mask[y, x] = True
+                if not nearby_enemies:
+                    print("DEBUG update_target: No nearby enemy units within reach")
+                    return False
                 
                 # Get the exclusion mask for other active Nova targets
                 exclusion_mask = None
                 try:
                     if nova_manager:
-                        exclusion_mask = nova_manager.get_exclusion_mask(grid, ignore_position=self.best_target_pos)
+                        # Get exclusion mask but ignore our current target
+                        exclusion_mask = nova_manager.get_exclusion_mask(grid)
+                        
+                        # Modify the mask to not exclude our current target
+                        if exclusion_mask is not None and self.best_target_pos:
+                            # Convert target position to grid indices
+                            target_x, target_y = int(self.best_target_pos.x), int(self.best_target_pos.y)
+                            
+                            # Create a small area around our current target that's allowed
+                            if 0 <= target_y < exclusion_mask.shape[0] and 0 <= target_x < exclusion_mask.shape[1]:
+                                radius = int(nova_manager.exclusion_radius)
+                                y_min = max(0, target_y - radius)
+                                y_max = min(exclusion_mask.shape[0], target_y + radius + 1)
+                                x_min = max(0, target_x - radius)
+                                x_max = min(exclusion_mask.shape[1], target_x + radius + 1)
+                                
+                                # Allow our current target area
+                                exclusion_mask[y_min:y_max, x_min:x_max] = False
                 except Exception as e:
                     print(f"DEBUG ERROR getting exclusion mask in update: {e}")
                 
-                # Make a working copy of the grid
-                working_grid = grid.copy()
+                # Find the position with the highest influence value among nearby enemies
+                best_pos = None
+                best_influence = float('-inf')
                 
-                # Create a combined mask (both distance and exclusion)
-                combined_mask = distance_mask.copy()
-                if exclusion_mask is not None and exclusion_mask.shape == combined_mask.shape:
-                    combined_mask = np.logical_or(combined_mask, exclusion_mask)
+                for enemy in nearby_enemies:
+                    try:
+                        # Check the enemy position
+                        enemy_pos = enemy.position
+                        
+                        # Check if this position is reachable
+                        if not nova_manager.can_nova_reach_target(current_position, enemy_pos, self.frames_left):
+                            continue
+                        
+                        # Check grid value at enemy position
+                        try:
+                            # Convert game position to grid indices
+                            grid_x = int(enemy_pos.x)
+                            grid_y = int(enemy_pos.y)
+                            
+                            # Skip if this position is in an exclusion zone
+                            if exclusion_mask is not None:
+                                if exclusion_mask[grid_y, grid_x]:
+                                    continue
+                            
+                            # Get influence value at this position
+                            influence = grid[grid_y, grid_x]
+                            
+                            # Use a very low threshold to accept almost any target
+                            # We'd rather have some target than none
+                            if influence > best_influence:
+                                best_influence = influence
+                                best_pos = enemy_pos
+                                print(f"DEBUG update_target: Found better position at {best_pos} with influence {best_influence}")
+                        except Exception as e:
+                            print(f"DEBUG ERROR getting influence value: {e}")
+                    except Exception as e:
+                        print(f"DEBUG ERROR processing enemy unit: {e}")
                 
-                # Apply combined mask - set excluded areas to a low value
-                working_grid[combined_mask] = 100.0  # Low value (friendly influence)
-                
-                # Find best position (highest influence)
-                new_y, new_x = np.unravel_index(np.argmax(working_grid), working_grid.shape)
-                new_influence = working_grid[new_y, new_x]
-                print(f"DEBUG update_target: Best candidate at ({new_x}, {new_y}) with influence {new_influence:.1f}")
-                
-                # Only use positions with at least some enemy influence
-                if new_influence > 200:  # Values > 200 indicate enemy influence
-                    new_pos = Point2((float(new_x), float(new_y)))
+                # If we found a good position, return it
+                if best_pos is not None:
+                    # Only update if the new influence is significantly better or the position is significantly different
+                    influence_improvement_threshold = 50.0
+                    position_change_threshold = 3.0
                     
-                    # Compare with current target
                     should_update = False
                     
                     # Update if the new influence is significantly better
-                    influence_improvement_threshold = 50.0
-                    if new_influence > self.best_target_influence + influence_improvement_threshold:
+                    if best_influence > self.best_target_influence + influence_improvement_threshold:
                         should_update = True
-                        print(f"DEBUG update_target: New influence {new_influence:.1f} is better than current {self.best_target_influence:.1f}")
+                        print(f"DEBUG update_target: New influence {best_influence:.1f} is better than current {self.best_target_influence:.1f}")
+                    
+                    # Or update if the position is significantly different
+                    elif self.best_target_pos.distance_to(best_pos) > position_change_threshold:
+                        should_update = True
+                        print(f"DEBUG update_target: New position {best_pos} is significantly different from current {self.best_target_pos}")
                     
                     if should_update:
                         # Unregister old target
@@ -251,15 +299,15 @@ class UseDisruptorNova(CombatIndividualBehavior):
                             
                         # Update target
                         old_pos = self.best_target_pos
-                        self.best_target_pos = new_pos
-                        self.best_target_influence = new_influence
+                        self.best_target_pos = best_pos
+                        self.best_target_influence = best_influence
                         
                         # Register new target
                         if nova_manager:
-                            success = nova_manager.register_nova_target(new_pos)
+                            success = nova_manager.register_nova_target(best_pos)
                             print(f"DEBUG update_target: {'Successfully' if success else 'Failed to'} register new target")
                         
-                        print(f"DEBUG update_target: Updated target from {old_pos} to {new_pos}")
+                        print(f"DEBUG update_target: Updated target from {old_pos} to {best_pos}")
                         return True
                 
                 return False
@@ -268,214 +316,430 @@ class UseDisruptorNova(CombatIndividualBehavior):
             print(f"DEBUG ERROR in update_target_position: {e}")
             return False
 
-    def execute(self, disruptor_unit, enemy_units: List['Unit'], friendly_units: List['Unit'], nova_manager=None):
+    def load_info(self, nova_unit) -> None:
+        """Load information about the nova unit."""
+        self.unit = nova_unit
+        self.current_position = nova_unit.position
+        self.frames_left = round(2.1 * 22.4)  # ~2.1 seconds at 22.4 frames per second
+        self.executing = True
+        
+        # Initialize movement tracking
+        self.previous_position = nova_unit.position
+        self.consecutive_stuck_frames = 0
+        
+        # Reset the frame counter
+        self.frame_counter = 0
+        
+        # Initialize time-based tracking
+        import time
+        self.execution_start_time = time.time()
+        self.last_position_update_time = time.time()
+        print(f"DEBUG: Loaded Nova unit - initial position: {self.current_position}")
+
+    def execute(self, disruptor_unit, enemy_units, friendly_units=None, nova_manager=None) -> bool:
         """
-        Execute the Nova ability.
+        Execute nova ability on the disruptor unit.
         
         Args:
-            disruptor_unit: The Disruptor unit
+            disruptor_unit: The disruptor unit to use the nova with
             enemy_units: List of enemy units to consider as targets
-            friendly_units: List of friendly units to avoid damaging
-            nova_manager: The NovaManager instance
+            friendly_units: (Optional) List of friendly units to avoid damaging
+            nova_manager: (Optional) The NovaManager instance for coordination
             
         Returns:
-            bool: True if the ability was used, False otherwise
+            bool: True if nova was successfully executed or is still active, False otherwise
         """
+        import time
+        current_time = time.time()
+        
+        # Case 1: Nova is already executing - check if it's still valid
+        if self.executing:
+            # Time-based safety check: Reset if this Nova has been executing for too long
+            if current_time - self.execution_start_time > self.max_execution_time:
+                print(f"DEBUG: Nova has exceeded maximum execution time, resetting")
+                # Unregister the target position if we have a manager
+                if nova_manager and self.best_target_pos:
+                    try:
+                        nova_manager.unregister_nova_target(self.best_target_pos)
+                    except Exception as e:
+                        print(f"DEBUG ERROR unregistering target during reset: {e}")
+                # Reset the Nova state
+                self.reset()
+                # Return False to indicate Nova is not active
+                return False
+            
+            # Verify the Nova unit still exists
+            if self.unit is None or not hasattr(self.unit, 'is_alive') or not self.unit.is_alive:
+                print(f"DEBUG: Nova unit is no longer valid, resetting")
+                # Unregister the target position if we have a manager
+                if nova_manager and self.best_target_pos:
+                    try:
+                        nova_manager.unregister_nova_target(self.best_target_pos)
+                    except Exception as e:
+                        print(f"DEBUG ERROR unregistering target during reset: {e}")
+                # Reset the Nova state
+                self.reset()
+                # Return False to indicate Nova is not active
+                return False
+                
+            # Nova is already executing and still valid - continue execution
+            print(f"DEBUG: Nova already executing, frames left: {self.frames_left}")
+            return True  # Return True to indicate Nova is still active
+
+        # Case 2: Nova is not executing - start new execution
         try:
-            print(f"DEBUG: Using nova_manager: {nova_manager is not None}")
+            # Find the best target position using enemy_units
+            target_pos = self.select_best_target_pos(disruptor_unit, enemy_units, friendly_units, nova_manager)
             
-            # Safety check for disruptor unit
-            if disruptor_unit is None:
-                print("DEBUG: No disruptor unit provided")
+            # If no valid target found, return False
+            if not target_pos:
+                print(f"DEBUG: No valid target position found for Nova")
                 return False
                 
-            # Check if unit is already casting Nova
-            is_casting = False
-            if hasattr(disruptor_unit, 'orders'):
-                is_casting = any(order.ability.id == 390 for order in disruptor_unit.orders)
-                    
-            if is_casting:
-                print(f"DEBUG: Disruptor unit already casting")
-                return False
-                
-            # Initialize with appropriate nova manager
+            # Save the original target position
+            self.original_target_pos = target_pos
+            # Initialize best_target_pos to original position
+            self.best_target_pos = target_pos
+            
+            # Register the target position with the Nova manager
             if nova_manager:
-                nova_manager.enemy_units = enemy_units
-                nova_manager.friendly_units = friendly_units
-                
-            # Get target
-            if not self.best_target_pos:
-                # Find best target if we don't have one
-                self.select_best_target(disruptor_unit, enemy_units, friendly_units, nova_manager)
-                if not self.best_target_pos:
-                    # Couldn't find a good target
-                    print("DEBUG: No valid target found")
+                registration_success = nova_manager.register_nova_target(target_pos)
+                if not registration_success:
+                    print(f"DEBUG: Could not register Nova target at {target_pos}, existing target at this position")
                     return False
-                    
-            # Check if we're already casting the ability
-            if self.executing:
-                print(f"DEBUG: Already executing Nova ability at {self.best_target_pos}")
-                if self.unit is None:
-                    print("DEBUG: Nova unit is None but executing flag is set, resetting")
-                    self.reset()
-                    return False
-                    
+                print(f"DEBUG: Successfully registered Nova target at {target_pos}")
+            
+            # Try to execute Nova ability
+            ability_executed = self.bot.do(disruptor_unit(AbilityId.EFFECT_PURIFICATIONNOVA, target_pos))
+            
+            if ability_executed:
+                print(f"DEBUG: Nova ability executed successfully at {target_pos}")
+                self.load_info(disruptor_unit)
+                self.initial_unit_position = disruptor_unit.position
+                # We'll set the current target to the launch position
+                self.best_target_pos = target_pos
                 return True
-                
-            # Calculate distance to target
-            try:
-                target_distance = disruptor_unit.position.distance_to(self.best_target_pos)
-            except Exception as e:
-                print(f"DEBUG ERROR calculating distance: {e}")
-                return False
-            
-            # Max travel distance for Nova (game units)
-            nova_range = 13.0  # Maximum reasonable range for Nova ability
-            if nova_manager and hasattr(nova_manager, 'nova_speed') and hasattr(nova_manager, 'nova_lifetime'):
-                max_travel_distance = min(nova_range, nova_manager.nova_speed * nova_manager.nova_lifetime)
             else:
-                max_travel_distance = nova_range
-            
-            print(f"Target distance: {target_distance:.2f}, Max travel distance: {max_travel_distance:.2f}")
-            
-            # Check for targets out of range
-            if target_distance > max_travel_distance + 5.0:  # Add a small buffer for pathing
-                print(f"Target out of range. Moving Disruptor to: {disruptor_unit.position.towards(self.best_target_pos, 3.0)}")
-                try:
-                    disruptor_unit.move(disruptor_unit.position.towards(self.best_target_pos, 3.0))
-                except Exception as e:
-                    print(f"DEBUG ERROR moving disruptor: {e}")
+                print(f"DEBUG: Nova ability execution failed")
+                # If execution failed, unregister the target
+                if nova_manager and self.best_target_pos:
+                    nova_manager.unregister_nova_target(self.best_target_pos)
                 return False
-            
-            # Target is in range, use ability
-            print(f"Using Purification Nova at {self.best_target_pos}")
-            try:
-                disruptor_unit(AbilityId.EFFECT_PURIFICATIONNOVA, self.best_target_pos)
-            except Exception as e:
-                print(f"DEBUG ERROR casting Nova: {e}")
-                return False
-            
-            # Mark as executing and set the Nova unit
-            self.executing = True
-            self.frames_left = int(nova_manager.nova_lifetime * 22.4) if nova_manager and hasattr(nova_manager, 'nova_lifetime') else 48
-            self.unit = disruptor_unit
-            
-            return True
         except Exception as e:
             print(f"DEBUG ERROR executing Nova: {e}")
-            
-            # Clean up resources in case of error
-            if self.best_target_pos and nova_manager:
-                print(f"DEBUG: Unregistering Nova target at {self.best_target_pos} after error")
-                try:
-                    nova_manager.unregister_nova_target(self.best_target_pos)
-                except Exception as unregister_error:
-                    print(f"DEBUG ERROR unregistering target: {unregister_error}")
-            
-            self.reset()
+            # If error during execution, ensure the target is unregistered
+            if nova_manager and self.best_target_pos:
+                nova_manager.unregister_nova_target(self.best_target_pos)
             return False
-
-    def reset(self):
-        """Reset the Nova state."""
-        self.best_target_pos = None
-        self.best_target_influence = 0
-        self.target_pos = None
-        self.executing = False
-        self.frames_left = 0
-        self.unit = None
-
-    def run_step(self, enemy_units: List['Unit'], friendly_units: List['Unit'], nova_manager=None):
-        """Execute one step for this nova. Reduces the frame counter and possibly moves the nova.
+    
+    def select_best_target_pos(self, disruptor_unit, enemy_units, friendly_units=None, nova_manager=None) -> Point2:
+        """
+        Select the best position to target with the Nova.
+        
         Args:
-            enemy_units: List of enemy units to consider
-            friendly_units: List of friendly units to avoid
-            nova_manager: Optional NovaManager for target coordination
+            disruptor_unit: The disruptor unit to use the nova with
+            enemy_units: List of enemy units to consider as targets
+            friendly_units: (Optional) List of friendly units to avoid damaging
+            nova_manager: (Optional) The NovaManager instance
             
         Returns:
-            bool: True if the Nova is still active, False if it has finished
+            Point2: The best target position, or None if no valid target
         """
-        if not self.executing:
-            return False
-            
         try:
-            # Decrement frame counter
+            # Convert to empty lists if None
+            if enemy_units is None:
+                enemy_units = []
+            if friendly_units is None:
+                friendly_units = []
+                
+            # Filter out non-attackable units
+            valid_enemy_units = [
+                unit for unit in enemy_units
+                if unit.is_visible and not unit.is_flying and not unit.is_structure
+            ]
+            
+            if not valid_enemy_units:
+                print(f"DEBUG: No valid enemy units to target with Nova")
+                return None
+                
+            # Filter enemies that are in range
+            nova_range = 15.0  # Maximum reasonable range for Nova ability
+            in_range_enemies = [
+                unit for unit in valid_enemy_units
+                if unit.distance_to(disruptor_unit) < nova_range
+            ]
+            
+            if not in_range_enemies:
+                print(f"DEBUG: No enemy units in range of disruptor")
+                return None
+                
+            # Find the best cluster of enemies
+            best_enemy = None
+            best_score = -1
+            
+            for enemy in in_range_enemies:
+                # Calculate base score from distance to disruptor (closer is better)
+                # Use inverse distance so closer enemies have higher scores
+                distance_to_disruptor = enemy.distance_to(disruptor_unit)
+                if distance_to_disruptor < 1.0:
+                    distance_to_disruptor = 1.0  # Avoid division by zero
+                
+                base_score = 100.0 / distance_to_disruptor
+                
+                # Count nearby enemies to this enemy for cluster score
+                nearby_count = sum(1 for other in in_range_enemies if other.distance_to(enemy) < 2.5)
+                cluster_score = nearby_count * 50.0  # Each nearby enemy adds 50 points
+                
+                # Combine scores
+                total_score = base_score + cluster_score
+                
+                if total_score > best_score:
+                    best_score = total_score
+                    best_enemy = enemy
+            
+            # If we found a good target, return its position
+            if best_enemy:
+                return best_enemy.position
+                
+            return None
+            
+        except Exception as e:
+            print(f"DEBUG ERROR selecting best target for Nova: {e}")
+            return None
+
+    def update_info(self) -> bool:
+        """
+        Update nova information.
+        
+        Returns:
+            bool: True if successfully updated, False if Nova is no longer valid
+        """
+        try:
+            # Increment our frame counter (used for debugging and movement logic)
+            self.frame_counter += 1
+            
+            # Reduce remaining frames
             self.frames_left -= 1
             
-            # Update target if time remains
-            if self.frames_left > 10 and nova_manager:
+            # If Nova unit is invalid or no frames left, unit is done
+            if self.unit is None or self.frames_left <= 0:
+                self.executing = False
+                return False
+                
+            # If unit is valid, update position information
+            if hasattr(self.unit, 'position'):
                 try:
-                    self.update_target_position(enemy_units, friendly_units, nova_manager)
-                except Exception as e:
-                    print(f"DEBUG ERROR updating target position: {e}")
-            
-            # Check if Nova has expired
+                    # Update current position
+                    new_position = self.unit.position
+                    
+                    # If the position changed, update our tracking
+                    if self.current_position is not None and self.current_position != new_position:
+                        # Store previous position for movement detection
+                        if not hasattr(self, 'previous_position'):
+                            self.previous_position = self.current_position
+                        else:
+                            # Only update previous_position if significant time has passed
+                            import time
+                            current_time = time.time()
+                            if not hasattr(self, 'last_position_update_time'):
+                                self.last_position_update_time = current_time
+                                self.previous_position = self.current_position
+                            elif current_time - self.last_position_update_time > 0.1:  # Update every 100ms
+                                self.previous_position = self.current_position
+                                self.last_position_update_time = current_time
+                    
+                    # Update current position to new value
+                    self.current_position = new_position
+                    
+                    # Update target periodically if we have access to the necessary data
+                    if hasattr(self, 'last_target_update_time'):
+                        import time
+                        current_time = time.time()
+                        if current_time - self.last_target_update_time > 0.5:  # Every 0.5 seconds
+                            self.last_target_update_time = current_time
+                            # Note: actual target update happens in run_step
+                    
+                    # Successfully updated info
+                    return True
+                except (AttributeError, Exception) as e:
+                    # If we can't access the position, the unit is invalid
+                    print(f"DEBUG: Nova unit is invalid or expired: {e}")
+                    self.frames_left = 0
+                    self.executing = False
+                    return False
+            else:
+                # Nova unit is no longer valid
+                self.frames_left = 0
+                self.executing = False
+                print(f"DEBUG: Nova unit is None or has no position, marking as not executing")
+                return False
+        except Exception as e:
+            print(f"DEBUG ERROR in update_info: {e}")
+            # If error in updating info, mark as done
+            self.frames_left = 0
+            self.executing = False
+            return False
+    
+    def run_step(self, enemy_units, friendly_units, nova_manager) -> bool:
+        """
+        Run one step of the nova logic, controlling its movement towards enemies.
+        
+        Returns:
+            bool: True if Nova is still active, False otherwise
+        """
+        try:
+            # First update unit info to get fresh position data
+            updated = self.update_info()
+            if not updated:
+                # Failed to update info, probably unit is gone
+                if self.best_target_pos and nova_manager:
+                    print(f"DEBUG: Nova unit info update failed, unregistering target")
+                    nova_manager.unregister_nova_target(self.best_target_pos)
+                
+                # Reset Nova state
+                self.reset()
+                return False
+                
+            # Check if frames are done
             if self.frames_left <= 0:
-                print("DEBUG: Nova expired, cleaning up")
-                # Clean up on finished Nova
+                # Time's up, unregister target and reset
                 if self.best_target_pos and nova_manager:
-                    try:
-                        nova_manager.unregister_nova_target(self.best_target_pos)
-                    except Exception as e:
-                        print(f"DEBUG ERROR unregistering expired Nova target: {e}")
+                    print(f"DEBUG: Nova frames completed, unregistering target")
+                    nova_manager.unregister_nova_target(self.best_target_pos)
+                
+                # Reset Nova state
                 self.reset()
                 return False
                 
-            # Check if Nova unit is still tracked
-            if self.unit is None:
-                print("DEBUG: Nova unit is no longer tracked")
-                # Clean up if Nova was destroyed or removed
-                if self.best_target_pos and nova_manager:
-                    try:
-                        nova_manager.unregister_nova_target(self.best_target_pos)
-                    except Exception as e:
-                        print(f"DEBUG ERROR unregistering destroyed Nova target: {e}")
-                self.reset()
+            # Unit should be executing at this point
+            if not self.executing:
+                print(f"DEBUG: Nova is not in executing state but run_step was called")
                 return False
+            
+            # Check if the Nova has moved since last update
+            if hasattr(self, 'previous_position') and self.current_position is not None and self.previous_position is not None:
+                movement_distance = self.current_position.distance_to(self.previous_position)
                 
+                # If we haven't moved significantly in several consecutive frames, we might be stuck
+                if movement_distance < 0.1:  # Minimal movement threshold
+                    if hasattr(self, 'consecutive_stuck_frames'):
+                        self.consecutive_stuck_frames += 1
+                        
+                        # If we've been stuck for too many frames, try to update the target
+                        if self.consecutive_stuck_frames > 10:  # Adjust threshold as needed
+                            print(f"DEBUG: Nova appears to be stuck for {self.consecutive_stuck_frames} frames, trying to find better path")
+                            # Try to update the target to break out of the stuck state
+                            self.update_target_position(enemy_units, friendly_units, nova_manager)
+                            # If we still have the same target, simply reset stuck counter and try again
+                            self.consecutive_stuck_frames = 0
+                else:
+                    # We're moving, reset stuck counter
+                    if hasattr(self, 'consecutive_stuck_frames'):
+                        self.consecutive_stuck_frames = 0
+            
+            # Store current position for next frame comparison
+            if self.current_position is not None:
+                self.previous_position = self.current_position
+                
+            # Periodically try to update target based on changing battlefield
+            if self.frame_counter % 10 == 0:  # Check every 10 frames
+                target_updated = self.update_target_position(enemy_units, friendly_units, nova_manager)
+                if target_updated:
+                    print(f"DEBUG: Updated Nova target based on battlefield changes")
+            
+            # If we have a target position, move the Nova toward it
+            if self.best_target_pos:
+                # Calculate vector from current position to target
+                dx = self.best_target_pos.x - self.current_position.x
+                dy = self.best_target_pos.y - self.current_position.y
+                
+                # Calculate the distance to the target
+                distance = (dx**2 + dy**2)**0.5
+                
+                # Only move if we're not very close to the target
+                if distance > 1.0:
+                    # Normalize the vector to get direction
+                    if distance > 0:
+                        dx /= distance
+                        dy /= distance
+                    
+                    # Calculate how far the Nova can move this frame
+                    # Nova speed is 5.95 units/sec, divide by 22.4 frames/sec
+                    max_move_dist = nova_manager.nova_speed / 22.4
+                    
+                    # If we're very close to the target, don't overshoot
+                    move_dist = min(max_move_dist, distance)
+                    
+                    # Calculate the new position
+                    new_x = self.current_position.x + dx * move_dist
+                    new_y = self.current_position.y + dy * move_dist
+                    
+                    # Create a new Point2 target position
+                    new_pos = Point2((new_x, new_y))
+                    
+                    # Only log position occasionally to reduce spam
+                    if self.frame_counter % self.position_update_frequency == 0:
+                        print(f"DEBUG: Moving Nova from {self.current_position} toward {self.best_target_pos}, distance: {distance:.2f}")
+                    
+                    # If a valid target was found and it differs from the current position, command the nova to move
+                    if self.best_target_pos is not None and self.unit is not None and hasattr(self.unit, 'move'):
+                        try:
+                            # Issue the move command directly to the unit
+                            self.unit.move(self.best_target_pos)
+                            if self.frame_counter % self.position_update_frequency == 0:
+                                print(f"Moving Nova to target: {self.best_target_pos}")
+                        except Exception as e:
+                            print(f"ERROR: Failed to move Nova: {e}")
+            
+            # Nova is still active
             return True
             
         except Exception as e:
             print(f"DEBUG ERROR in run_step: {e}")
+            
+            # On error, assume Nova is no longer valid
+            # Unregister the target if we have one
             if self.best_target_pos and nova_manager:
-                try:
-                    nova_manager.unregister_nova_target(self.best_target_pos)
-                except Exception as unregister_error:
-                    print(f"DEBUG ERROR unregistering target: {unregister_error}")
+                nova_manager.unregister_nova_target(self.best_target_pos)
+            
+            # Reset the Nova state
             self.reset()
+            
+            # Nova is no longer active
             return False
+    
+    def reset(self) -> None:
+        """Reset nova state."""
+        print(f"DEBUG: Resetting Nova - was executing: {self.executing}, frames left: {self.frames_left}")
+        # Reset execution state
+        self.executing = False
+        self.frames_left = 0
         
-    def load_info(self, unit):
-        """Initialize nova tracking state when fired."""
-        self.unit = unit
-        self.frames_left = 48  # Reset to starting frame count
-        self.distance_left = self.calculate_distance_left(unit.movement_speed)
-        self.best_target_pos = unit.position  # Initial target position
-
-    def update_info(self):
-        """Update nova tracking state each step."""
-        self.frames_left -= 1  # Decrement frame count
-        self.distance_left = self.calculate_distance_left(self.unit.movement_speed)
-
-    def calculate_distance_left(self, unit_speed: float) -> float:
-        """Calculate remaining distance based on unit movement speed and frames left.
-
-        Uses the constant 22.4 frames per second to convert speed into distance per frame.
-        """
-        return self.frames_left * (unit_speed / 22.4)
+        # Clear unit reference
+        self.unit = None
+        
+        # Clear target positions
+        self.best_target_pos = None
+        self.original_target_pos = None
+        
+        # Reset tracking variables
+        self.frame_counter = 0
+        self.current_position = None
+        self.previous_position = None
+        self.initial_unit_position = None
+        self.consecutive_stuck_frames = 0
+        
+        # Reset timers
+        self.execution_start_time = 0
+        self.last_position_update_time = 0
 
     def run_debug(self):
         """Output debugging information."""
         print(f"Nova Frames Left: {self.frames_left}, Distance Left: {self.distance_left}")
-        print(f"Current Position: {self.unit.position}, Target Position: {self.best_target_pos}")
+        print(f"Current Position: {self.unit.position if hasattr(self.unit, 'position') else self.last_known_position}, Target Position: {self.best_target_pos}")
         
         # For debugging, let's get a fresh grid if we don't have one stored
-        grid = self.mediator.get_tactical_ground_grid
-        if grid is not None:
-            self.influence_grid = grid.copy()
-            print(f"Successfully obtained grid with shape {grid.shape}")
-        else:
-            print("No grid available for visualization")
-            return
+        self.influence_grid = self.mediator.get_tactical_ground_grid
         
         try:
             # Get max and min values to understand the range of influence
