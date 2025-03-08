@@ -121,7 +121,8 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                         
                         # Update the Nova Manager with current units
                         bot.nova_manager.update_units(enemy_units, friendly_units)
-                        
+                        # Run the update method to handle active Novas
+                        bot.nova_manager.update(enemy_units, friendly_units)
                     except Exception as e:
                         print(f"DEBUG ERROR updating NovaManager: {e}")
                     
