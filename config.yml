@@ -15,12 +15,16 @@ Debug: True
 GameStep: 4
 DebugGameStep: 4
 
+# Turn ares features on/off for performance reasons
+Features:
+    # this grid is useful for disruptor balls and maybe some other uses
+    # off by default to save computation
+    TacticalGroundGrid: True
+
 DebugOptions:
-    # one of: Air, AirVsGround, Ground, GroundAvoidance, AirAvoidance, GroundToAir, TacticalGround
-    ActiveGrid: Ground
+    # one of: Air, AirVsGround, Ground, GroundAvoidance, AirAvoidance
+    ActiveGrid: TacticalGround
     ChatDebug: True
     DebugSpawn: False
     ShowPathingCost: True
     ResourceDebug: False
-Features:
-    TacticalGroundGrid: True
