@@ -3,6 +3,7 @@ from sc2.ids.unit_typeid import UnitTypeId
 import time
 import numpy as np
 from sc2.position import Point2
+import traceback
 
 if TYPE_CHECKING:
     from bot.utilities.use_disruptor_nova import UseDisruptorNova
@@ -18,15 +19,18 @@ class NovaManager:
         # List to hold active nova instances
         self.active_novas: List = []
         # Store full target positions instead of just coordinates for better matching
-        self.current_targets: Dict[Tuple[float, float], Point2] = {}
+        self.current_targets: Dict[str, Point2] = {}
         # Exclusion radius (in grid cells)
         self.exclusion_radius = 2.5  # Reduced from 3 to 2.5 for even more flexibility
         # Nova speed and lifetime constants
         self.nova_speed = 5.95  # Nova movement speed in game units per second
         self.nova_lifetime = 2.1  # Nova lifetime in seconds
         self.nova_radius = 1.5  # Nova radius
+        # Exclusion radius in game units should match nova radius or larger
+        self.exclusion_radius_game_units = 3.0  # Ensure disruptors target different areas
         self.enemy_units = []
         self.friendly_units = []
+        self.current_time = time.time()
 
         print(f"DEBUG: NovaManager initialized with exclusion radius of {self.exclusion_radius} grid cells")
 
@@ -55,33 +59,53 @@ class NovaManager:
             self.register_nova_target(nova.best_target_pos)
 
     
-    def update(self, enemy_units: list, friendly_units: list) -> None:
-        """Update all active nova instances and remove expired ones."""
-        self.update_units(enemy_units, friendly_units)
-        expired = []
+    def update(self, enemy_units: List['Unit'], friendly_units: List['Unit']) -> None:
+        """
+        Update the nova manager state, track active novas, and clean up expired ones.
         
-        for nova in self.active_novas:
-            # Decrement the frame counter and update remaining distance
-            nova.update_info()
+        Args:
+            enemy_units: List of enemy units
+            friendly_units: List of friendly units
+        """
+        try:
+            # Update internal state
+            self.enemy_units = enemy_units
+            self.friendly_units = friendly_units
+            self.current_time = time.time()  # Just for generating unique keys
             
-            # Run the nova's step logic with target adjustment
-            nova.run_step(self.enemy_units, self.friendly_units, self)
+            # Track and update active nova instances
+            expired_novas = []
             
-            # If timer has expired, mark for removal
-            if nova.frames_left <= 0:
-                expired.append(nova)
-        
-        # Remove expired nova instances
-        for nova in expired:
-            if hasattr(nova, 'best_target_pos') and nova.best_target_pos:
-                # Use the proper unregister method to ensure consistency
-                try:
-                    self.unregister_nova_target(nova.best_target_pos)
-                except Exception as e:
-                    print(f"DEBUG ERROR unregistering expired Nova target: {e}")
-            self.active_novas.remove(nova)
-
+            for nova in self.active_novas:
+                # Decrement the frame counter and update remaining distance
+                nova.update_info()
                 
+                # Run the nova's step logic with target adjustment
+                nova.run_step(self.enemy_units, self.friendly_units, self)
+                
+                # If timer has expired, mark for removal
+                if nova.frames_left <= 0:
+                    expired_novas.append(nova)
+                    
+                    # When a nova expires, unregister its target
+                    if hasattr(nova, 'best_target_pos') and nova.best_target_pos:
+                        self.unregister_nova_target(nova.best_target_pos)
+                        print(f"DEBUG: Nova at {nova.best_target_pos} expired, target unregistered")
+            
+            # Remove expired novas
+            if expired_novas:
+                for nova in expired_novas:
+                    self.active_novas.remove(nova)
+                print(f"DEBUG: Removed {len(expired_novas)} expired novas, {len(self.active_novas)} still active")
+                
+            # Debug info about current tracking state
+            if self.active_novas:
+                print(f"DEBUG: Currently tracking {len(self.active_novas)} active novas and {len(self.current_targets)} registered targets")
+                
+        except Exception as e:
+            print(f"DEBUG ERROR in NovaManager.update: {e}")
+            traceback.print_exc()
+
     def get_active_novas(self) -> List:
         """Return the list of currently active nova instances."""
         return self.active_novas
@@ -97,6 +121,11 @@ class NovaManager:
             bool: True if registration was successful, False if target is too close to existing targets
         """
         try:
+            # Validate input
+            if not position:
+                print("DEBUG: Cannot register None position")
+                return False
+            
             # Check if this is effectively the same as an existing target
             for target_key, target_position in list(self.current_targets.items()):
                 distance = position.distance_to(target_position)
@@ -106,18 +135,21 @@ class NovaManager:
                     return True
                     
                 # If within exclusion radius but not identical, reject as too close
-                if distance < self.exclusion_radius:
-                    print(f"DEBUG: Nova target at {position} is too close to existing target at {target_position}, distance: {distance:.2f}")
+                if distance < self.exclusion_radius_game_units:
+                    print(f"DEBUG: Nova target registration failed - target at {position} too close to existing target at {target_position}")
+                    print(f"DEBUG: Distance: {distance:.2f}, Minimum required: {self.exclusion_radius_game_units:.2f}")
                     return False
             
-            # Add position to dictionary of current targets
-            # Use a tuple of rounded coordinates as the key for consistent lookup
-            rounded_key = (round(position.x, 2), round(position.y, 2))
-            self.current_targets[rounded_key] = position
-            print(f"DEBUG: Registered Nova target at {position}, key: {rounded_key}")
+            # Generate a unique key for this target
+            target_key = f"nova_{len(self.current_targets)}_{int(self.current_time)}"
+            
+            # Register the target
+            self.current_targets[target_key] = position
+            print(f"DEBUG: Registered Nova target at {position}, now tracking {len(self.current_targets)} targets")
             return True
+            
         except Exception as e:
-            print(f"DEBUG ERROR registering Nova target: {e}")
+            print(f"DEBUG ERROR in register_nova_target: {e}")
             return False
 
     def unregister_nova_target(self, position: Point2) -> None:
@@ -162,7 +194,9 @@ class NovaManager:
             if self.current_targets:
                 print(f"DEBUG: Could not find target near {position} to unregister. Current targets:")
                 for key, target in self.current_targets.items():
-                    print(f"  Target {key}: {target}, distance: {position.distance_to(target):.2f}")
+                    print(f"  Target at {target} (key: {key})")
+            else:
+                print("DEBUG: No current Nova targets registered")
             
         except Exception as e:
             print(f"DEBUG ERROR unregistering Nova target: {e}")
@@ -186,33 +220,50 @@ class NovaManager:
                 
             # Get the shape of the grid for creating our mask
             grid_shape = grid.shape
-            
+            print(f"DEBUG: Creating exclusion mask with shape {grid_shape}")
+                
             # Create an empty mask matching the grid shape
             mask = np.zeros(grid_shape, dtype=bool)
             
             # If we don't have any current targets, return the empty mask
             if not self.current_targets:
+                print(f"DEBUG: No exclusion zones (no current targets)")
                 return mask
                 
-            # More efficient approach: create a single mask in one pass
             # Mark exclusion zones around each current target
-            if self.current_targets:
-                # Create coordinate grids once for more efficient distance calculations
-                x_indices, y_indices = np.indices(grid_shape)
-                
-                # For each target, create a circular mask and combine them all
-                for _, target_position in self.current_targets.items():
+            for target_key, target_position in self.current_targets.items():
+                try:
+                    # Extract grid coordinates
                     target_x, target_y = int(target_position.x), int(target_position.y)
-                    
+                        
                     # Safety check for grid boundaries
-                    if (0 <= target_x < grid_shape[1] and 0 <= target_y < grid_shape[0]):
+                    if (0 <= target_x < grid_shape[0] and 0 <= target_y < grid_shape[1]):
+                        # Calculate grid coordinates for the circle - use ogrid for better performance
+                        y_indices, x_indices = np.ogrid[:grid_shape[0], :grid_shape[1]]
+                        
                         # Calculate squared distance from this position
+                        # In SC2, x is first dimension, y is second
                         dist_from_target = ((x_indices - target_x)**2 + (y_indices - target_y)**2)
-                        # Create circular mask and combine with our existing mask
-                        mask = np.logical_or(mask, dist_from_target <= self.exclusion_radius**2)
+                        
+                        # Create circular mask with the game units radius (not grid cells)
+                        circular_mask = dist_from_target <= self.exclusion_radius_game_units**2
+                        
+                        # Apply to our main mask
+                        mask = np.logical_or(mask, circular_mask)
+                        print(f"DEBUG: Added exclusion zone at ({target_x}, {target_y}) with radius {self.exclusion_radius_game_units}")
                     else:
                         print(f"DEBUG: Target position ({target_x}, {target_y}) out of grid bounds {grid_shape}")
-                 
+                except Exception as e:
+                    print(f"DEBUG ERROR creating exclusion zone for target {target_position}: {e}")
+            
+            # Print detailed info about current targets for debugging
+            if self.current_targets:
+                print(f"DEBUG: Current Nova targets ({len(self.current_targets)}):")
+                for key, target in self.current_targets.items():
+                    print(f"  Target at {target} (key: {key})")
+            else:
+                print("DEBUG: No current Nova targets registered")
+                
             print(f"DEBUG: Generated exclusion mask with {np.sum(mask)} excluded cells")
             return mask
         except Exception as e:
@@ -241,4 +292,13 @@ class NovaManager:
         # Return whether the target is reachable
         return current_distance <= max_travel_distance
 
-    
+    def update_units(self, enemy_units, friendly_units):
+        """
+        Update the internal record of enemy and friendly units for this frame.
+        
+        Args:
+            enemy_units: List of enemy units
+            friendly_units: List of friendly units
+        """
+        self.enemy_units = enemy_units
+        self.friendly_units = friendly_units
