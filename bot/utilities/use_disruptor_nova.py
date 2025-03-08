@@ -261,48 +261,18 @@ class UseDisruptorNova(CombatIndividualBehavior):
                                         max_enemies_hit = enemies_hit
                                         best_position = center_unit.position
                             
-                            # If we didn't find a good non-excluded position, try excluded positions as a fallback
+                            # If we didn't find a good non-excluded position, don't use excluded positions
                             if best_position is None:
-                                print("DEBUG: No good non-excluded positions found, trying excluded positions")
-                                for center_unit, is_excluded in candidate_positions:
-                                    if not is_excluded:
-                                        continue  # Skip non-excluded positions (already processed)
-                                        
-                                    # Count enemies within nova_radius of this unit
-                                    enemies_hit = sum(1 for unit in nearby_enemies 
-                                                  if unit.position.distance_to(center_unit.position) <= nova_radius)
-                                    
-                                    # If this is better than our previous best, update it
-                                    if enemies_hit > max_enemies_hit:
-                                        # Check for friendly fire
-                                        friendly_hit = any(unit.position.distance_to(center_unit.position) <= nova_radius 
-                                                        for unit in friendly_units)
-                                        
-                                        # Only use this position if it doesn't hit friendly units
-                                        if not friendly_hit:
-                                            max_enemies_hit = enemies_hit
-                                            best_position = center_unit.position
-                                            print(f"DEBUG: Using excluded position {best_position} as fallback")
+                                print("DEBUG: No good non-excluded positions found, skipping Nova to avoid wasteful firing")
+                                return None
                             
                             # Only use the position if it's valid and within range
-                            if best_position is not None and max_enemies_hit > 0:
+                            if best_position and best_position.distance_to(disruptor_unit.position) <= disruptor_max_range:
                                 print(f"DEBUG: Best target at {best_position} will hit {max_enemies_hit} enemy units")
                                 
-                                # Check if the optimized position is within the disruptor's range
-                                if disruptor_pos.distance_to(best_position) <= disruptor_max_range:
-                                    # Register this target with the nova manager if available
-                                    if nova_manager:
-                                        try:
-                                            nova_manager.register_nova_target(best_position)
-                                            print(f"DEBUG: Registered target {best_position} with nova manager")
-                                        except Exception as e:
-                                            print(f"ERROR registering target: {e}")
-                                    
-                                    return best_position
-                                else:
-                                    print(f"DEBUG: Best position {best_position} is out of disruptor range")
+                                return best_position
                             else:
-                                print(f"DEBUG: No good target found by our AOE targeting")
+                                print(f"DEBUG: Best position {best_position} is out of disruptor range")
                         except Exception as e:
                             print(f"ERROR in AOE targeting: {e}")
                     else:
@@ -459,12 +429,13 @@ class UseDisruptorNova(CombatIndividualBehavior):
             try:
                 target_registered = nova_manager.register_nova_target(target)
                 if not target_registered:
-                    print(f"DEBUG: Failed to register target with NovaManager - continuing anyway")
+                    print(f"DEBUG: Target {target} rejected by nova_manager - not firing to avoid wasting Nova")
+                    return None
                 else:
                     print(f"DEBUG: Target registered successfully")
             except Exception as e:
                 print(f"ERROR registering target: {e}")
-                # Continue anyway - we'll still try to fire the nova
+                return None  # Don't fire if we can't register the target
 
         # Calculate which ability ID to use based on unit type (should be AbilityId.EFFECT_PURIFICATIONNOVA)
         ability_id = AbilityId.EFFECT_PURIFICATIONNOVA

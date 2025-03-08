@@ -21,7 +21,7 @@ class NovaManager:
         # Store full target positions instead of just coordinates for better matching
         self.current_targets: Dict[str, Point2] = {}
         # Exclusion radius (in grid cells)
-        self.exclusion_radius = 2.5  # Reduced from 3 to 2.5 for even more flexibility
+        self.exclusion_radius = 3.0  # Updated to match game units value for consistency
         # Nova speed and lifetime constants
         self.nova_speed = 5.95  # Nova movement speed in game units per second
         self.nova_lifetime = 2.1  # Nova lifetime in seconds
