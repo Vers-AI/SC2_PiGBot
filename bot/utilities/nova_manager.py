@@ -231,39 +231,26 @@ class NovaManager:
                 return mask
                 
             # Mark exclusion zones around each current target
-            for target_key, target_position in self.current_targets.items():
+            for target_key, target_pos in self.current_targets.items():
                 try:
-                    # Extract grid coordinates
-                    target_x, target_y = int(target_position.x), int(target_position.y)
+                    # Extract x, y from the Point2 object
+                    target_x, target_y = target_pos.x, target_pos.y
                         
-                    # Safety check for grid boundaries
-                    if (0 <= target_x < grid_shape[0] and 0 <= target_y < grid_shape[1]):
-                        # Calculate grid coordinates for the circle - use ogrid for better performance
-                        y_indices, x_indices = np.ogrid[:grid_shape[0], :grid_shape[1]]
-                        
-                        # Calculate squared distance from this position
-                        # In SC2, x is first dimension, y is second
-                        dist_from_target = ((x_indices - target_x)**2 + (y_indices - target_y)**2)
-                        
-                        # Create circular mask with the game units radius (not grid cells)
-                        circular_mask = dist_from_target <= self.exclusion_radius_game_units**2
-                        
-                        # Apply to our main mask
-                        mask = np.logical_or(mask, circular_mask)
-                        print(f"DEBUG: Added exclusion zone at ({target_x}, {target_y}) with radius {self.exclusion_radius_game_units}")
-                    else:
-                        print(f"DEBUG: Target position ({target_x}, {target_y}) out of grid bounds {grid_shape}")
+                    # Create a circular mask at this position
+                    mask_radius = self.exclusion_radius
+                    
+                    # Calculate grid coordinates for the circle
+                    y_indices, x_indices = np.ogrid[:grid_shape[0], :grid_shape[1]]
+                    # Calculate squared distance from this position
+                    dist_from_target = ((x_indices - target_x)**2 + (y_indices - target_y)**2)
+                    # Create circular mask
+                    circular_mask = dist_from_target <= mask_radius**2
+                    # Apply to our main mask
+                    mask = np.logical_or(mask, circular_mask)
+                    print(f"DEBUG: Added exclusion zone at ({target_x}, {target_y}) with radius {mask_radius}")
                 except Exception as e:
-                    print(f"DEBUG ERROR creating exclusion zone for target {target_position}: {e}")
-            
-            # Print detailed info about current targets for debugging
-            if self.current_targets:
-                print(f"DEBUG: Current Nova targets ({len(self.current_targets)}):")
-                for key, target in self.current_targets.items():
-                    print(f"  Target at {target} (key: {key})")
-            else:
-                print("DEBUG: No current Nova targets registered")
-                
+                    print(f"DEBUG ERROR creating exclusion zone for target {target_key}: {target_pos}, error: {e}")
+        
             print(f"DEBUG: Generated exclusion mask with {np.sum(mask)} excluded cells")
             return mask
         except Exception as e:
