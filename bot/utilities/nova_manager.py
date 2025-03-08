@@ -10,24 +10,37 @@ if TYPE_CHECKING:
 
 
 class NovaManager:
-    """Manager for tracking and updating active Disruptor Nova abilities."""
+    """Coordinates and manages Disruptor Nova abilities across multiple units.
+    
+    Handles tracking of active Novas, target registration, exclusion zones,
+    and Nova lifetime management to ensure efficient usage of this powerful ability.
+    """
 
     def __init__(self, bot, mediator):
-        # Store bot and mediator for wrapping incoming nova units
+        """Initialize the Nova Manager.
+        
+        Args:
+            bot: Reference to the main bot instance
+            mediator: Access point for game state and tactical information
+        """
+        # Core references
         self.bot = bot
         self.mediator = mediator
-        # List to hold active nova instances
+        
+        # Nova tracking
         self.active_novas: List = []
-        # Store full target positions instead of just coordinates for better matching
         self.current_targets: Dict[str, Point2] = {}
-        # Exclusion radius (in grid cells)
-        self.exclusion_radius = 3.0  # Updated to match game units value for consistency
-        # Nova speed and lifetime constants
-        self.nova_speed = 5.95  # Nova movement speed in game units per second
-        self.nova_lifetime = 2.1  # Nova lifetime in seconds
-        self.nova_radius = 1.5  # Nova radius
-        # Exclusion radius in game units should match nova radius or larger
-        self.exclusion_radius_game_units = 3.0  # Ensure disruptors target different areas
+        
+        # Nova constants
+        self.nova_speed = 5.95  # Movement speed (game units/second)
+        self.nova_lifetime = 2.1  # Lifetime (seconds)
+        self.nova_radius = 1.5  # Explosion radius
+        
+        # Targeting parameters
+        self.exclusion_radius = 3.0  # Grid cells
+        self.exclusion_radius_game_units = 3.0  # Game units
+        
+        # Unit tracking
         self.enemy_units = []
         self.friendly_units = []
         self.current_time = time.time()
@@ -44,7 +57,14 @@ class NovaManager:
             print(f"DEBUG ERROR initializing NovaManager - could not access tactical grid: {e}")
 
     def add_nova(self, nova) -> None:
-        """Add a nova instance to the manager."""
+        """Register a nova unit or behavior instance for tracking.
+        
+        Handles both raw Nova units and Nova behavior instances by wrapping
+        raw units in a behavior controller if needed.
+        
+        Args:
+            nova: Either a Nova unit or a UseDisruptorNova behavior instance
+        """
         from bot.utilities.use_disruptor_nova import UseDisruptorNova
         
         if not hasattr(nova, 'update_info'):
@@ -61,11 +81,14 @@ class NovaManager:
     
     def update(self, enemy_units: List['Unit'], friendly_units: List['Unit']) -> None:
         """
-        Update the nova manager state, track active novas, and clean up expired ones.
+        Process one game step for all active Novas.
+        
+        Updates Nova states, removes expired Novas, and maintains target registrations.
+        Called once per game step to manage the lifecycle of all active Novas.
         
         Args:
-            enemy_units: List of enemy units
-            friendly_units: List of friendly units
+            enemy_units: Current list of visible enemy units
+            friendly_units: Current list of friendly units
         """
         try:
             # Update internal state
@@ -107,18 +130,25 @@ class NovaManager:
             traceback.print_exc()
 
     def get_active_novas(self) -> List:
-        """Return the list of currently active nova instances."""
+        """Get all currently active Nova instances.
+        
+        Returns:
+            List: Active UseDisruptorNova behavior instances
+        """
         return self.active_novas
         
     def register_nova_target(self, position: Point2) -> bool:
         """
-        Register a position as a current Nova target.
+        Register a position as a Nova target to prevent overlapping Novas.
+        
+        Maintains a registry of active Nova targets and enforces minimum
+        spacing between targets to prevent wasting Novas on the same area.
         
         Args:
-            position: The position (x, y) to register as target
+            position: Target position in game coordinates
             
         Returns:
-            bool: True if registration was successful, False if target is too close to existing targets
+            bool: True if registration successful, False if too close to existing target
         """
         try:
             # Validate input
@@ -154,10 +184,13 @@ class NovaManager:
 
     def unregister_nova_target(self, position: Point2) -> None:
         """
-        Remove a Nova target position from tracking.
+        Remove a target position from the registry when a Nova expires or is canceled.
+        
+        Handles approximate position matching to find the correct target to remove,
+        as Nova positions may drift slightly during movement.
         
         Args:
-            position: The position to remove
+            position: The approximate position to unregister
         """
         try:
             # Use rounded position for lookup to handle small differences
@@ -203,13 +236,16 @@ class NovaManager:
 
     def get_exclusion_mask(self, grid) -> np.ndarray:
         """
-        Create a boolean mask of areas that should be excluded from targeting.
+        Generate a mask of areas that should be excluded from Nova targeting.
+        
+        Creates circular exclusion zones around all currently active Nova targets
+        to prevent multiple Novas from being fired at the same location.
         
         Args:
-            grid: The tactical ground grid
+            grid: Tactical ground grid defining the map dimensions
             
         Returns:
-            np.ndarray: Boolean mask where True indicates areas to avoid
+            np.ndarray: Boolean mask where True indicates excluded areas
         """
         try:
             # Very specific check - must be instance of np.ndarray
@@ -260,15 +296,18 @@ class NovaManager:
 
     def can_nova_reach_target(self, nova_position: Point2, target_position: Point2, frames_left: int) -> bool:
         """
-        Check if a Nova can reach a target position within its remaining lifetime.
+        Calculate if a Nova can reach a target before expiring.
+        
+        Uses Nova speed, remaining lifetime, and distance to determine
+        if the target is within the Nova's maximum remaining travel range.
         
         Args:
-            nova_position: Current position of the Nova
-            target_position: Target position to check
-            frames_left: Number of frames left in the Nova's lifetime
+            nova_position: Current Nova position
+            target_position: Potential target position
+            frames_left: Remaining lifetime in frames
             
         Returns:
-            bool: True if the Nova can reach the target, False otherwise
+            bool: True if target is reachable, False otherwise
         """
         # Calculate maximum travel distance - using the constant FPS value consistently
         max_travel_distance = self.nova_speed * (frames_left / 22.4)
@@ -281,11 +320,14 @@ class NovaManager:
 
     def update_units(self, enemy_units, friendly_units):
         """
-        Update the internal record of enemy and friendly units for this frame.
+        Update the cached unit lists for the current game step.
+        
+        Maintains references to current battlefield state for Nova targeting
+        without requiring these lists to be passed to every method.
         
         Args:
-            enemy_units: List of enemy units
-            friendly_units: List of friendly units
+            enemy_units: Current visible enemy units
+            friendly_units: Current friendly units
         """
         self.enemy_units = enemy_units
         self.friendly_units = friendly_units

@@ -1,7 +1,7 @@
 """Custom behavior for Disruptor Nova ability.
-This module implements the logic to fire the Disruptor Nova ability,
-track its on-screen duration, and select optimal targets using enemy
-and friendly positions. This serves as a basis for integration with the Ares combat framework.
+Implements targeting logic, firing mechanics, and tracking for the Disruptor's Purification Nova.
+Handles target selection based on tactical influence grid, unit positioning, and damage potential.
+Integrates with the Ares combat framework for coordinated unit control.
 """
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, List, Optional
@@ -19,59 +19,81 @@ import math
 
 class UseDisruptorNova(CombatIndividualBehavior):
     def __init__(self, mediator: ManagerMediator, bot: 'AresBot', position_update_frequency: int = 10):
-        """Initialize with the given cooldown and nova duration in seconds."""
-        self.cooldown = 21.4
-        self.nova_duration = 2.1
+        """Initialize the Disruptor Nova behavior controller.
+        
+        Args:
+            mediator: Access point for game state and tactical information
+            bot: Reference to the main bot instance
+            position_update_frequency: How often to update Nova position (in frames)
+        """
+        # Nova ability constants
+        self.cooldown = 21.4  # Cooldown in seconds
+        self.nova_duration = 2.1  # Duration in seconds
+        
+        # Targeting state
         self.best_target_pos = None
         self.best_target_influence = 0
         self.unit = None
         self.original_target_pos = None
         self.target_pos = None
+        
+        # Execution state
         self.executing = False
         self.frames_left = 0
         self.distance_left = 0.0
         self.mediator = mediator
-        self.bot = bot  # Store bot instance
-        self.should_debug_visuals = False  # Set to True for visual debugging
+        self.bot = bot
+        self.should_debug_visuals = False
         
-        # Do NOT store any references to grids here, get them fresh when needed
+        # Tactical grid reference - retrieved fresh when needed
         self.influence_grid = None
         
-        # Print initialization message
         print("DEBUG: UseDisruptorNova initialized")
         
-        # Add movement cooldown tracking
+        # Movement control
         self.last_movement_frame = 0
-        self.movement_cooldown = 5  # Only issue move commands every 5 frames
+        self.movement_cooldown = 5  # Frames between movement commands
         
-        # Add a timestamp to track when this Nova was started
+        # Execution timing
         self.execution_start_time = 0
-        self.max_execution_time = 10.0  # Maximum time in seconds a Nova should be executing
+        self.max_execution_time = 10.0  # Maximum execution time in seconds
         
-        # Position tracking and movement management
-        self.max_distance_tracking_factor = 35.0  # Maximum distance to consider for tracking by the Nova
-        self.frame_counter = 0  # To track frames since execution for position updates
-        self.position_update_frequency = position_update_frequency  # How often to update position
-        self.current_position = None  # Current Nova position
-        self.initial_unit_position = None  # Position when the Nova was created
-        self.last_target_update_time = 0  # Last time we updated the target position
+        # Position tracking
+        self.max_distance_tracking_factor = 35.0  # Max tracking distance
+        self.frame_counter = 0
+        self.position_update_frequency = position_update_frequency
+        self.current_position = None
+        self.initial_unit_position = None
+        self.last_target_update_time = 0
     
     def can_use(self, disruptor_unit) -> bool:
-        """Return True if the ability can be used based on its cooldown."""
+        """Check if the Disruptor can use Purification Nova.
+        
+        Args:
+            disruptor_unit: The Disruptor unit to check
+            
+        Returns:
+            bool: True if Nova is available, False otherwise
+        """
         return (AbilityId.EFFECT_PURIFICATIONNOVA in disruptor_unit.abilities)
 
     def select_best_target(self, enemy_units: List['Unit'], friendly_units: List['Unit'], nova_manager) -> Optional[Point2]:
         """
-        Select the best position to target with a Disruptor Nova ability.
-        Uses influence grid to find the highest value point within range of the disruptor.
+        Find optimal Nova target position based on tactical influence and unit positioning.
+        
+        Evaluates potential targets using:
+        1. Tactical influence grid for high-value areas
+        2. Enemy unit clustering for maximum damage
+        3. Exclusion zones to prevent overlapping Novas
+        4. Friendly fire avoidance
         
         Args:
             enemy_units: List of enemy units to consider targeting
             friendly_units: List of friendly units to avoid damaging
-            nova_manager: NovaManager instance for target coordination
+            nova_manager: NovaManager for target coordination and exclusion zones
             
         Returns:
-            Point2: The recommended target position, or None if no good position found
+            Point2: Optimal target position, or None if no suitable target found
         """
         try:
             nova_radius = 1.5
@@ -203,7 +225,7 @@ class UseDisruptorNova(CombatIndividualBehavior):
                 print(f"DEBUG: Found maximum influence value {max_value} at position {game_world_pos}")
                 
                 # Check if the value is high enough to be worth targeting
-                influence_threshold = 100
+                influence_threshold = 200
                 if max_value > influence_threshold:
                     # Find enemy units within the disruptor's range that could potentially be hit
                     nearby_enemies = [unit for unit in enemy_units 
@@ -213,9 +235,9 @@ class UseDisruptorNova(CombatIndividualBehavior):
                     enemy_positions = [(unit.position.x, unit.position.y) for unit in nearby_enemies]
                     print(f"DEBUG: Enemy unit positions: {enemy_positions}")
                     
+                    #TODO remove the targeting, just aiming for the highest influence is enough
                     if nearby_enemies:
                         try:
-                            # Since cy_find_aoe_position isn't available, implement our own AOE targeting
                             # Find the best position to hit the most enemies with the Nova
                             best_position = None
                             max_enemies_hit = 0
@@ -296,12 +318,15 @@ class UseDisruptorNova(CombatIndividualBehavior):
 
     def update_target_position(self, enemy_units: List['Unit'], friendly_units: List['Unit'], nova_manager):
         """
-        Check if a better target has become available within Nova's remaining travel range.
+        Dynamically adjust Nova targeting during flight based on battlefield changes.
+        
+        Evaluates if a more optimal target has become available within the Nova's
+        remaining travel range and updates targeting accordingly.
         
         Args:
             enemy_units: List of enemy units to consider
             friendly_units: List of friendly units to avoid
-            nova_manager: The NovaManager for exclusion mask and target registration
+            nova_manager: NovaManager for exclusion zones and target registration
             
         Returns:
             bool: True if target was updated, False otherwise
@@ -370,22 +395,31 @@ class UseDisruptorNova(CombatIndividualBehavior):
             return False
 
     def load_info(self, unit):
-        """Initialize nova tracking state when fired."""
+        """Initialize Nova tracking state when a Nova is fired.
+        
+        Args:
+            unit: The Nova unit to track
+        """
         self.unit = unit
-        self.frames_left = 48  # Reset to starting frame count
+        self.frames_left = 48  # Nova lifetime (2.1s * 22.4 fps)
         self.distance_left = self.calculate_distance_left(unit.movement_speed)
         self.best_target_pos = unit.position  # Initial target position
         
 
     def execute(self, disruptor_unit, enemy_units: List['Unit'], friendly_units: List['Unit'], nova_manager=None):
-        """Attempt to execute Disruptor Nova ability. Initializes nova state and simulates firing the nova.
-        Returns self (the nova instance) if fired successfully, or None if not.
+        """Fire a Disruptor's Purification Nova at the best available target.
+        
+        Handles target selection, firing mechanics, and Nova registration with the manager.
+        Includes range checking and positioning logic to ensure effective Nova usage.
         
         Args:
             disruptor_unit: The Disruptor unit to fire the Nova
-            enemy_units: List of enemy units to target
-            friendly_units: List of friendly units to avoid
+            enemy_units: List of enemy units to consider targeting
+            friendly_units: List of friendly units to avoid damaging
             nova_manager: Optional NovaManager for target coordination
+            
+        Returns:
+            UseDisruptorNova: This instance if Nova fired successfully, None otherwise
         """
         # Check if ability can be used 
         if not self.can_use(disruptor_unit):
@@ -485,13 +519,18 @@ class UseDisruptorNova(CombatIndividualBehavior):
 
     
     def run_step(self, enemy_units: List['Unit'], friendly_units: List['Unit'], nova_manager=None):
-        """Execute one step for this nova. Reduces the frame counter and possibly moves the nova.
-        Returns True if the nova is still active, False if it has expired.
+        """Process one game step for an active Nova.
+        
+        Updates Nova state, decrements lifetime counter, and handles movement commands.
+        Dynamically adjusts targeting based on battlefield changes when appropriate.
         
         Args:
-            enemy_units: List of enemy units to avoid hitting
-            friendly_units: List of friendly units to avoid hitting
-            nova_manager: Optional NovaManager for target updating
+            enemy_units: List of enemy units for targeting updates
+            friendly_units: List of friendly units to avoid
+            nova_manager: Optional NovaManager for coordinated targeting
+            
+        Returns:
+            bool: True if Nova is still active, False if expired
         """
     
         if self.frames_left <= 0:
@@ -516,13 +555,23 @@ class UseDisruptorNova(CombatIndividualBehavior):
         return self.frames_left > 0
 
     def update_info(self):
-        """Update nova tracking state each step."""
-        self.frames_left -= 1  # Decrement frame count
+        """Update Nova tracking state for the current game step.
+        
+        Decrements frame counter and recalculates remaining travel distance.
+        """
+        self.frames_left -= 1
         self.distance_left = self.calculate_distance_left(self.unit.movement_speed)
     
     def calculate_distance_left(self, unit_speed: float) -> float:
-        """Calculate remaining distance based on unit movement speed and frames left.
-
-        Uses the constant 22.4 frames per second to convert speed into distance per frame.
+        """Calculate maximum remaining travel distance for the Nova.
+        
+        Converts unit speed (game units per second) to distance per frame,
+        then multiplies by remaining frames to get total possible distance.
+        
+        Args:
+            unit_speed: Movement speed of the Nova in game units per second
+            
+        Returns:
+            float: Maximum remaining travel distance in game units
         """
         return self.frames_left * (unit_speed / 22.4)
