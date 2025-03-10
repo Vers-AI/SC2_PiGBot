@@ -23,7 +23,7 @@ from bot.utilities.nova_manager import NovaManager
 
 from cython_extensions import (
    
-    cy_find_units_center_mass, cy_pick_enemy_target, cy_closest_to
+    cy_find_units_center_mass, cy_pick_enemy_target, cy_closest_to, cy_distance_to, cy_center
     
 )
 
@@ -197,53 +197,28 @@ def assess_threat(bot, enemy_units: Units, own_forces: Units) -> int:
     You can refine logic to suit your needs.
     """
     threat_level = 0
-    #TODO swap this with UNIT_DATA from Ares and change the weight calculation but filter
-    threat_weights = {
-        UnitTypeId.MARINE: 1.5, UnitTypeId.ZEALOT: 1.5, UnitTypeId.ZERGLING: 1.0,
-        UnitTypeId.ADEPT: 2.0, UnitTypeId.STALKER: 2.0, UnitTypeId.ROACH: 2.5,
-        UnitTypeId.REAPER: 1.5, UnitTypeId.MARAUDER: 3.0, UnitTypeId.SENTRY: 1.5,
-        UnitTypeId.HYDRALISK: 2.5, UnitTypeId.BANELING: 3.0, UnitTypeId.HELLION: 2.0,
-        UnitTypeId.HELLIONTANK: 3.0, UnitTypeId.HIGHTEMPLAR: 2.5, UnitTypeId.MUTALISK: 1.5,
-        UnitTypeId.BANSHEE: 2.0, UnitTypeId.VIKING: 2.0, UnitTypeId.VIKINGFIGHTER: 2.0,
-        UnitTypeId.PHOENIX: 2.0, UnitTypeId.ORACLE: 2.0, UnitTypeId.RAVEN: 2.0,
-        UnitTypeId.GHOST: 2.0,
-        UnitTypeId.SIEGETANK: 3.5, UnitTypeId.IMMORTAL: 3.5, UnitTypeId.CYCLONE: 3.5,
-        UnitTypeId.DISRUPTOR: 3.5, UnitTypeId.COLOSSUS: 4.0, UnitTypeId.RAVAGER: 4.0,
-        UnitTypeId.LURKER: 4.0, UnitTypeId.VOIDRAY: 3.0, UnitTypeId.CARRIER: 4.0,
-        UnitTypeId.BATTLECRUISER: 4.5, UnitTypeId.TEMPEST: 4.0, UnitTypeId.BROODLORD: 4.5,
-        UnitTypeId.ULTRALISK: 4.0, UnitTypeId.THOR: 4.5, UnitTypeId.SIEGETANKSIEGED: 4.0,
-        UnitTypeId.LIBERATOR: 3.5, UnitTypeId.LIBERATORAG: 3.5, UnitTypeId.LURKERBURROWED: 4.0,
-        UnitTypeId.DARKTEMPLAR: 3.0, UnitTypeId.ARCHON: 3.0, UnitTypeId.CORRUPTOR: 3.0,
-        UnitTypeId.WIDOWMINE: 3.5, UnitTypeId.INFESTOR: 3.5, UnitTypeId.INFESTORBURROWED: 3.5,
-        UnitTypeId.SWARMHOSTBURROWEDMP: 3.5, UnitTypeId.VIPER: 3.5, UnitTypeId.WIDOWMINEBURROWED: 3.5,
-    }
+    
     for unit in enemy_units:
-        weight = threat_weights.get(unit.type_id, 1.0)
+        weight = UNIT_DATA[unit.type_id]['army_value']
         # Multiply weight by the effective power (health + shield) scaled by 50.0, tweak if needed
         threat_level += weight * ((unit.health + unit.shield) / 50.0)
 
     # Density check: adjust threat level based on enemy clustering
     if enemy_units.amount > 0:
-        sum_x, sum_y = 0.0, 0.0
-        for unit in enemy_units:
-            sum_x += unit.position.x
-            sum_y += unit.position.y
-        center_x = sum_x / enemy_units.amount
-        center_y = sum_y / enemy_units.amount
-        center = Point2((center_x, center_y))
+        center = cy_center(enemy_units)
 
         cluster_count = 0
         for unit in enemy_units:
-            if unit.position.distance_to(center) <= 5.0:
+            if cy_distance_to(unit.position, center) <= 5.0:
                 cluster_count += 1
 
         # If fewer than 3 enemy units are clustered, scale down the threat level
         if cluster_count < 3:
             threat_level *= 0.5
 
-    # Adjust threat if our forces significantly outnumber enemy units
-    if own_forces.amount > enemy_units.amount * 2:
-        threat_level -= 2
+    # Adjust threat if our forces significantly outnumber enemy units (not used, caused distortion)
+    # if own_forces.amount > enemy_units.amount * 2:
+    #     threat_level -= 2
 
     return max(round(threat_level), 0)
 
