@@ -3,19 +3,15 @@ Implements targeting logic, firing mechanics, and tracking for the Disruptor's P
 Handles target selection based on tactical influence grid, unit positioning, and damage potential.
 Integrates with the Ares combat framework for coordinated unit control.
 """
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, List, Optional
 from sc2.data import UnitTypeId
 from sc2.ids.ability_id import AbilityId
 
-import traceback
 
 from behaviors.combat.individual.combat_individual_behavior import CombatIndividualBehavior
-from ares.behaviors.combat.individual import PathUnitToTarget
 from ares.managers.manager_mediator import ManagerMediator
 import numpy as np
 from sc2.position import Point2
-import math
 
 class UseDisruptorNova(CombatIndividualBehavior):
     def __init__(self, mediator: ManagerMediator, bot: 'AresBot', position_update_frequency: int = 10):

@@ -19,12 +19,12 @@ DebugGameStep: 4
 Features:
     # this grid is useful for disruptor balls and maybe some other uses
     # off by default to save computation
-    TacticalGroundGrid: True
+    TacticalGroundGrid: False
 
 DebugOptions:
     # one of: Air, AirVsGround, Ground, GroundAvoidance, AirAvoidance
     ActiveGrid: TacticalGround
     ChatDebug: True
     DebugSpawn: False
-    ShowPathingCost: True
+    ShowPathingCost: False
     ResourceDebug: False
