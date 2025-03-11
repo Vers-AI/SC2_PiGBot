@@ -57,7 +57,6 @@ class PiG_Bot(AresBot):
 
     current_base_target: Point2
     expansions_generator: cycle
-    _begin_attack_at_supply: float
 
     def __init__(self, game_step_override: Optional[int] = None):
         """
@@ -107,7 +106,6 @@ class PiG_Bot(AresBot):
 
         # Reserve expansions and set flags
         self.natural_expansion: Point2 = self.expansion_locations_list[-2]
-        self._begin_attack_at_supply = 25.0
         self.expansions_generator = cycle(self.expansion_locations_list)
         self.freeflow = self.minerals > 800 and self.vespene < 200
 

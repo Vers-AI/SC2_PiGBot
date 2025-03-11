@@ -272,9 +272,8 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
     Handles the attack toggles logic.
     """
     # Assess the threat level of enemy units
-    #TODO measure the value of my army vs the value of the eneny to attack instead of attack supply - use get_cached_enemy_army, own_forces and enemy_forces
     enemy_threat_level = assess_threat(bot, bot.enemy_units, main_army)
-
+    #TODO review the logic of this function
     # If the army is already attacking, decide based on threat level
     if bot._commenced_attack:
         if enemy_threat_level < 5:
@@ -285,12 +284,15 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
             enemy_center, _ = cy_find_units_center_mass(bot.enemy_units, 10.0)
             control_main_army(bot, main_army, Point2(enemy_center), bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
     else:
-        # Handle attack toggles logic as before
-        current_supply = bot.get_total_supply(main_army)
-        if current_supply <= bot._begin_attack_at_supply:
-            bot._commenced_attack = False
-        elif bot._commenced_attack and not bot._under_attack:
-            control_main_army(bot, main_army, attack_target, bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
+        if bot.time > 3 * 60: #TODO replace with a better indicator, perhaps after build runner is complete: self.build_order_runner.build_completed
+            # Handle attack toggles logic as before
+            army_strength_value = army_strength(main_army)
+            enemy_strength_value = enemy_strength(bot)
+            if army_strength_value <= enemy_strength_value:
+                bot._commenced_attack = False
+            elif not bot._under_attack:
+                control_main_army(bot, main_army, attack_target, bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
+                bot._commenced_attack = True
 
 
 def attack_target(bot, main_army_position: Point2) -> Point2:
@@ -330,7 +332,7 @@ def fallback_target(bot) -> Point2:
     
     return bot.current_base_target
 
-
+#TODO check regrouping too aggressive? 
 def regroup_army(bot, main_army: Units) -> None:
     """Regroups the main army if units are too scattered and the bot is not in a combat state.
 
@@ -358,3 +360,32 @@ def regroup_army(bot, main_army: Units) -> None:
         # Command the main army to regroup by using control_main_army with the natural expansion as target
         control_main_army(bot, main_army, bot.natural_expansion.towards(bot.game_info.map_center, 2), bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
         print("Regrouping army")
+
+
+def army_strength(main_army_power: Units) -> float:
+    """
+    Returns the total strength of the main army.
+    """
+    total_strength = 0.0
+    for unit in main_army_power:
+        power = UNIT_DATA[unit.type_id]['army_value']
+        # Multiply power by the effective power (health + shield) scaled by 50.0, tweak if needed
+        total_strength += power * ((unit.health + unit.shield) / 50.0)
+
+    return total_strength
+
+
+def enemy_strength(bot) -> float:
+    """
+    Returns the total strength of the enemy army.
+    """
+    total_strength = 0.0
+    enemy_units = bot.mediator.get_all_enemy()
+    
+    for unit in enemy_units:
+        if unit.type_id in UNIT_DATA:
+            power = UNIT_DATA[unit.type_id]['army_value']
+            # Multiply power by the effective power (health + shield) scaled by 50.0, tweak if needed
+            total_strength += power * ((unit.health + unit.shield) / 50.0)
+
+    return total_strength
