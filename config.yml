@@ -7,7 +7,7 @@ MyBotName: PiG_Bot
 MyBotRace: Protoss
 # setting ture allows auto upload to aiareana (https://aiarena.net/) on push to `main` branch
 # see tutorial on readme before setting to True
-AutoUploadToAiarena: False
+AutoUploadToAiarena: True
 ########################
 
 UseData: False
@@ -19,12 +19,12 @@ DebugGameStep: 4
 Features:
     # this grid is useful for disruptor balls and maybe some other uses
     # off by default to save computation
-    TacticalGroundGrid: False
+    TacticalGroundGrid: True
 
 DebugOptions:
     # one of: Air, AirVsGround, Ground, GroundAvoidance, AirAvoidance
     ActiveGrid: TacticalGround
-    ChatDebug: True
+    ChatDebug: False
     DebugSpawn: False
     ShowPathingCost: False
     ResourceDebug: False
