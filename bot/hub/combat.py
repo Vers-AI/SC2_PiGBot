@@ -48,6 +48,7 @@ COMMON_UNIT_IGNORE_TYPES: set[UnitTypeId] = {
     UnitTypeId.CHANGELINGMARINE,
     UnitTypeId.CHANGELINGZEALOT,
     UnitTypeId.CHANGELINGZERGLING,
+    UnitTypeId.BROODLING
 }
 
 
@@ -284,7 +285,7 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
             enemy_center, _ = cy_find_units_center_mass(bot.enemy_units, 10.0)
             control_main_army(bot, main_army, Point2(enemy_center), bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
     else:
-        if bot.time > 3 * 60: #TODO replace with a better indicator, perhaps after build runner is complete: self.build_order_runner.build_completed
+        if bot.build_order_runner.build_completed:
             # Handle attack toggles logic as before
             army_strength_value = army_strength(main_army)
             enemy_strength_value = enemy_strength(bot)
