@@ -20,7 +20,7 @@ BuildChoices:
     Zerg:
         BotName: ZergRace
         Cycle:
-            - B2GM_Starting_Build
+            - B2GM_Starting_Build_PVZ
     Random:
         BotName: RandomRace
         Cycle:
@@ -41,8 +41,69 @@ Builds:
         OpeningBuildOrder:
             - 14 PYLON @ NAT
             - 16 GATEWAY @ NAT
-            - 16 WORKER_SCOUT
             - 16 CHRONO @ NEXUS
+            - 16 WORKER_SCOUT:
+                [enemy_spawn, enemy_nat, map_center, fourth,third, enemy_nat,spawn,nat,]
+            - 16 GAS
+            - 20 EXPAND
+            - 20 CORE @ NAT
+            - 21 PYLON
+            - 21 GAS
+            - 22 WARPGATERESEARCH
+            - 22 CHRONO @ NEXUS # chroning instead of cyber
+            - 24 STALKER
+            - 26 CHRONO @ GATEWAY
+            - 26 ROBOTICSFACILITY
+            - 27 STALKER
+            - 27 CHRONO @ NEXUS #Chrono Gateway if PVP instead of NEXUS
+            - 28 GATEWAY *2 @ NAT
+            - 30 STALKER
+            - 33 CHRONO @ NEXUS
+            - 34 PYLON @ NAT
+            - 34 OBSERVER
+            - 35 GAS x2
+            - 40 IMMORTAL
+            - 40 CHRONO @  ROBOTICSFACILITY
+            - 48 STALKER *3 @ NAT
+            - 50 ROBOTICSBAY
+            - 50 ROBOTICSFACILITY
+            - 52 IMMORTAL
+            - 54 EXPAND
+            - 55 COLOSSUS x2
+            - 55 CHRONO @ ROBOTICSFACILITY x2
+            - 56 EXTENDEDTHERMALLANCE
+            - 56 TWILIGHTCOUNCIL
+            - 56 FORGE
+            - 57 CHRONO @ ROBOTICSBAY
+            - 58 GAS x2
+            - 58 PROTOSSGROUNDARMORSLEVEL1
+            - 58 CHARGE
+            - 59 CHRONO @ FORGE
+            - 59 DISRUPTOR
+            - 59 CHRONO @ TWILIGHTCOUNCIL 
+            - 62 GATEWAY 
+            - 62 GATEWAY
+            - 62 GATEWAY
+            - 62 GATEWAY
+            - 62 GATEWAY
+            - 62 TEMPLARARCHIVE
+            - 63 CHRONO @ FORGE
+            - 64 WARPPRISM
+            - 64 DISRUPTOR
+            - 66 HIGHTEMPLAR *4 @ NAT
+            - 66 ZEALOT *2 @ NAT
+
+    B2GM_Starting_Build_PVZ:
+        # Build constant worker production till this supply
+        ConstantWorkerProductionTill: 44
+        # After 0 supply turn AutoSupply on
+        AutoSupplyAtSupply: 33
+        OpeningBuildOrder:
+            - 14 PYLON @ NAT
+            - 16 GATEWAY @ NAT
+            - 16 CHRONO @ NEXUS
+            - 16 WORKER_SCOUT:
+                [enemy_spawn, enemy_nat, map_center, fourth,third, enemy_nat]
             - 16 GAS
             - 20 EXPAND
             - 20 CORE @ NAT
@@ -66,7 +127,7 @@ Builds:
             - 48 STALKER *3 @ NAT
             - 50 ROBOTICSBAY
             - 50 ROBOTICSFACILITY
-            - 52 IMMORTAL
+            - 52 IMMORTAL x2
             - 54 EXPAND
             - 55 COLOSSUS x2
             - 55 CHRONO @ ROBOTICSFACILITY x2
@@ -78,7 +139,7 @@ Builds:
             - 58 PROTOSSGROUNDARMORSLEVEL1
             - 58 CHARGE
             - 59 CHRONO @ FORGE
-            - 59 IMMORTAL x2
+            - 59 DISRUPTOR x2
             - 59 CHRONO @ TWILIGHTCOUNCIL 
             - 62 GATEWAY 
             - 62 GATEWAY
@@ -91,6 +152,29 @@ Builds:
             - 64 IMMORTAL
             - 66 HIGHTEMPLAR *4 @ NAT
             - 66 ZEALOT *2 @ NAT
-             
-   
-    
+
+    One_Base_Reaction_Build:
+        # One base reaction Build order
+        ConstantWorkerProductionTill: 44
+        OpeningBuildOrder:
+            - 14 PYLON
+            - 16 GATEWAY @ NAT
+            - 16 CHRONO @ GATEWAY
+            - 20 STALKER *3
+            - 20 SHIELDBATTERY @ NAT
+            - 24 SHIELDBATTERY 
+            - 24 PYLON @ NAT
+
+    Cheese_Reaction_Build:
+        # Chesese reaction Build order
+        OpeningBuildOrder:
+            - 14 PYLON @ NAT
+            - 16 GATEWAY @ NAT
+            - 18 ZEALOT
+            - 18 SHIELDBATTERY @ NAT
+            - 20 ZEALOT
+            - 22 PYLON @ NAT
+            - 22 GATEWAY @ NAT
+            - 24 WARPGATERESEARCH
+            - 24 PYLON @ NAT
+            - 24 CHRONO @ GATEWAY
