@@ -20,12 +20,11 @@ from bot.hub.scouting import control_scout
 
 # Army composition constants 
 STANDARD_ARMY = {
-    UnitTypeId.IMMORTAL: {"proportion": 0.2, "priority": 2},
-    UnitTypeId.COLOSSUS: {"proportion": 0.1, "priority": 3},
-    UnitTypeId.HIGHTEMPLAR: {"proportion": 0.35, "priority": 1},
-    UnitTypeId.DISRUPTOR: {"proportion": 0.1, "priority": 1},
-    UnitTypeId.ZEALOT: {"proportion": 0.24, "priority": 0},
-    UnitTypeId.WARPPRISM: {"proportion": 0.01, "priority": 0},
+    UnitTypeId.IMMORTAL: {"proportion": 0.2, "priority": 1},
+    UnitTypeId.COLOSSUS: {"proportion": 0.1, "priority": 4},
+    UnitTypeId.HIGHTEMPLAR: {"proportion": 0.35, "priority": 0},
+    UnitTypeId.DISRUPTOR: {"proportion": 0.1, "priority": 3},
+    UnitTypeId.ZEALOT: {"proportion": 0.25, "priority": 5},
 }
 
 CHEESE_DEFENSE_ARMY = {
@@ -51,7 +50,7 @@ async def handle_macro(
     if bot.build_order_runner.build_completed and not bot._used_cheese_response:
         macro_plan: MacroPlan = MacroPlan()
         macro_plan.add(AutoSupply(base_location=bot.start_location))
-        macro_plan.add(ProductionController(STANDARD_ARMY, base_location=bot.start_location))
+        macro_plan.add(ProductionController(STANDARD_ARMY, base_location=bot.start_location, should_repower_structures=True))
         bot.register_behavior(BuildWorkers(to_count=len(bot.townhalls) * 22))
         bot.register_behavior(
                 GasBuildingController(to_count=len(bot.townhalls)*2, max_pending=2)
@@ -75,10 +74,9 @@ async def handle_macro(
         bot.register_behavior(macro_plan)
 
     # If we detected cheese
-    #TODO have it switch to standard army if we're in the mid-game after doing cheese defense
     elif bot._cheese_reaction_completed:
         bot.register_behavior(BuildWorkers(to_count=len(bot.townhalls) * 22))
-        if not bot._under_attack:
+        if not bot._under_attack and bot.time < 7 * 60:
             bot.register_behavior(
                 ExpansionController(to_count=3, max_pending=1)
             )
@@ -93,11 +91,23 @@ async def handle_macro(
                 SpawnController(CHEESE_DEFENSE_ARMY, spawn_target=bot.start_location, freeflow_mode=freeflow)
             )
             cheese_defense_plan.add(
-                ProductionController(CHEESE_DEFENSE_ARMY, base_location=bot.start_location)
+                ProductionController(CHEESE_DEFENSE_ARMY, base_location=bot.start_location, should_repower_structures=True)
             )
 
             bot.register_behavior(cheese_defense_plan)
-
+        else:
+            cheese_macro_plan: MacroPlan = MacroPlan()
+            # Change to Standard Army
+            cheese_macro_plan.add(AutoSupply(base_location=bot.start_location))
+            cheese_macro_plan.add(
+                ExpansionController(to_count=6, max_pending=1)
+            )
+            cheese_macro_plan.add(
+                GasBuildingController(to_count=len(bot.townhalls)*2, max_pending=2)
+            )
+            cheese_macro_plan.add(ProductionController(STANDARD_ARMY, base_location=bot.start_location, should_repower_structures=True))
+            cheese_macro_plan.add(SpawnController(STANDARD_ARMY, freeflow_mode=False))
+            bot.register_behavior(cheese_macro_plan)
         
 
 
@@ -121,10 +131,4 @@ async def handle_macro(
 
 
 
-def _chrono_townhalls(bot) -> None:
-    """
-    Helper function to chrono your townhalls if possible.
-    """
-    for th in bot.townhalls:
-        if not th.is_idle and th.energy >= 50:
-            th(AbilityId.EFFECT_CHRONOBOOST, th)
+
