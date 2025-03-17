@@ -47,7 +47,7 @@ async def handle_macro(
     or transitions to late game. Call this in your bot's on_step.
     """
     # If our build is done and we haven't detected cheese, do standard macro
-    if bot.build_order_runner.build_completed and not bot._used_cheese_response:
+    if bot.build_order_runner.build_completed and not bot._cheese_reaction_completed:
         macro_plan: MacroPlan = MacroPlan()
         macro_plan.add(AutoSupply(base_location=bot.start_location))
         macro_plan.add(ProductionController(STANDARD_ARMY, base_location=bot.start_location, should_repower_structures=True))

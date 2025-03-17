@@ -167,14 +167,17 @@ Builds:
 
     Cheese_Reaction_Build:
         # Chesese reaction Build order
+        ConstantWorkerProductionTill: 20
         OpeningBuildOrder:
-            - 14 PYLON @ NAT
-            - 16 GATEWAY @ NAT
-            - 18 ZEALOT
-            - 18 SHIELDBATTERY @ NAT
-            - 20 ZEALOT
-            - 22 PYLON @ NAT
-            - 22 GATEWAY @ NAT
+            - 21 PYLON @ NAT
+            - 21 GATEWAY @ NAT
+            - 21 CORE @ NAT
+            - 21 ZEALOT
+            - 23 SHIELDBATTERY @ NAT
+            - 23 ZEALOT
+            - 24 PYLON @ NAT
+            - 24 GATEWAY @ NAT
             - 24 WARPGATERESEARCH
             - 24 PYLON @ NAT
             - 24 CHRONO @ GATEWAY
+        
