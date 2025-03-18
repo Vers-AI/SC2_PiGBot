@@ -156,6 +156,7 @@ Builds:
     One_Base_Reaction_Build:
         # One base reaction Build order
         ConstantWorkerProductionTill: 44
+        AutoSupplyAtSupply: 0
         OpeningBuildOrder:
             - 14 PYLON
             - 16 GATEWAY @ NAT
@@ -168,13 +169,14 @@ Builds:
     Cheese_Reaction_Build:
         # Chesese reaction Build order
         ConstantWorkerProductionTill: 20
+        AutoSupplyAtSupply: 0
         OpeningBuildOrder:
-            - 21 PYLON @ NAT
-            - 21 GATEWAY @ NAT
-            - 21 CORE @ NAT
-            - 21 ZEALOT
-            - 23 SHIELDBATTERY @ NAT
-            - 23 ZEALOT
+            - 20 PYLON @ NAT
+            - 20 GATEWAY @ NAT
+            - 20 CORE @ NAT
+            - 20 ZEALOT
+            - 22 SHIELDBATTERY @ NAT
+            - 22 ZEALOT
             - 24 PYLON @ NAT
             - 24 GATEWAY @ NAT
             - 24 WARPGATERESEARCH

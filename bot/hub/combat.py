@@ -191,7 +191,7 @@ def warp_prism_follower(bot, warp_prisms: Units, main_army: Units) -> None:
 
     bot.register_behavior(maneuver)
 
-
+#TODO Move all threat logics to reactions.py
 def assess_threat(bot, enemy_units: Units, own_forces: Units) -> int: 
     """
     Assigns a 'threat level' based on unit composition.

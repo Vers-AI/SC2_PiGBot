@@ -60,9 +60,7 @@ def cheese_reaction(bot):
         for pt in bot.townhalls.not_ready:
             bot.mediator.cancel_structure(structure=pt)
 
-    # Set the flag if the build order is completed
-    if bot.build_order_runner.build_completed:
-        bot._cheese_reaction_completed = True
+    
 
 def one_base_reaction(bot):
     bot.build_order_runner.switch_opening("One_Base_Reaction_Build")

@@ -47,7 +47,8 @@ async def handle_macro(
     or transitions to late game. Call this in your bot's on_step.
     """
     # If our build is done and we haven't detected cheese, do standard macro
-    if bot.build_order_runner.build_completed and not bot._cheese_reaction_completed:
+    if not bot._used_cheese_response:
+        print("Standard macro")
         macro_plan: MacroPlan = MacroPlan()
         macro_plan.add(AutoSupply(base_location=bot.start_location))
         macro_plan.add(ProductionController(STANDARD_ARMY, base_location=bot.start_location, should_repower_structures=True))
@@ -74,9 +75,10 @@ async def handle_macro(
         bot.register_behavior(macro_plan)
 
     # If we detected cheese
-    elif bot._cheese_reaction_completed:
+    else:
+        print("Cheese reaction")
         bot.register_behavior(BuildWorkers(to_count=len(bot.townhalls) * 22))
-        if not bot._under_attack and bot.time < 7 * 60:
+        if bot.time < 6 * 60:
             bot.register_behavior(
                 ExpansionController(to_count=3, max_pending=1)
             )
@@ -96,18 +98,10 @@ async def handle_macro(
 
             bot.register_behavior(cheese_defense_plan)
         else:
-            cheese_macro_plan: MacroPlan = MacroPlan()
-            # Change to Standard Army
-            cheese_macro_plan.add(AutoSupply(base_location=bot.start_location))
-            cheese_macro_plan.add(
-                ExpansionController(to_count=6, max_pending=1)
-            )
-            cheese_macro_plan.add(
-                GasBuildingController(to_count=len(bot.townhalls)*2, max_pending=2)
-            )
-            cheese_macro_plan.add(ProductionController(STANDARD_ARMY, base_location=bot.start_location, should_repower_structures=True))
-            cheese_macro_plan.add(SpawnController(STANDARD_ARMY, freeflow_mode=False))
-            bot.register_behavior(cheese_macro_plan)
+            #switch to the mid game build order
+            bot._used_cheese_response = False
+            bot._cheese_reaction_completed = True
+            print("Cheese reaction completed")
         
 
 

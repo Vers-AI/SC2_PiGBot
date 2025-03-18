@@ -130,27 +130,30 @@ class PiG_Bot(AresBot):
         squads: list[UnitSquad] = self.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15)
 
         # If not under attack and build order isn't done, do an early threat check
-        if not self._under_attack and not self.build_order_runner.build_completed:
-            early_threat_sensor(self)
+        if not self.build_order_runner.build_completed:
+            if not self._under_attack:
+                early_threat_sensor(self)
+            # If cheese or one-base flags are set, handle them
+            if self._used_cheese_response:
+                cheese_reaction(self)
+            if self._used_one_base_response:
+                one_base_reaction(self)
+        else:
+            # Run combat-oriented threat detection
+            #TODO change parameters in the future when multi-squad support is added
+            threat_detection(self, main_army)
 
-        # If cheese or one-base flags are set, handle them
-        if self._used_cheese_response:
-            cheese_reaction(self)
-        if self._used_one_base_response:
-            one_base_reaction(self)
+            # Macro calls
+            await handle_macro(
+                bot=self,
+                iteration=iteration,
+                main_army=main_army,
+                warp_prism=warp_prism,
+                scout_units=scout_units,
+                freeflow=self.freeflow,
+            )
 
-        # Macro calls
-        await handle_macro(
-            bot=self,
-            iteration=iteration,
-            main_army=main_army,
-            warp_prism=warp_prism,
-            scout_units=scout_units,
-            freeflow=self.freeflow,
-        )
-
-        # Run combat-oriented threat detection
-        threat_detection(self, main_army)
+        
 
         # Handle attack toggles if main_army exists
         if main_army:
