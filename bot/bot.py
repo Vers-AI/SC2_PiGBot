@@ -69,8 +69,6 @@ class PiG_Bot(AresBot):
         self.scout_targets = {}
         self.bases = {}
         self.total_health_shield_percentage = 1.0
-        
-        # Game state tracking
         self.game_state = "early"
         self.early_game_threshold = 360  # 6 minutes in seconds
         self.mid_game_threshold = 720    # 12 minutes in seconds
@@ -83,6 +81,9 @@ class PiG_Bot(AresBot):
         self._cheese_reaction_completed = False
         self._one_base_reaction_completed = False
         self._is_building = False
+
+        # Debug flags
+        self.debug = True
 
 
 
