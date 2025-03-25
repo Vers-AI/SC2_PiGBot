@@ -69,6 +69,11 @@ class PiG_Bot(AresBot):
         self.scout_targets = {}
         self.bases = {}
         self.total_health_shield_percentage = 1.0
+        
+        # Game state tracking
+        self.game_state = "early"
+        self.early_game_threshold = 360  # 6 minutes in seconds
+        self.mid_game_threshold = 720    # 12 minutes in seconds
 
         # Flags for in-game logic
         self._commenced_attack = False
@@ -118,6 +123,15 @@ class PiG_Bot(AresBot):
         """
         await super(PiG_Bot, self).on_step(iteration)
         self.register_behavior(Mining()) #ares Mining 
+
+        # Update game state based on game time
+        current_time = self.time
+        if current_time >= self.mid_game_threshold and self.game_state != "late":
+            self.game_state = "late"
+            print(f"Game state changed to LATE GAME at {current_time:.1f} seconds")
+        elif current_time >= self.early_game_threshold and self.game_state == "early":
+            self.game_state = "mid"
+            print(f"Game state changed to MID GAME at {current_time:.1f} seconds")
 
         # Retrieve roles
         main_army = self.mediator.get_units_from_role(role=UnitRole.ATTACKING)
