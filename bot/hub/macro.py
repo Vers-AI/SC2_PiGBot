@@ -20,12 +20,18 @@ from bot.hub.scouting import control_scout
 from bot.hub.combat import COMMON_UNIT_IGNORE_TYPES, enemy_strength, army_strength
 
 # Army composition constants 
-STANDARD_ARMY = {
+STANDARD_ARMY_0 = {
     UnitTypeId.IMMORTAL: {"proportion": 0.2, "priority": 1},
     UnitTypeId.COLOSSUS: {"proportion": 0.1, "priority": 4},
     UnitTypeId.HIGHTEMPLAR: {"proportion": 0.35, "priority": 0},
     UnitTypeId.DISRUPTOR: {"proportion": 0.1, "priority": 3},
     UnitTypeId.ZEALOT: {"proportion": 0.25, "priority": 5},
+}
+STANDARD_ARMY_1 = {
+    UnitTypeId.IMMORTAL: {"proportion": 0.35, "priority": 1},
+    UnitTypeId.COLOSSUS: {"proportion": 0.2, "priority": 4},
+    UnitTypeId.DISRUPTOR: {"proportion": 0.1, "priority": 3},
+    UnitTypeId.ZEALOT: {"proportion": 0.35, "priority": 0},
 }
 
 CHEESE_DEFENSE_ARMY = {
@@ -103,11 +109,11 @@ def expansion_checker(bot, main_army) -> int:
     expansion_count = current_bases
     
     # Debug information
-    print(f"Game state: {bot.game_state}")
-    print(f"Worker saturation: {worker_saturation:.2f} ({current_workers}/{optimal_workers})")
-    print(f"Mineral collection rate: {mineral_collection_rate}")
-    print(f"Own army value: {own_army_value}")
-    print(f"Enemy army value: {enemy_army_value}")
+    # print(f"Game state: {bot.game_state}")
+    # print(f"Worker saturation: {worker_saturation:.2f} ({current_workers}/{optimal_workers})")
+    # print(f"Mineral collection rate: {mineral_collection_rate}")
+    # print(f"Own army value: {own_army_value}")
+    # print(f"Enemy army value: {enemy_army_value}")
     
     # Step 1: Check if collection rate is below threshold
     if mineral_collection_rate < collection_threshold:
@@ -140,6 +146,39 @@ def expansion_checker(bot, main_army) -> int:
     return expansion_count
 
 
+def select_army_composition(bot, main_army: Units) -> dict:
+    """
+    Determines which army composition to use based on the current army state.
+    Switches from STANDARD_ARMY_0 to STANDARD_ARMY_1 when Archons reach a threshold percentage.
+    
+    Returns:
+        dict: The selected army composition dictionary
+    """
+    # Default to STANDARD_ARMY_0
+    selected_composition = STANDARD_ARMY_0
+    
+    # Only evaluate composition switch if we have a main army
+    if main_army and len(main_army) > 0:
+        # Count Archons in the main army
+        archon_count = sum(1 for unit in main_army if unit.type_id == UnitTypeId.ARCHON)
+        
+        # Calculate the percentage of Archons in the army
+        archon_percentage = archon_count / len(main_army) if len(main_army) > 0 else 0
+        
+        # Debug info
+        if bot.debug:
+            print(f"Archon percentage: {archon_percentage:.2f} ({archon_count}/{len(main_army)})")
+        
+        # If Archons are at least 35% of our army, switch to STANDARD_ARMY_1
+        # This threshold matches the High Templar proportion in STANDARD_ARMY_0
+        if archon_percentage >= 0.35:
+            selected_composition = STANDARD_ARMY_1
+            if bot.debug:
+                print("Switching to STANDARD_ARMY_1 due to high Archon count")
+    
+    return selected_composition
+
+
 async def handle_macro(
     bot,
     iteration: int,
@@ -158,7 +197,12 @@ async def handle_macro(
         print("Standard macro")
         macro_plan: MacroPlan = MacroPlan()
         macro_plan.add(AutoSupply(base_location=bot.start_location))
-        macro_plan.add(ProductionController(STANDARD_ARMY, base_location=bot.start_location, should_repower_structures=True))
+        
+        # Select army composition based on current army state
+        army_composition = select_army_composition(bot, main_army)
+        
+        # Use the selected army composition for production
+        macro_plan.add(ProductionController(army_composition, base_location=bot.start_location, should_repower_structures=True))
         
         # Calculate optimal worker count based on available resources
         optimal_worker_count = calculate_optimal_worker_count(bot)
@@ -180,10 +224,10 @@ async def handle_macro(
         if warp_prism:
             prism_position = warp_prism[0].position
             macro_plan.add(
-                SpawnController(STANDARD_ARMY, spawn_target=prism_position, freeflow_mode=False)
+                SpawnController(army_composition, spawn_target=prism_position, freeflow_mode=False)
             )
         else:
-            macro_plan.add(SpawnController(STANDARD_ARMY, freeflow_mode=False))
+            macro_plan.add(SpawnController(army_composition, freeflow_mode=False))
 
         bot.register_behavior(macro_plan)
 
