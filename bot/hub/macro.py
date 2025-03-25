@@ -194,7 +194,6 @@ async def handle_macro(
     # If our build is done and we haven't detected cheese, do standard macro
     
     if not bot._used_cheese_response:
-        print("Standard macro")
         macro_plan: MacroPlan = MacroPlan()
         macro_plan.add(AutoSupply(base_location=bot.start_location))
         
