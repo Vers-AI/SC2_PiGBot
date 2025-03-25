@@ -69,6 +69,9 @@ class PiG_Bot(AresBot):
         self.scout_targets = {}
         self.bases = {}
         self.total_health_shield_percentage = 1.0
+        self.game_state = "early"
+        self.early_game_threshold = 360  # 6 minutes in seconds
+        self.mid_game_threshold = 720    # 12 minutes in seconds
 
         # Flags for in-game logic
         self._commenced_attack = False
@@ -78,6 +81,9 @@ class PiG_Bot(AresBot):
         self._cheese_reaction_completed = False
         self._one_base_reaction_completed = False
         self._is_building = False
+
+        # Debug flags
+        self.debug = False
 
 
 
@@ -119,6 +125,15 @@ class PiG_Bot(AresBot):
         await super(PiG_Bot, self).on_step(iteration)
         self.register_behavior(Mining()) #ares Mining 
 
+        # Update game state based on game time
+        current_time = self.time
+        if current_time >= self.mid_game_threshold and self.game_state != "late":
+            self.game_state = "late"
+            print(f"Game state changed to LATE GAME at {current_time:.1f} seconds")
+        elif current_time >= self.early_game_threshold and self.game_state == "early":
+            self.game_state = "mid"
+            print(f"Game state changed to MID GAME at {current_time:.1f} seconds")
+
         # Retrieve roles
         main_army = self.mediator.get_units_from_role(role=UnitRole.ATTACKING)
         warp_prism = self.mediator.get_units_from_role(role=UnitRole.DROP_SHIP)
@@ -130,27 +145,30 @@ class PiG_Bot(AresBot):
         squads: list[UnitSquad] = self.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15)
 
         # If not under attack and build order isn't done, do an early threat check
-        if not self._under_attack and not self.build_order_runner.build_completed:
-            early_threat_sensor(self)
+        if not self.build_order_runner.build_completed:
+            if not self._under_attack:
+                early_threat_sensor(self)
+            # If cheese or one-base flags are set, handle them
+            if self._used_cheese_response:
+                cheese_reaction(self)
+            if self._used_one_base_response:
+                one_base_reaction(self)
+        else:
+            # Run combat-oriented threat detection
+            #TODO change parameters in the future when multi-squad support is added
+            threat_detection(self, main_army)
 
-        # If cheese or one-base flags are set, handle them
-        if self._used_cheese_response:
-            cheese_reaction(self)
-        if self._used_one_base_response:
-            one_base_reaction(self)
+            # Macro calls
+            await handle_macro(
+                bot=self,
+                iteration=iteration,
+                main_army=main_army,
+                warp_prism=warp_prism,
+                scout_units=scout_units,
+                freeflow=self.freeflow,
+            )
 
-        # Macro calls
-        await handle_macro(
-            bot=self,
-            iteration=iteration,
-            main_army=main_army,
-            warp_prism=warp_prism,
-            scout_units=scout_units,
-            freeflow=self.freeflow,
-        )
-
-        # Run combat-oriented threat detection
-        threat_detection(self, main_army)
+        
 
         # Handle attack toggles if main_army exists
         if main_army:

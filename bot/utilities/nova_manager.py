@@ -66,7 +66,9 @@ class NovaManager:
             nova: Either a Nova unit or a UseDisruptorNova behavior instance
         """
         from bot.utilities.use_disruptor_nova import UseDisruptorNova
-        
+        self.nova_speed = nova.movement_speed
+        print(f"DEBUG: NovaManager movement speed set to {self.nova_speed} game units/second")
+
         if not hasattr(nova, 'update_info'):
             nova_instance = UseDisruptorNova(mediator=self.mediator, bot=self.bot)
             nova_instance.load_info(nova)

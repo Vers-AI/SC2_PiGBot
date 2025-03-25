@@ -325,7 +325,7 @@ class UseDisruptorNova(CombatIndividualBehavior):
             unit: The Nova unit to track
         """
         self.unit = unit
-        self.frames_left = 48  # Nova lifetime (2.1s * 22.4 fps)
+        self.frames_left = 47  # Nova lifetime (2.1s * 22.4 fps)
         self.distance_left = self.calculate_distance_left(unit.movement_speed)
         self.best_target_pos = unit.position  # Initial target position
         

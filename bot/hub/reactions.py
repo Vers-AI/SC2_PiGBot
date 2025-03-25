@@ -60,9 +60,7 @@ def cheese_reaction(bot):
         for pt in bot.townhalls.not_ready:
             bot.mediator.cancel_structure(structure=pt)
 
-    # Set the flag if the build order is completed
-    if bot.build_order_runner.build_completed:
-        bot._cheese_reaction_completed = True
+    
 
 def one_base_reaction(bot):
     bot.build_order_runner.switch_opening("One_Base_Reaction_Build")
@@ -77,6 +75,7 @@ def early_threat_sensor(bot):
     Detects early threats like zergling rush, proxy zealots, etc.
     Sets flags so the bot can respond (e.g., cheese_reaction).
     """
+    # TODO worker rush response
     if bot.mediator.get_enemy_worker_rushed:
         print("Rushed worker detected")
 

@@ -191,7 +191,7 @@ def warp_prism_follower(bot, warp_prisms: Units, main_army: Units) -> None:
 
     bot.register_behavior(maneuver)
 
-
+#TODO Move all threat logics to reactions.py
 def assess_threat(bot, enemy_units: Units, own_forces: Units) -> int: 
     """
     Assigns a 'threat level' based on unit composition.
@@ -271,29 +271,87 @@ def threat_detection(bot, main_army: Units) -> None:
 def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
     """
     Handles the attack toggles logic.
+    
+    Controls when to attack and when to retreat based on relative army strength
+    and threat assessment.
     """
+    # Calculate strength values for decision making
+    army_strength_value = army_strength(main_army)
+    enemy_strength_value = enemy_strength(bot)
+    
     # Assess the threat level of enemy units
     enemy_threat_level = assess_threat(bot, bot.enemy_units, main_army)
-    #TODO review the logic of this function
-    # If the army is already attacking, decide based on threat level
+
+    # Set attack threshold ratio (0.8 means we attack when our army is 80% or more of enemy strength)
+    attack_threshold_ratio = 0.8
+    # Set minimum army strength before attacking regardless of enemy strength
+    min_attack_strength = 1000
+    # Set retreat threshold ratio (0.6 means we retreat if our army falls below 60% of enemy strength)
+    retreat_threshold_ratio = 0.6
+    
+    # Early game safety - don't attack during cheese or one-base reactions
+    is_early_defensive_mode = bot._used_cheese_response or bot._used_one_base_response
+    # Only clear early defensive mode when the one-base reaction is completed
+    if (is_early_defensive_mode and bot._one_base_reaction_completed) or bot.game_state == "mid":
+        is_early_defensive_mode = False
+    
+    # Debug info
+    if bot.debug:
+        bot.client.debug_text_2d(f"Army: {army_strength_value:.0f} Enemy: {enemy_strength_value:.0f} Ratio: {(army_strength_value/max(enemy_strength_value, 1)):.2f}", 
+                                Point2((0.1, 0.2)), None, 14)
+        bot.client.debug_text_2d(f"Attack: {bot._commenced_attack} Threat: {enemy_threat_level} Under Attack: {bot._under_attack}", 
+                                Point2((0.1, 0.22)), None, 14)
+        bot.client.debug_text_2d(f"EarlyDefMode: {is_early_defensive_mode} Cheese: {bot._used_cheese_response} OneBase: {bot._used_one_base_response}", 
+                                Point2((0.1, 0.24)), None, 14)
+
+    # If the army is already attacking, decide whether to continue or retreat
     if bot._commenced_attack:
-        if enemy_threat_level < 5:
-            # Continue attacking the original target
-            control_main_army(bot, main_army, attack_target, bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
-        else:
-            # Redirect to engage the enemy if threat is high
+        # Immediately retreat if we enter an early defensive mode
+        if is_early_defensive_mode:
+            bot._commenced_attack = False
+            nearest_base = bot.townhalls.closest_to(main_army.center)
+            if nearest_base:
+                control_main_army(bot, main_army, nearest_base.position, 
+                                bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
+        # Decide whether to retreat based on army ratio
+        elif (army_strength_value < enemy_strength_value * retreat_threshold_ratio and 
+            army_strength_value < min_attack_strength):
+            # Retreat to the closest base if we're outmatched
+            bot._commenced_attack = False
+            nearest_base = bot.townhalls.closest_to(main_army.center)
+            if nearest_base:
+                control_main_army(bot, main_army, nearest_base.position, 
+                                bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
+        # If high threat detected, redirect to engage the enemy units
+        elif enemy_threat_level >= 5:
             enemy_center, _ = cy_find_units_center_mass(bot.enemy_units, 10.0)
-            control_main_army(bot, main_army, Point2(enemy_center), bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
+            control_main_army(bot, main_army, Point2(enemy_center), 
+                            bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
+        # Otherwise, continue attacking the original target
+        else:
+            control_main_army(bot, main_army, attack_target, 
+                            bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
     else:
-        if bot.build_order_runner.build_completed:
-            # Handle attack toggles logic as before
-            army_strength_value = army_strength(main_army)
-            enemy_strength_value = enemy_strength(bot)
-            if army_strength_value <= enemy_strength_value:
-                bot._commenced_attack = False
-            elif not bot._under_attack:
-                control_main_army(bot, main_army, attack_target, bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
+        # Only consider attacking if build order is complete and not in early defensive mode
+        if bot.build_order_runner.build_completed and not is_early_defensive_mode:
+            # Don't attack if enemy army value is suspiciously low (likely unscouted)
+            if enemy_strength_value < 20 and bot.time > 3 * 60:
+                # Enemy army should have some value by this point, likely unscouted
+                if bot.debug:
+                    bot.client.debug_text_2d(f"Enemy army value suspiciously low, not attacking yet", 
+                                            Point2((0.1, 0.26)), None, 14)
+            # Start attack if we're stronger than threshold ratio or have sufficient force
+            elif ((army_strength_value > enemy_strength_value * attack_threshold_ratio or 
+                army_strength_value > min_attack_strength) and 
+                not bot._under_attack):
+                control_main_army(bot, main_army, attack_target, 
+                                bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
                 bot._commenced_attack = True
+        # When build order isn't complete or in defensive mode, focus on defending if needed
+        elif bot._under_attack and bot.enemy_units:
+            enemy_center, _ = cy_find_units_center_mass(bot.enemy_units, 10.0)
+            control_main_army(bot, main_army, Point2(enemy_center), 
+                            bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
 
 
 def attack_target(bot, main_army_position: Point2) -> Point2:
@@ -369,9 +427,10 @@ def army_strength(main_army_power: Units) -> float:
     """
     total_strength = 0.0
     for unit in main_army_power:
-        power = UNIT_DATA[unit.type_id]['army_value']
-        # Multiply power by the effective power (health + shield) scaled by 50.0, tweak if needed
-        total_strength += power * ((unit.health + unit.shield) / 50.0)
+        if unit.type_id not in COMMON_UNIT_IGNORE_TYPES:
+            power = UNIT_DATA[unit.type_id]['army_value']
+            # Multiply power by the effective power (health + shield) scaled by 50.0, tweak if needed
+            total_strength += power * ((unit.health + unit.shield) / 50.0)
 
     return total_strength
 
@@ -381,12 +440,12 @@ def enemy_strength(bot) -> float:
     Returns the total strength of the enemy army.
     """
     total_strength = 0.0
-    enemy_units = bot.mediator.get_all_enemy()
+    enemy_units = bot.mediator.get_cached_enemy_army
     
     for unit in enemy_units:
-        if unit.type_id in UNIT_DATA:
-            power = UNIT_DATA[unit.type_id]['army_value']
+        if unit.type_id in UNIT_DATA and unit.type_id not in COMMON_UNIT_IGNORE_TYPES:
+            enemy_army_value = UNIT_DATA[unit.type_id]['army_value']
             # Multiply power by the effective power (health + shield) scaled by 50.0, tweak if needed
-            total_strength += power * ((unit.health + unit.shield) / 50.0)
+            total_strength += enemy_army_value * ((unit.health + unit.shield) / 50.0)
 
     return total_strength

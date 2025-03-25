@@ -59,12 +59,12 @@ def main():
         # Local game
         
         map_list: List[str] = [
-            "Equilibrium513AIE",
-            "GoldenAura513AIE",
-            "Gresvan513AIE",
-            "HardLead513AIE",
-            "Oceanborn513AIE",
-            "SiteDelta513AIE"
+            "AbyssalReefAIE",
+            "AcropolisAIE",
+            "AutomatonAIE",
+            "EphemeronAIE",
+            "InterloperAIE",
+            "ThunderbirdAIE"
         ]
 
         random_race = Race.Terran #random.choice([Race.Zerg, Race.Terran, Race.Protoss])
@@ -73,7 +73,7 @@ def main():
             maps.get(random.choice(map_list)),
             [
                 bot1,
-                Computer(Race.Zerg, Difficulty.VeryEasy, ai_build=AIBuild.Macro),
+                Computer(Race.Terran, Difficulty.Hard, ai_build=AIBuild.Rush),
             ],
             realtime=False,
         )
