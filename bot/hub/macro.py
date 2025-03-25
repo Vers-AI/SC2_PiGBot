@@ -17,7 +17,7 @@ from ares.behaviors.macro import (
 from ares.dicts.unit_data import UNIT_DATA
 
 from bot.hub.scouting import control_scout
-from bot.hub.combat import COMMON_UNIT_IGNORE_TYPES
+from bot.hub.combat import COMMON_UNIT_IGNORE_TYPES, enemy_strength, army_strength
 
 # Army composition constants 
 STANDARD_ARMY = {
@@ -85,36 +85,29 @@ def expansion_checker(bot, main_army) -> int:
     mineral_collection_rate = bot.state.score.collection_rate_minerals
     vespene_collection_rate = bot.state.score.collection_rate_vespene
     
-    # Get our army value
-    own_army_value = 0
-    for unit in main_army:
-        if unit.type_id in UNIT_DATA:
-            own_army_value += UNIT_DATA[unit.type_id]['army_value']
+    # Get our army value using the army_strength function
+    own_army_value = army_strength(main_army)
     
-    # Get enemy army value by iterating through all enemy units
-    # Excluding units from COMMON_UNIT_IGNORE_TYPES
-    enemy_army_value = 0
-    for unit in bot.mediator.get_all_enemy:
-        if unit.type_id in UNIT_DATA and unit.type_id not in COMMON_UNIT_IGNORE_TYPES:
-            enemy_army_value += UNIT_DATA[unit.type_id]['army_value']
+    # Get enemy army value using the enemy_strength function
+    enemy_army_value = enemy_strength(bot)
     
     # Set collection rate threshold based on game state
     if bot.game_state == "early":
         collection_threshold = 300
     elif bot.game_state == "mid":
-        collection_threshold = 400
+        collection_threshold = 600
     else:  # late game
-        collection_threshold = 500
+        collection_threshold = 1000
     
     # Default to current number of bases
     expansion_count = current_bases
     
     # Debug information
-    # print(f"Game state: {bot.game_state}")
-    # print(f"Worker saturation: {worker_saturation:.2f} ({current_workers}/{optimal_workers})")
-    # print(f"Mineral collection rate: {mineral_collection_rate}")
-    # print(f"Own army value: {own_army_value}")
-    # print(f"Enemy army value: {enemy_army_value}")
+    print(f"Game state: {bot.game_state}")
+    print(f"Worker saturation: {worker_saturation:.2f} ({current_workers}/{optimal_workers})")
+    print(f"Mineral collection rate: {mineral_collection_rate}")
+    print(f"Own army value: {own_army_value}")
+    print(f"Enemy army value: {enemy_army_value}")
     
     # Step 1: Check if collection rate is below threshold
     if mineral_collection_rate < collection_threshold:
