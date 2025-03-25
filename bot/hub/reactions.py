@@ -75,6 +75,7 @@ def early_threat_sensor(bot):
     Detects early threats like zergling rush, proxy zealots, etc.
     Sets flags so the bot can respond (e.g., cheese_reaction).
     """
+    # TODO worker rush response
     if bot.mediator.get_enemy_worker_rushed:
         print("Rushed worker detected")
 
