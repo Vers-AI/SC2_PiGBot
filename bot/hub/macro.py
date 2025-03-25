@@ -60,7 +60,7 @@ def calculate_optimal_worker_count(bot) -> int:
     worker_count = mineral_spots + gas_spots + 4
     
     # Debug info
-    print(f"Optimal worker count: {worker_count} (Mineral spots: {mineral_spots}, Gas spots: {gas_spots})")
+    # print(f"Optimal worker count: {worker_count} (Mineral spots: {mineral_spots}, Gas spots: {gas_spots})")
     
     return worker_count
 
@@ -110,11 +110,11 @@ def expansion_checker(bot, main_army) -> int:
     expansion_count = current_bases
     
     # Debug information
-    print(f"Game state: {bot.game_state}")
-    print(f"Worker saturation: {worker_saturation:.2f} ({current_workers}/{optimal_workers})")
-    print(f"Mineral collection rate: {mineral_collection_rate}")
-    print(f"Own army value: {own_army_value}")
-    print(f"Enemy army value: {enemy_army_value}")
+    # print(f"Game state: {bot.game_state}")
+    # print(f"Worker saturation: {worker_saturation:.2f} ({current_workers}/{optimal_workers})")
+    # print(f"Mineral collection rate: {mineral_collection_rate}")
+    # print(f"Own army value: {own_army_value}")
+    # print(f"Enemy army value: {enemy_army_value}")
     
     # Step 1: Check if collection rate is below threshold
     if mineral_collection_rate < collection_threshold:
@@ -124,25 +124,25 @@ def expansion_checker(bot, main_army) -> int:
             if own_army_value > enemy_army_value * 0.8 or own_army_value > 1000:
                 # Safe to expand
                 expansion_count = current_bases + 1
-                print(f"Expanding based on army advantage: {expansion_count}")
+                # print(f"Expanding based on army advantage: {expansion_count}")
     else:
         # If we have good income, check if we can expand based on worker saturation
         if worker_saturation > 0.8:
             expansion_count = current_bases + 1
-            print(f"Expanding based on high income and saturation: {expansion_count}")
+            # print(f"Expanding based on high income and saturation: {expansion_count}")
     
     # Timing-based fallback expansions
     if bot.time > 5 * 60 and current_bases < 2:
         expansion_count = max(expansion_count, 2)
-        print(f"Fallback expansion to 2 bases at 5 min: {expansion_count}")
+        # print(f"Fallback expansion to 2 bases at 5 min: {expansion_count}")
     elif bot.time > 8 * 60 and current_bases < 3:
         expansion_count = max(expansion_count, 3)
-        print(f"Fallback expansion to 3 bases at 8 min: {expansion_count}")
+        # print(f"Fallback expansion to 3 bases at 8 min: {expansion_count}")
     
     # Safety check - don't expand too early with little army
     if current_bases == 1 and len(main_army) < 5 and bot.game_state == "early":
         expansion_count = 1
-        print("Limiting expansion count due to safety concerns")
+        # print("Limiting expansion count due to safety concerns")
     
     return expansion_count
 
