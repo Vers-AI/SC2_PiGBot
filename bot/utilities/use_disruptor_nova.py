@@ -292,26 +292,31 @@ class UseDisruptorNova(CombatIndividualBehavior):
             new_target = self.select_best_target(nearby_enemies, friendly_units, nova_manager)
             
             if new_target and new_target != self.best_target_pos:
-                print(f"DEBUG update_target: Target changed from {self.best_target_pos} to {new_target}")
+                print(f"DEBUG update_target: Found potential new target at {new_target}")
                 
-                # Unregister old target if nova_manager is available
+                # First check if the new target can be registered
                 if nova_manager:
                     try:
+                        # Temporarily register the new target
+                        target_registered = nova_manager.register_nova_target(new_target)
+                        
+                        if not target_registered:
+                            print(f"DEBUG update_target: New target {new_target} could not be registered, keeping old target")
+                            return False
+                        
+                        # Now we can safely unregister the old target
                         nova_manager.unregister_nova_target(self.best_target_pos)
-                    except Exception as e:
-                        print(f"DEBUG ERROR unregistering old target: {e}")
-                
-                # Update to new target
-                self.best_target_pos = new_target
-                
-                # Register new target if nova_manager is available
-                if nova_manager:
-                    try:
-                        nova_manager.register_nova_target(new_target)
+                        print(f"DEBUG update_target: Target changed from {self.best_target_pos} to {new_target}")
+                        self.best_target_pos = new_target
+                        return True
                     except Exception as e:
                         print(f"DEBUG ERROR registering new target: {e}")
-                
-                return True
+                        return False
+                else:
+                    # If no nova_manager, just update the target
+                    self.best_target_pos = new_target
+                    print(f"DEBUG update_target: Target changed to {new_target} (no nova_manager)")
+                    return True
             
             return False
         except Exception as e:
@@ -406,11 +411,15 @@ class UseDisruptorNova(CombatIndividualBehavior):
         # Calculate the current distance to the target
         current_distance = disruptor_unit.position.distance_to(target)
         
-        # Debug info
-        print(f"Target distance: {current_distance:.2f}, Max travel distance: {max_travel_distance:.2f}")
+        # Add a safety margin to account for unit movement
+        safety_margin = 2.0  # Can be adjusted based on testing results
+        effective_max_distance = max_travel_distance - safety_margin
         
-        # Check if the target is within range
-        if current_distance <= max_travel_distance:
+        # Debug info
+        print(f"Target distance: {current_distance:.2f}, Max travel distance: {max_travel_distance:.2f}, Effective distance with safety margin: {effective_max_distance:.2f}")
+        
+        # Check if the target is within range (with safety margin)
+        if current_distance <= effective_max_distance:
             # Target is within range, fire the Nova
             try:
                 did_fire = disruptor_unit(ability_id, target)
@@ -430,7 +439,7 @@ class UseDisruptorNova(CombatIndividualBehavior):
         if did_fire:
             # On successful fire, initialize the nova instance and add to active novas
             self.best_target_pos = target
-            self.frames_left = 48  # 2.1 seconds duration at 22.4 frames per sec
+            self.frames_left = 47  # 2.1 seconds duration at 22.4 frames per sec
             return self
         else:
             # If firing failed, unregister the target only if we registered it successfully
