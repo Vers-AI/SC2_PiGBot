@@ -7,7 +7,7 @@ import numpy as np
 # Ares imports (framework-specific)
 from ares import AresBot
 from ares.consts import ALL_STRUCTURES, WORKER_TYPES, UnitRole 
-
+# from ares.managers.unit_manager import UnitManager
 from ares.managers.squad_manager import UnitSquad
 from ares.managers.manager_mediator import ManagerMediator
 from map_analyzer import MapData
@@ -144,9 +144,14 @@ class PiG_Bot(AresBot):
         # Create Squad
         squads: list[UnitSquad] = self.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15)
 
-        # If not under attack and build order isn't done, do an early threat check
+        # Always run combat-oriented threat detection first
+        # This ensures we're always responding to immediate threats regardless of build order status
+        if main_army:  # Only run detection if we have an army to use for defense
+            threat_detection(self, main_army)
+
+        # Early game logic
         if not self.build_order_runner.build_completed:
-            if not self._under_attack:
+            if not self._under_attack:  # Still use early_threat_sensor for cheese detection
                 early_threat_sensor(self)
             # If cheese or one-base flags are set, handle them
             if self._used_cheese_response:
@@ -154,11 +159,7 @@ class PiG_Bot(AresBot):
             if self._used_one_base_response:
                 one_base_reaction(self)
         else:
-            # Run combat-oriented threat detection
-            #TODO change parameters in the future when multi-squad support is added
-            threat_detection(self, main_army)
-
-            # Macro calls
+            # Macro calls (only run if build order is complete)
             await handle_macro(
                 bot=self,
                 iteration=iteration,
@@ -167,8 +168,6 @@ class PiG_Bot(AresBot):
                 scout_units=scout_units,
                 freeflow=self.freeflow,
             )
-
-        
 
         # Handle attack toggles if main_army exists
         if main_army:

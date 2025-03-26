@@ -32,7 +32,7 @@ class NovaManager:
         self.current_targets: Dict[str, Point2] = {}
         
         # Nova constants
-        self.nova_speed = 5.95  # Movement speed (game units/second)
+        self.nova_speed = 4.25  # Movement speed (game units/second)
         self.nova_lifetime = 2.1  # Lifetime (seconds)
         self.nova_radius = 1.5  # Explosion radius
         
@@ -195,18 +195,7 @@ class NovaManager:
             position: The approximate position to unregister
         """
         try:
-            # Use rounded position for lookup to handle small differences
-            rounded_pos = (round(position.x, 2), round(position.y, 2))
-            
-            # Try direct lookup with rounded position first
-            if rounded_pos in self.current_targets:
-                # Get the original Point2 to report in logging
-                actual_pos = self.current_targets[rounded_pos]
-                del self.current_targets[rounded_pos]
-                print(f"DEBUG: Directly unregistered Nova target at {position}, match: {actual_pos}")
-                return
-                
-            # If no direct match, find closest match
+            # Find closest match
             closest_key = None
             min_distance = float('inf')
             
