@@ -11,6 +11,7 @@ from ares.consts import ALL_STRUCTURES, WORKER_TYPES, UnitRole
 from ares.managers.squad_manager import UnitSquad
 from ares.managers.manager_mediator import ManagerMediator
 from map_analyzer import MapData
+from ares.behaviors.macro.restore_power import RestorePower
 
 
 # SC2-related imports
@@ -151,6 +152,7 @@ class PiG_Bot(AresBot):
 
         # Early game logic
         if not self.build_order_runner.build_completed:
+            self.register_behavior(RestorePower()) # Restore power to depowered buildings
             if not self._under_attack:  # Still use early_threat_sensor for cheese detection
                 early_threat_sensor(self)
             # If cheese or one-base flags are set, handle them
