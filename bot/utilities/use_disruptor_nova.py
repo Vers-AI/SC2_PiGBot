@@ -211,8 +211,8 @@ class UseDisruptorNova(CombatIndividualBehavior):
                 
                 print(f"DEBUG: Found maximum influence value {max_value} at position {game_world_pos}")
                 
-                # Check if the value is high enough to be worth targeting
-                influence_threshold = 200
+                # Check if the influence value is high enough to be worth targeting
+                influence_threshold = 205 
                 if max_value > influence_threshold:
                     # Count how many enemies would be hit by this position
                     nearby_enemies = [unit for unit in enemy_units 
