@@ -192,16 +192,17 @@ async def handle_macro(
     or transitions to late game. Call this in your bot's on_step.
     """
     # If our build is done and we haven't detected cheese, do standard macro
-    
+    spawn_location = bot.natural_expansion
+
     if not bot._used_cheese_response:
         macro_plan: MacroPlan = MacroPlan()
-        macro_plan.add(AutoSupply(base_location=bot.start_location))
+        macro_plan.add(AutoSupply(base_location=spawn_location))
         
         # Select army composition based on current army state
         army_composition = select_army_composition(bot, main_army)
         
         # Use the selected army composition for production
-        macro_plan.add(ProductionController(army_composition, base_location=bot.start_location, should_repower_structures=True))
+        macro_plan.add(ProductionController(army_composition, base_location=spawn_location, should_repower_structures=True))
         
         # Calculate optimal worker count based on available resources
         optimal_worker_count = calculate_optimal_worker_count(bot)
@@ -226,7 +227,7 @@ async def handle_macro(
                 SpawnController(army_composition, spawn_target=prism_position, freeflow_mode=False)
             )
         else:
-            macro_plan.add(SpawnController(army_composition, freeflow_mode=False))
+            macro_plan.add(SpawnController(army_composition, spawn_target=spawn_location, freeflow_mode=False))
 
         bot.register_behavior(macro_plan)
 
@@ -247,12 +248,12 @@ async def handle_macro(
 
             # Build a cheese defense plan
             cheese_defense_plan: MacroPlan = MacroPlan()
-            cheese_defense_plan.add(AutoSupply(base_location=bot.start_location))
+            cheese_defense_plan.add(AutoSupply(base_location=spawn_location))
             cheese_defense_plan.add(
-                SpawnController(CHEESE_DEFENSE_ARMY, spawn_target=bot.start_location, freeflow_mode=freeflow)
+                SpawnController(CHEESE_DEFENSE_ARMY, spawn_target=spawn_location, freeflow_mode=freeflow)
             )
             cheese_defense_plan.add(
-                ProductionController(CHEESE_DEFENSE_ARMY, base_location=bot.start_location, should_repower_structures=True)
+                ProductionController(CHEESE_DEFENSE_ARMY, base_location=spawn_location, should_repower_structures=True)
             )
 
             bot.register_behavior(cheese_defense_plan)
@@ -265,10 +266,10 @@ async def handle_macro(
 
 
     # Scout control or build observer if no scout
-    if scout_units and main_army:
-        control_scout(bot, scout_units, main_army)
+    if scout_units:
+        return 
     else:
-        if bot.game_state == "mid":
+        if bot.game_state == "mid" or bot.game_state == "late":
             if bot.structures(UnitTypeId.ROBOTICSFACILITY).ready:
                 if (bot.units(UnitTypeId.OBSERVER).amount < 1 
                     and bot.already_pending(UnitTypeId.OBSERVER) == 0
