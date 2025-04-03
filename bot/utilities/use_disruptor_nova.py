@@ -214,13 +214,30 @@ class UseDisruptorNova(CombatIndividualBehavior):
                 # Check if the value is high enough to be worth targeting
                 influence_threshold = 200
                 if max_value > influence_threshold:
-                    # Count how many enemies would be hit by this position
+                    # Find enemies that would be hit by this position
                     nearby_enemies = [unit for unit in enemy_units 
                                       if unit.position.distance_to(game_world_pos) <= nova_manager.nova_radius]
                     
                     if nearby_enemies:
-                        print(f"DEBUG: Best target at {game_world_pos} will hit {len(nearby_enemies)} enemy units")
-                        return game_world_pos
+                        # Find the unit with highest influence among nearby enemies
+                        best_unit = nearby_enemies[0]  # Default to first unit
+                        best_unit_influence = -float('inf')
+                        
+                        for unit in nearby_enemies:
+                            # Get unit grid position
+                            unit_pos = unit.position.rounded
+                            unit_x, unit_y = int(unit_pos.x), int(unit_pos.y)
+                            
+                            # Check boundaries
+                            if 0 <= unit_x < tactical_grid.shape[1] and 0 <= unit_y < tactical_grid.shape[0]:
+                                unit_influence = tactical_grid[unit_y, unit_x]
+                                if np.isfinite(unit_influence) and unit_influence > best_unit_influence:
+                                    best_unit_influence = unit_influence
+                                    best_unit = unit
+                        
+                        target_position = best_unit.position
+                        print(f"DEBUG: Best target at {target_position} (unit position) will hit {len(nearby_enemies)} enemy units")
+                        return target_position
                     else:
                         print(f"DEBUG: No enemy units would be hit at position {game_world_pos}")
                         return None
