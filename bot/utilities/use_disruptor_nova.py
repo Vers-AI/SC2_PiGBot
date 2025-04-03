@@ -272,6 +272,7 @@ class UseDisruptorNova(CombatIndividualBehavior):
         Returns:
             bool: True if target was updated, False otherwise
         """
+        #TODO refactor to be like select_best_target but restricted to the nova ball
         if not self.best_target_pos or not self.unit:
             return False
             
