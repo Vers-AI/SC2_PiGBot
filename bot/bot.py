@@ -84,7 +84,7 @@ class PiG_Bot(AresBot):
         self._is_building = False
 
         # Debug flags
-        self.debug = False
+        self.debug = True
 
 
 
@@ -112,7 +112,7 @@ class PiG_Bot(AresBot):
 
 
         # Reserve expansions and set flags
-        self.natural_expansion: Point2 = self.expansion_locations_list[-2]
+        self.natural_expansion = self.mediator.get_own_nat
         self.expansions_generator = cycle(self.expansion_locations_list)
         self.freeflow = self.minerals > 800 and self.vespene < 200
 
@@ -126,7 +126,8 @@ class PiG_Bot(AresBot):
         await super(PiG_Bot, self).on_step(iteration)
         self.register_behavior(Mining()) #ares Mining 
 
-        # Update game state based on game time
+        # Update game state based on game time 
+        #TODO change gamestate to a number base, 0 = early, 1 = mid, 2 = late
         current_time = self.time
         if current_time >= self.mid_game_threshold and self.game_state != "late":
             self.game_state = "late"

@@ -211,8 +211,8 @@ class UseDisruptorNova(CombatIndividualBehavior):
                 
                 print(f"DEBUG: Found maximum influence value {max_value} at position {game_world_pos}")
                 
-                # Check if the value is high enough to be worth targeting
-                influence_threshold = 200
+                # Check if the influence value is high enough to be worth targeting
+                influence_threshold = 205 
                 if max_value > influence_threshold:
                     # Find enemies that would be hit by this position
                     nearby_enemies = [unit for unit in enemy_units 
@@ -288,7 +288,7 @@ class UseDisruptorNova(CombatIndividualBehavior):
             max_travel_distance = nova_manager.nova_speed * (self.frames_left / 22.4)
             
             # Filter enemy units by distance to the Nova unit
-            MAX_SEARCH_RADIUS = max_travel_distance + 2.0  # Add a small buffer
+            MAX_SEARCH_RADIUS = max_travel_distance + 4.0  # Add a small buffer
             nearby_enemies = [unit for unit in enemy_units 
                              if unit.position.distance_to(current_position) <= MAX_SEARCH_RADIUS]
             
@@ -347,7 +347,7 @@ class UseDisruptorNova(CombatIndividualBehavior):
             unit: The Nova unit to track
         """
         self.unit = unit
-        self.frames_left = 47  # Nova lifetime (2.1s * 22.4 fps)
+        self.frames_left = 47  # Nova lifetime (2.1s * 22.4 game steps)
         self.distance_left = self.calculate_distance_left(unit.movement_speed)
         self.best_target_pos = unit.position  # Initial target position
         
@@ -456,7 +456,7 @@ class UseDisruptorNova(CombatIndividualBehavior):
         if did_fire:
             # On successful fire, initialize the nova instance and add to active novas
             self.best_target_pos = target
-            self.frames_left = 47  # 2.1 seconds duration at 22.4 frames per sec
+            self.frames_left = 47  # 2.1 seconds duration at 22.4 game steps per real seconds
             return self
         else:
             # If firing failed, unregister the target only if we registered it successfully
