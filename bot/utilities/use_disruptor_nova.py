@@ -514,14 +514,14 @@ class UseDisruptorNova(CombatIndividualBehavior):
     
     def calculate_distance_left(self, unit_speed: float) -> float:
         """Calculate maximum remaining travel distance for the Nova.
+    
+    Converts unit speed (game units per second) to distance per game step,
+    then multiplies by remaining game steps to get total possible distance.
+    
+    Args:
+        unit_speed: Movement speed of the Nova in game units per second
         
-        Converts unit speed (game units per second) to distance per frame,
-        then multiplies by remaining frames to get total possible distance.
-        
-        Args:
-            unit_speed: Movement speed of the Nova in game units per second
-            
-        Returns:
-            float: Maximum remaining travel distance in game units
-        """
+    Returns:
+        float: Maximum remaining travel distance in game units
+    """
         return self.frames_left * (unit_speed / 22.4)

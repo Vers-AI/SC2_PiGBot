@@ -301,7 +301,7 @@ class NovaManager:
             bool: True if target is reachable, False otherwise
         """
         #TODO change this into a sphere that shrinks as the nova expires
-        # Calculate maximum travel distance - using the constant FPS value consistently
+        # Calculate maximum travel distance - using the constant game steps per second (22.4) consistently
         max_travel_distance = self.nova_speed * (frames_left / 22.4)
         
         # Calculate current distance to target
