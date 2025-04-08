@@ -368,3 +368,56 @@ class NovaManager:
         """
         self.enemy_units = enemy_units
         self.friendly_units = friendly_units
+
+    def clean_expired_targets(self) -> None:
+        """
+        Remove targets that have expired from the target registry.
+        
+        Handles cleanup of targets that are no longer active but weren't properly
+        unregistered when their associated Nova expired.
+        """
+        try:
+            # Identify targets to clean up
+            targets_to_remove = []
+            current_time = time.time()
+            
+            # Find targets that have been active longer than the Nova lifetime
+            for target_id, target_pos in self.current_targets.items():
+                # Extract timestamp from the target ID if possible
+                if '_' in target_id:
+                    try:
+                        # Format is typically "type_timestamp_x_y"
+                        parts = target_id.split('_')
+                        if len(parts) >= 2:
+                            timestamp = float(parts[1])
+                            if current_time - timestamp > self.nova_lifetime * 1.5:  # Add buffer
+                                targets_to_remove.append(target_id)
+                    except (ValueError, IndexError):
+                        # If we can't parse the timestamp, leave it alone
+                        pass
+            
+            # Remove the expired targets
+            for target_id in targets_to_remove:
+                del self.current_targets[target_id]
+                print(f"DEBUG: Removed expired target {target_id}")
+                
+            # Also clean up any stale pending targets
+            pending_to_remove = []
+            for pending_id, _ in self.pending_targets.items():
+                try:
+                    parts = pending_id.split('_')
+                    if len(parts) >= 2:
+                        timestamp = float(parts[1])
+                        if current_time - timestamp > 3.0:  # Pending targets should be confirmed quickly
+                            pending_to_remove.append(pending_id)
+                except (ValueError, IndexError):
+                    pass
+                    
+            # Remove expired pending targets
+            for pending_id in pending_to_remove:
+                del self.pending_targets[pending_id]
+                print(f"DEBUG: Removed expired pending target {pending_id}")
+                
+        except Exception as e:
+            print(f"DEBUG ERROR in clean_expired_targets: {e}")
+            traceback.print_exc()
