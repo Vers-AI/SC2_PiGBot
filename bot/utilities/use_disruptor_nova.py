@@ -389,16 +389,31 @@ class UseDisruptorNova(CombatIndividualBehavior):
             
         # Register this target with the nova manager if provided
         target_registered = False
+        pending_target_id = None
         if nova_manager:
             try:
-                target_registered = nova_manager.register_nova_target(target)
+                # First register it as pending to immediately affect other targeting Disruptors
+                pending_target_id = nova_manager.add_pending_target(target)
+                print(f"DEBUG: Target {target} registered as pending with ID {pending_target_id}")
+                
+                # Now try to register it as a real target, passing our pending ID so it doesn't self-reject
+                target_registered = nova_manager.register_nova_target(target, source_pending_id=pending_target_id)
                 if not target_registered:
                     print(f"DEBUG: Target {target} rejected by nova_manager - not firing to avoid wasting Nova")
+                    # Ensure we clean up the pending target
+                    if pending_target_id:
+                        nova_manager.cancel_pending_target(pending_target_id)
                     return None
                 else:
                     print(f"DEBUG: Target registered successfully")
+                    # Confirm the pending target (moving it to active)
+                    if pending_target_id:
+                        nova_manager.confirm_pending_target(pending_target_id)
             except Exception as e:
                 print(f"ERROR registering target: {e}")
+                # Clean up pending target on error
+                if pending_target_id:
+                    nova_manager.cancel_pending_target(pending_target_id)
                 return None  # Don't fire if we can't register the target
 
         # Calculate which ability ID to use based on unit type (should be AbilityId.EFFECT_PURIFICATIONNOVA)
@@ -443,12 +458,21 @@ class UseDisruptorNova(CombatIndividualBehavior):
             self.frames_left = 47  # 2.1 seconds duration at 22.4 game steps per real seconds
             return self
         else:
-            # If firing failed, unregister the target only if we registered it successfully
-            if nova_manager and target_registered:
-                try:
-                    nova_manager.unregister_nova_target(target)
-                except Exception as e:
-                    print(f"DEBUG ERROR unregistering unused target: {e}")
+            # If firing failed, clean up by unregistering the target and canceling pending
+            if nova_manager:
+                # Cancel the pending target if we have an ID
+                if pending_target_id:
+                    try:
+                        nova_manager.cancel_pending_target(pending_target_id)
+                    except Exception as e:
+                        print(f"DEBUG ERROR canceling pending target: {e}")
+                        
+                # Unregister the main target if we registered it
+                if target_registered:
+                    try:
+                        nova_manager.unregister_nova_target(target)
+                    except Exception as e:
+                        print(f"DEBUG ERROR unregistering unused target: {e}")
             return None
 
     

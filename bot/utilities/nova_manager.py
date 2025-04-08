@@ -30,6 +30,7 @@ class NovaManager:
         # Nova tracking
         self.active_novas: List = []
         self.current_targets: Dict[str, Point2] = {}
+        self.pending_targets: Dict[str, Point2] = {}
         
         # Nova constants
         self.nova_speed = 4.25  # Movement speed (game units/second)
@@ -81,6 +82,49 @@ class NovaManager:
             self.register_nova_target(nova.best_target_pos)
 
     
+    def add_pending_target(self, position: Point2) -> str:
+        """
+        Register a position as a pending Nova target.
+        
+        Pending targets are included in exclusion zones but aren't yet confirmed.
+        This prevents multiple Disruptors from choosing the same target in a single game step.
+        
+        Args:
+            position: Target position in game coordinates
+            
+        Returns:
+            str: Unique ID for this pending target
+        """
+        # Generate a unique ID for this pending target
+        target_id = f"pending_{time.time()}_{position.x}_{position.y}"
+        self.pending_targets[target_id] = position
+        print(f"DEBUG: Added pending target at {position} with ID {target_id}")
+        return target_id
+    
+    def confirm_pending_target(self, target_id: str) -> None:
+        """
+        Confirm a pending target, moving it to active targets.
+        
+        Args:
+            target_id: The ID of the pending target to confirm
+        """
+        if target_id in self.pending_targets:
+            position = self.pending_targets[target_id]
+            self.current_targets[target_id] = position
+            del self.pending_targets[target_id]
+            print(f"DEBUG: Confirmed pending target {target_id} at {position}")
+    
+    def cancel_pending_target(self, target_id: str) -> None:
+        """
+        Cancel a pending target that wasn't used.
+        
+        Args:
+            target_id: The ID of the pending target to cancel
+        """
+        if target_id in self.pending_targets:
+            print(f"DEBUG: Canceled pending target {target_id} at {self.pending_targets[target_id]}")
+            del self.pending_targets[target_id]
+    
     def update(self, enemy_units: List['Unit'], friendly_units: List['Unit']) -> None:
         """
         Process one game step for all active Novas.
@@ -98,6 +142,9 @@ class NovaManager:
             self.friendly_units = friendly_units
             self.current_time = time.time()  # Just for generating unique keys
             
+            # Perform periodic cleanup of expired targets
+            self.clean_expired_targets()
+            
             # Track and update active nova instances
             expired_novas = []
             
@@ -105,33 +152,33 @@ class NovaManager:
                 # Decrement the frame counter and update remaining distance
                 nova.update_info()
                 
-                # Run the nova's step logic with target adjustment
-                nova.run_step(self.enemy_units, self.friendly_units, self)
+                # If still active, process targeting updates, otherwise remove it
+                is_active = nova.run_step(enemy_units, friendly_units, self)
                 
-                # If timer has expired, mark for removal
-                if nova.frames_left <= 0:
+                if not is_active:
                     expired_novas.append(nova)
-                    
-                    # When a nova expires, unregister its target
                     if hasattr(nova, 'best_target_pos') and nova.best_target_pos:
+                        print(f"DEBUG: Unregistering expired Nova target at {nova.best_target_pos}")
                         self.unregister_nova_target(nova.best_target_pos)
-                        print(f"DEBUG: Nova at {nova.best_target_pos} expired, target unregistered")
-            
+                        
             # Remove expired novas
-            if expired_novas:
-                for nova in expired_novas:
-                    self.active_novas.remove(nova)
-                print(f"DEBUG: Removed {len(expired_novas)} expired novas, {len(self.active_novas)} still active")
+            for expired_nova in expired_novas:
+                if expired_nova in self.active_novas:
+                    self.active_novas.remove(expired_nova)
+                print(f"DEBUG: Removed expired nova, {len(self.active_novas)} novas remaining")
                 
-            # Debug info about current tracking state
-            if self.active_novas:
-                print(f"DEBUG: Currently tracking {len(self.active_novas)} active novas and {len(self.current_targets)} registered targets")
-                
+            # Debug current target state
+            if self.current_targets:
+                print(f"DEBUG: Current active Nova targets: {len(self.current_targets)}")
+                for key, target in list(self.current_targets.items())[:3]:  # Show max 3 to avoid spam
+                    print(f"DEBUG: Active target: {target} (key: {key})")
+                if len(self.current_targets) > 3:
+                    print(f"DEBUG: ...and {len(self.current_targets)-3} more")
         except Exception as e:
-            print(f"DEBUG ERROR in NovaManager.update: {e}")
+            print(f"DEBUG ERROR in NovaManager.update(): {e}")
             traceback.print_exc()
 
-    def get_active_novas(self) -> List:
+    def get_active_novas(self):
         """Get all currently active Nova instances.
         
         Returns:
@@ -139,7 +186,7 @@ class NovaManager:
         """
         return self.active_novas
         
-    def register_nova_target(self, position: Point2) -> bool:
+    def register_nova_target(self, position: Point2, source_pending_id: Optional[str] = None) -> bool:
         """
         Register a position as a Nova target to prevent overlapping Novas.
         
@@ -148,40 +195,38 @@ class NovaManager:
         
         Args:
             position: Target position in game coordinates
+            source_pending_id: ID of the pending target that is being confirmed (to avoid self-rejection)
             
         Returns:
             bool: True if registration successful, False if too close to existing target
         """
         try:
-            # Validate input
-            if not position:
-                print("DEBUG: Cannot register None position")
-                return False
-            
-            # Check if this is effectively the same as an existing target
+            # First check if this target is too close to an existing target
             for target_key, target_position in list(self.current_targets.items()):
                 distance = position.distance_to(target_position)
-                # If very close (almost the same point), consider it already registered
-                if distance < 0.5:
-                    # No need to log here - reduces spam
-                    return True
-                    
-                # If within exclusion radius but not identical, reject as too close
-                if distance < self.exclusion_radius_game_units:
-                    print(f"DEBUG: Nova target registration failed - target at {position} too close to existing target at {target_position}")
-                    print(f"DEBUG: Distance: {distance:.2f}, Minimum required: {self.exclusion_radius_game_units:.2f}")
+                if distance < self.exclusion_radius_game_units * 2:
+                    print(f"DEBUG: Target at {position} rejected - too close to existing target at {target_position} (distance: {distance:.2f})")
                     return False
             
-            # Generate a unique key for this target
-            target_key = f"nova_{len(self.current_targets)}_{int(self.current_time)}"
-            
-            # Register the target
+            # Also check against pending targets (except the one being confirmed)
+            for target_id, target_position in self.pending_targets.items():
+                # Skip checking against our own pending target
+                if source_pending_id and target_id == source_pending_id:
+                    print(f"DEBUG: Skipping self-check for pending target {target_id}")
+                    continue
+                    
+                distance = position.distance_to(target_position)
+                if distance < self.exclusion_radius_game_units * 2:
+                    print(f"DEBUG: Target at {position} rejected - too close to pending target at {target_position} (distance: {distance:.2f})")
+                    return False
+                    
+            # If we get here, the target is valid, so register it with a unique key
+            target_key = f"target_{time.time()}_{position.x}_{position.y}"
             self.current_targets[target_key] = position
-            print(f"DEBUG: Registered Nova target at {position}, now tracking {len(self.current_targets)} targets")
+            print(f"DEBUG: Registered new Nova target at {position} with key {target_key}")
             return True
-            
         except Exception as e:
-            print(f"DEBUG ERROR in register_nova_target: {e}")
+            print(f"DEBUG ERROR registering Nova target: {e}")
             return False
 
     def unregister_nova_target(self, position: Point2) -> None:
@@ -221,7 +266,6 @@ class NovaManager:
                     print(f"  Target at {target} (key: {key})")
             else:
                 print("DEBUG: No current Nova targets registered")
-            
         except Exception as e:
             print(f"DEBUG ERROR unregistering Nova target: {e}")
 
@@ -252,13 +296,14 @@ class NovaManager:
             # Create an empty mask matching the grid shape
             mask = np.zeros(grid_shape, dtype=bool)
             
-            # If we don't have any current targets, return the empty mask
-            if not self.current_targets:
-                print(f"DEBUG: No exclusion zones (no current targets)")
+            # If we don't have any targets (current or pending), return the empty mask
+            if not self.current_targets and not self.pending_targets:
+                print(f"DEBUG: No exclusion zones (no targets)")
                 return mask
                 
-            # Mark exclusion zones around each current target
-            for target_key, target_pos in self.current_targets.items():
+            # Mark exclusion zones around each target (both current and pending)
+            all_targets = list(self.current_targets.items()) + list(self.pending_targets.items())
+            for target_key, target_pos in all_targets:
                 try:
                     # Extract x, y from the Point2 object
                     target_x, target_y = target_pos.x, target_pos.y
