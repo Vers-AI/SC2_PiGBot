@@ -26,5 +26,5 @@ DebugOptions:
     ActiveGrid: TacticalGround
     ChatDebug: True
     DebugSpawn: False
-    ShowPathingCost: False
+    ShowPathingCost: True
     ResourceDebug: False
