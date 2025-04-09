@@ -280,17 +280,11 @@ class UseDisruptorNova(CombatIndividualBehavior):
                 print("DEBUG update_target: No nearby enemy units within reach")
                 return False
             
-            # Get exclusion mask from nova_manager
-            exclusion_mask = None
-            if nova_manager and grid is not None:
-                try:
-                    exclusion_mask = nova_manager.get_exclusion_mask(grid)
-                    print(f"DEBUG update_target: Got exclusion mask with {np.sum(exclusion_mask)} cells excluded")
-                except Exception as e:
-                    print(f"DEBUG ERROR getting exclusion mask in update_target: {e}")
+            # Remove exclusion mask check for Nova movement - we don't need to check exclusion zones
+            # once the Nova is already in flight
             
-            # Select the best target position
-            new_target = self.select_best_target(nearby_enemies, friendly_units, nova_manager)
+            # Select the best target position without using exclusion mask
+            new_target = self.select_best_target(nearby_enemies, friendly_units, None)  # Pass None instead of nova_manager
             
             if new_target and new_target != self.best_target_pos:
                 print(f"DEBUG update_target: Found potential new target at {new_target}")
