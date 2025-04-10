@@ -282,10 +282,10 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
     # Assess the threat level of enemy units
     enemy_threat_level = assess_threat(bot, bot.enemy_units, main_army)
 
-    # Set attack threshold ratio (0.8 means we attack when our army is 80% or more of enemy strength)
-    attack_threshold_ratio = 0.8
+    # Set attack threshold ratio (1.2 means we attack when our army is 120% or more of enemy strength)
+    attack_threshold_ratio = 1.2
     # Set minimum army strength before attacking regardless of enemy strength
-    min_attack_strength = 1000
+    min_attack_strength = 300
     # Set retreat threshold ratio (0.6 means we retreat if our army falls below 60% of enemy strength)
     retreat_threshold_ratio = 0.6
     
@@ -430,7 +430,7 @@ def army_strength(main_army_power: Units) -> float:
         if unit.type_id not in COMMON_UNIT_IGNORE_TYPES:
             power = UNIT_DATA[unit.type_id]['army_value']
             # Multiply power by the effective power (health + shield) scaled by 50.0, tweak if needed
-            total_strength += power * ((unit.health + unit.shield) / 50.0)
+            total_strength += power * unit.shield_health_percentage #((unit.health + unit.shield) / 50.0)
 
     return total_strength
 
@@ -446,6 +446,6 @@ def enemy_strength(bot) -> float:
         if unit.type_id in UNIT_DATA and unit.type_id not in COMMON_UNIT_IGNORE_TYPES:
             enemy_army_value = UNIT_DATA[unit.type_id]['army_value']
             # Multiply power by the effective power (health + shield) scaled by 50.0, tweak if needed
-            total_strength += enemy_army_value * ((unit.health + unit.shield) / 50.0)
+            total_strength += enemy_army_value * unit.shield_health_percentage #* ((unit.health + unit.shield) / 50.0)
 
     return total_strength

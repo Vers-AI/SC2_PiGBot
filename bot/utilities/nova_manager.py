@@ -16,7 +16,7 @@ class NovaManager:
     and Nova lifetime management to ensure efficient usage of this powerful ability.
     """
 
-    def __init__(self, bot, mediator):
+    def __init__(self, bot, mediator, debug_output: bool = False):
         """Initialize the Nova Manager.
         
         Args:
@@ -26,10 +26,12 @@ class NovaManager:
         # Core references
         self.bot = bot
         self.mediator = mediator
+        self.debug_output = debug_output
         
         # Nova tracking
         self.active_novas: List = []
         self.current_targets: Dict[str, Point2] = {}
+        self.pending_targets: Dict[str, Point2] = {}
         
         # Nova constants
         self.nova_speed = 4.25  # Movement speed (game units/second)
@@ -37,22 +39,23 @@ class NovaManager:
         self.nova_radius = 1.5  # Explosion radius
         
         # Targeting parameters
-        self.exclusion_radius = 3.0  # Grid cells
-        self.exclusion_radius_game_units = 3.0  # Game units
+        self.exclusion_radius = 3.0  # Exclusion radius in game units
         
         # Unit tracking
         self.enemy_units = []
         self.friendly_units = []
         self.current_time = time.time()
 
-        print(f"DEBUG: NovaManager initialized with exclusion radius of {self.exclusion_radius} grid cells")
+        if self.debug_output:
+            print(f"DEBUG: NovaManager initialized with exclusion radius of {self.exclusion_radius} game units")
 
         try:
             grid = self.mediator.get_tactical_ground_grid
-            if grid is not None:
-                print(f"DEBUG: Successfully accessed tactical grid")
-            else:
-                print("DEBUG: Warning - tactical grid is None")
+            if self.debug_output:
+                if grid is not None:
+                    print(f"DEBUG: Successfully accessed tactical grid")
+                else:
+                    print("DEBUG: Warning - tactical grid is None")
         except Exception as e:
             print(f"DEBUG ERROR initializing NovaManager - could not access tactical grid: {e}")
 
@@ -67,7 +70,8 @@ class NovaManager:
         """
         from bot.utilities.use_disruptor_nova import UseDisruptorNova
         self.nova_speed = nova.movement_speed
-        print(f"DEBUG: NovaManager movement speed set to {self.nova_speed} game units/second")
+        if self.debug_output:
+            print(f"DEBUG: NovaManager movement speed set to {self.nova_speed} game units/second")
 
         if not hasattr(nova, 'update_info'):
             nova_instance = UseDisruptorNova(mediator=self.mediator, bot=self.bot)
@@ -80,6 +84,54 @@ class NovaManager:
         if hasattr(nova, 'best_target_pos') and nova.best_target_pos:
             self.register_nova_target(nova.best_target_pos)
 
+    
+    def add_pending_target(self, position: Point2) -> str:
+        """
+        Register a position as a pending Nova target.
+        
+        Pending targets are included in exclusion zones but aren't yet confirmed.
+        This prevents multiple Disruptors from choosing the same target in a single game step.
+        
+        Args:
+            position: Target position in game coordinates
+            
+        Returns:
+            str: Unique ID for this pending target
+        """
+        # Generate a unique ID for this pending target
+        target_id = f"pending_{time.time()}_{position.x}_{position.y}"
+        self.pending_targets[target_id] = position
+        if self.debug_output:
+            print(f"DEBUG: Added pending target at {position} with ID {target_id}")
+        return target_id
+    
+    def confirm_pending_target(self, target_id: str) -> None:
+        """
+        Confirm a pending target, moving it to active targets.
+        
+        Args:
+            target_id: The ID of the pending target to confirm
+        """
+        if target_id in self.pending_targets:
+            position = self.pending_targets[target_id]
+            # Generate new target ID with proper prefix for active targets
+            new_target_id = f"target_{time.time()}_{position.x}_{position.y}"
+            self.current_targets[new_target_id] = position
+            del self.pending_targets[target_id]
+            if self.debug_output:
+                print(f"DEBUG: Confirmed pending target {target_id} at {position}, registered as active with ID {new_target_id}")
+    
+    def cancel_pending_target(self, target_id: str) -> None:
+        """
+        Cancel a pending target that wasn't used.
+        
+        Args:
+            target_id: The ID of the pending target to cancel
+        """
+        if target_id in self.pending_targets:
+            if self.debug_output:
+                print(f"DEBUG: Canceled pending target {target_id} at {self.pending_targets[target_id]}")
+            del self.pending_targets[target_id]
     
     def update(self, enemy_units: List['Unit'], friendly_units: List['Unit']) -> None:
         """
@@ -98,6 +150,9 @@ class NovaManager:
             self.friendly_units = friendly_units
             self.current_time = time.time()  # Just for generating unique keys
             
+            # Perform periodic cleanup of expired targets
+            self.clean_expired_targets()
+            
             # Track and update active nova instances
             expired_novas = []
             
@@ -105,33 +160,35 @@ class NovaManager:
                 # Decrement the frame counter and update remaining distance
                 nova.update_info()
                 
-                # Run the nova's step logic with target adjustment
-                nova.run_step(self.enemy_units, self.friendly_units, self)
+                # If still active, process targeting updates, otherwise remove it
+                is_active = nova.run_step(enemy_units, friendly_units, self)
                 
-                # If timer has expired, mark for removal
-                if nova.frames_left <= 0:
+                if not is_active:
                     expired_novas.append(nova)
-                    
-                    # When a nova expires, unregister its target
                     if hasattr(nova, 'best_target_pos') and nova.best_target_pos:
+                        if self.debug_output:
+                            print(f"DEBUG: Unregistering expired Nova target at {nova.best_target_pos}")
                         self.unregister_nova_target(nova.best_target_pos)
-                        print(f"DEBUG: Nova at {nova.best_target_pos} expired, target unregistered")
-            
+                        
             # Remove expired novas
-            if expired_novas:
-                for nova in expired_novas:
-                    self.active_novas.remove(nova)
-                print(f"DEBUG: Removed {len(expired_novas)} expired novas, {len(self.active_novas)} still active")
+            for expired_nova in expired_novas:
+                if expired_nova in self.active_novas:
+                    self.active_novas.remove(expired_nova)
+                if self.debug_output:
+                    print(f"DEBUG: Removed expired nova, {len(self.active_novas)} novas remaining")
                 
-            # Debug info about current tracking state
-            if self.active_novas:
-                print(f"DEBUG: Currently tracking {len(self.active_novas)} active novas and {len(self.current_targets)} registered targets")
-                
+            # Debug current target state
+            if self.debug_output and self.current_targets:
+                print(f"DEBUG: Current active Nova targets: {len(self.current_targets)}")
+                for key, target in list(self.current_targets.items())[:3]:  # Show max 3 to avoid spam
+                    print(f"DEBUG: Active target: {target} (key: {key})")
+                if len(self.current_targets) > 3:
+                    print(f"DEBUG: ...and {len(self.current_targets)-3} more")
         except Exception as e:
-            print(f"DEBUG ERROR in NovaManager.update: {e}")
+            print(f"DEBUG ERROR in NovaManager.update(): {e}")
             traceback.print_exc()
 
-    def get_active_novas(self) -> List:
+    def get_active_novas(self):
         """Get all currently active Nova instances.
         
         Returns:
@@ -139,7 +196,7 @@ class NovaManager:
         """
         return self.active_novas
         
-    def register_nova_target(self, position: Point2) -> bool:
+    def register_nova_target(self, position: Point2, source_pending_id: Optional[str] = None) -> bool:
         """
         Register a position as a Nova target to prevent overlapping Novas.
         
@@ -148,40 +205,42 @@ class NovaManager:
         
         Args:
             position: Target position in game coordinates
+            source_pending_id: ID of the pending target that is being confirmed (to avoid self-rejection)
             
         Returns:
             bool: True if registration successful, False if too close to existing target
         """
         try:
-            # Validate input
-            if not position:
-                print("DEBUG: Cannot register None position")
-                return False
-            
-            # Check if this is effectively the same as an existing target
+            # First check if this target is too close to an existing target
             for target_key, target_position in list(self.current_targets.items()):
                 distance = position.distance_to(target_position)
-                # If very close (almost the same point), consider it already registered
-                if distance < 0.5:
-                    # No need to log here - reduces spam
-                    return True
-                    
-                # If within exclusion radius but not identical, reject as too close
-                if distance < self.exclusion_radius_game_units:
-                    print(f"DEBUG: Nova target registration failed - target at {position} too close to existing target at {target_position}")
-                    print(f"DEBUG: Distance: {distance:.2f}, Minimum required: {self.exclusion_radius_game_units:.2f}")
+                if distance < self.exclusion_radius * 2:
+                    if self.debug_output:
+                        print(f"DEBUG: Target at {position} rejected - too close to existing target at {target_position} (distance: {distance:.2f})")
                     return False
             
-            # Generate a unique key for this target
-            target_key = f"nova_{len(self.current_targets)}_{int(self.current_time)}"
-            
-            # Register the target
+            # Also check against pending targets (except the one being confirmed)
+            for target_id, target_position in self.pending_targets.items():
+                # Skip checking against our own pending target
+                if source_pending_id and target_id == source_pending_id:
+                    if self.debug_output:
+                        print(f"DEBUG: Skipping self-check for pending target {target_id}")
+                    continue
+                    
+                distance = position.distance_to(target_position)
+                if distance < self.exclusion_radius * 2:
+                    if self.debug_output:
+                        print(f"DEBUG: Target at {position} rejected - too close to pending target at {target_position} (distance: {distance:.2f})")
+                    return False
+                    
+            # If we get here, the target is valid, so register it with a unique key
+            target_key = f"target_{time.time()}_{position.x}_{position.y}"
             self.current_targets[target_key] = position
-            print(f"DEBUG: Registered Nova target at {position}, now tracking {len(self.current_targets)} targets")
+            if self.debug_output:
+                print(f"DEBUG: Registered new Nova target at {position} with key {target_key}")
             return True
-            
         except Exception as e:
-            print(f"DEBUG ERROR in register_nova_target: {e}")
+            print(f"DEBUG ERROR registering Nova target: {e}")
             return False
 
     def unregister_nova_target(self, position: Point2) -> None:
@@ -211,17 +270,18 @@ class NovaManager:
             if closest_key:
                 actual_pos = self.current_targets[closest_key]
                 del self.current_targets[closest_key]
-                print(f"DEBUG: Unregistered Nova target at {position}, closest match: {actual_pos}, distance: {min_distance:.2f}")
+                if self.debug_output:
+                    print(f"DEBUG: Unregistered Nova target at {position}, closest match: {actual_pos}, distance: {min_distance:.2f}")
                 return
                 
             # If we get here without finding a target, look through all targets with a debug message
-            if self.current_targets:
-                print(f"DEBUG: Could not find target near {position} to unregister. Current targets:")
-                for key, target in self.current_targets.items():
-                    print(f"  Target at {target} (key: {key})")
-            else:
-                print("DEBUG: No current Nova targets registered")
-            
+            if self.debug_output:
+                if self.current_targets:
+                    print(f"DEBUG: Could not find target near {position} to unregister. Current targets:")
+                    for key, target in self.current_targets.items():
+                        print(f"  Target at {target} (key: {key})")
+                else:
+                    print("DEBUG: No current Nova targets registered")
         except Exception as e:
             print(f"DEBUG ERROR unregistering Nova target: {e}")
 
@@ -241,24 +301,28 @@ class NovaManager:
         try:
             # Very specific check - must be instance of np.ndarray
             if not isinstance(grid, np.ndarray):
-                print(f"DEBUG: get_exclusion_mask received invalid grid type: {type(grid)}")
+                if self.debug_output:
+                    print(f"DEBUG: get_exclusion_mask received invalid grid type: {type(grid)}")
                 # Return an empty mask of default shape (100x100) if grid is invalid
                 return np.zeros((100, 100), dtype=bool)
                 
             # Get the shape of the grid for creating our mask
             grid_shape = grid.shape
-            print(f"DEBUG: Creating exclusion mask with shape {grid_shape}")
+            if self.debug_output:
+                print(f"DEBUG: Creating exclusion mask with shape {grid_shape}")
                 
             # Create an empty mask matching the grid shape
             mask = np.zeros(grid_shape, dtype=bool)
             
-            # If we don't have any current targets, return the empty mask
-            if not self.current_targets:
-                print(f"DEBUG: No exclusion zones (no current targets)")
+            # If we don't have any targets (current or pending), return the empty mask
+            if not self.current_targets and not self.pending_targets:
+                if self.debug_output:
+                    print(f"DEBUG: No exclusion zones (no targets)")
                 return mask
                 
-            # Mark exclusion zones around each current target
-            for target_key, target_pos in self.current_targets.items():
+            # Mark exclusion zones around each target (both current and pending)
+            all_targets = list(self.current_targets.items()) + list(self.pending_targets.items())
+            for target_key, target_pos in all_targets:
                 try:
                     # Extract x, y from the Point2 object
                     target_x, target_y = target_pos.x, target_pos.y
@@ -274,40 +338,44 @@ class NovaManager:
                     circular_mask = dist_from_target <= mask_radius**2
                     # Apply to our main mask
                     mask = np.logical_or(mask, circular_mask)
-                    print(f"DEBUG: Added exclusion zone at ({target_x}, {target_y}) with radius {mask_radius}")
+                    if self.debug_output:
+                        print(f"DEBUG: Added exclusion zone at ({target_x}, {target_y}) with radius {mask_radius}")
                 except Exception as e:
                     print(f"DEBUG ERROR creating exclusion zone for target {target_key}: {target_pos}, error: {e}")
         
-            print(f"DEBUG: Generated exclusion mask with {np.sum(mask)} excluded cells")
+            if self.debug_output:
+                print(f"DEBUG: Generated exclusion mask with {np.sum(mask)} excluded cells")
             return mask
         except Exception as e:
             print(f"DEBUG ERROR in get_exclusion_mask: {e}")
             # Return empty mask on error
             return np.zeros((100, 100), dtype=bool)
 
-    def can_nova_reach_target(self, nova_position: Point2, target_position: Point2, frames_left: int) -> bool:
+    def _draw_nova_radius(self, position: Point2, radius: float):
         """
-        Calculate if a Nova can reach a target before expiring.
+        Draw a debug sphere showing the maximum distance a Nova can travel.
         
-        Uses Nova speed, remaining lifetime, and distance to determine
-        if the target is within the Nova's maximum remaining travel range.
+        This creates a visual representation of the shrinking sphere approach,
+        showing how far a Nova can travel before expiring based on its remaining lifetime.
         
         Args:
-            nova_position: Current Nova position
-            target_position: Potential target position
-            frames_left: Remaining lifetime in frames
-            
-        Returns:
-            bool: True if target is reachable, False otherwise
+            position: Current Nova position
+            radius: Maximum travel distance radius
         """
-        # Calculate maximum travel distance - using the constant FPS value consistently
-        max_travel_distance = self.nova_speed * (frames_left / 22.4)
-        
-        # Calculate current distance to target
-        current_distance = nova_position.distance_to(target_position)
-        
-        # Return whether the target is reachable
-        return current_distance <= max_travel_distance
+        try:
+            from sc2.position import Point3
+            
+            # Get the height in world coordinates (exactly like in DragonBot._draw_debug_sphere_at_point)
+            height = self.bot.get_terrain_z_height(position)
+            
+            # Convert the 2D point to a 3D point with proper height
+            point3 = Point3((position.x, position.y, height))
+            
+            # Draw the sphere using debug_sphere_out with a fixed red color
+            self.bot.client.debug_sphere_out(point3, radius, color=Point3((255, 0, 0)))
+            
+        except Exception as e:
+            print(f"DEBUG ERROR in _draw_nova_radius: {e}")
 
     def update_units(self, enemy_units, friendly_units):
         """
@@ -322,3 +390,62 @@ class NovaManager:
         """
         self.enemy_units = enemy_units
         self.friendly_units = friendly_units
+
+    def _clean_expired_target_entries(self, target_dict: Dict[str, Point2], max_age: float, target_type: str) -> None:
+        """
+        Helper method to clean expired targets from a target dictionary.
+        
+        Args:
+            target_dict: Dictionary of targets to clean (current_targets or pending_targets)
+            max_age: Maximum age in seconds before targets are considered expired
+            target_type: Description of target type for debug messages (e.g., "active", "pending")
+        """
+        targets_to_remove = []
+        current_time = time.time()
+        
+        # Find targets that have been active longer than the specified time
+        for target_id, _ in target_dict.items():
+            # Extract timestamp from the target ID if possible
+            if '_' in target_id:
+                try:
+                    # Format is typically "type_timestamp_x_y"
+                    parts = target_id.split('_')
+                    if len(parts) >= 2:
+                        timestamp = float(parts[1])
+                        if current_time - timestamp > max_age:
+                            targets_to_remove.append(target_id)
+                except (ValueError, IndexError):
+                    # If we can't parse the timestamp, leave it alone
+                    pass
+        
+        # Remove the expired targets
+        for target_id in targets_to_remove:
+            del target_dict[target_id]
+            if self.debug_output:
+                print(f"DEBUG: Removed expired {target_type} target {target_id}")
+    
+    def clean_expired_targets(self) -> None:
+        """
+        Remove targets that have expired from the target registry.
+        
+        Handles cleanup of targets that are no longer active but weren't properly
+        unregistered when their associated Nova expired.
+        """
+        try:
+            # Clean active targets - allow 1.5x the nova lifetime for buffer
+            self._clean_expired_target_entries(
+                self.current_targets, 
+                self.nova_lifetime * 1.5, 
+                "active"
+            )
+            
+            # Clean pending targets - these should be confirmed quickly (3 seconds)
+            self._clean_expired_target_entries(
+                self.pending_targets,
+                3.0,
+                "pending"
+            )
+                
+        except Exception as e:
+            print(f"DEBUG ERROR in clean_expired_targets: {e}")
+            traceback.print_exc()

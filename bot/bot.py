@@ -11,6 +11,7 @@ from ares.consts import ALL_STRUCTURES, WORKER_TYPES, UnitRole
 from ares.managers.squad_manager import UnitSquad
 from ares.managers.manager_mediator import ManagerMediator
 from map_analyzer import MapData
+from ares.behaviors.macro.restore_power import RestorePower
 
 
 # SC2-related imports
@@ -111,7 +112,7 @@ class PiG_Bot(AresBot):
 
 
         # Reserve expansions and set flags
-        self.natural_expansion: Point2 = self.expansion_locations_list[-2]
+        self.natural_expansion = self.mediator.get_own_nat
         self.expansions_generator = cycle(self.expansion_locations_list)
         self.freeflow = self.minerals > 800 and self.vespene < 200
 
@@ -125,7 +126,8 @@ class PiG_Bot(AresBot):
         await super(PiG_Bot, self).on_step(iteration)
         self.register_behavior(Mining()) #ares Mining 
 
-        # Update game state based on game time
+        # Update game state based on game time 
+        #TODO change gamestate to a number base, 0 = early, 1 = mid, 2 = late
         current_time = self.time
         if current_time >= self.mid_game_threshold and self.game_state != "late":
             self.game_state = "late"
@@ -151,6 +153,7 @@ class PiG_Bot(AresBot):
 
         # Early game logic
         if not self.build_order_runner.build_completed:
+            self.register_behavior(RestorePower()) # Restore power to depowered buildings
             if not self._under_attack:  # Still use early_threat_sensor for cheese detection
                 early_threat_sensor(self)
             # If cheese or one-base flags are set, handle them

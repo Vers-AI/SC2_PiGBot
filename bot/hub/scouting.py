@@ -58,7 +58,7 @@ def control_scout(bot, scout_units: Units, main_army: Units) -> None: #TODO figu
                             unit=scout,
                             target=bot.start_location,
                             grid=air_grid,
-                            danger_distance=10
+                            danger_distance=15
                         )
                     )
 
