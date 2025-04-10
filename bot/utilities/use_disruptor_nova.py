@@ -30,38 +30,21 @@ class UseDisruptorNova(CombatIndividualBehavior):
         self.best_target_pos = None
         self.best_target_influence = 0
         self.unit = None
-        self.original_target_pos = None
-        self.target_pos = None
         
         # Execution state
-        self.executing = False
         self.frames_left = 0
         self.distance_left = 0.0
         self.mediator = mediator
         self.bot = bot
-        self.should_debug_visuals = False
         
         # Tactical grid reference - retrieved fresh when needed
         self.influence_grid = None
         
         print("DEBUG: UseDisruptorNova initialized")
         
-        # Movement control
-        self.last_movement_frame = 0
-        self.movement_cooldown = 5  # Frames between movement commands
-        
-        # Execution timing
-        self.execution_start_time = 0
-        self.max_execution_time = 10.0  # Maximum execution time in seconds
-        
         # Position tracking
-        self.max_distance_tracking_factor = 35.0  # Max tracking distance
-        self.frame_counter = 0
         self.position_update_frequency = position_update_frequency
-        self.current_position = None
-        self.initial_unit_position = None
-        self.last_target_update_time = 0
-    
+
     def can_use(self, disruptor_unit) -> bool:
         """Check if the Disruptor can use Purification Nova.
         
@@ -215,8 +198,10 @@ class UseDisruptorNova(CombatIndividualBehavior):
                 influence_threshold = 205 
                 if max_value > influence_threshold:
                     # Find enemies that would be hit by this position
+                    # Use a default nova radius of 1.5 when nova_manager is None
+                    nova_radius = nova_manager.nova_radius if nova_manager else 1.5
                     nearby_enemies = [unit for unit in enemy_units 
-                                      if unit.position.distance_to(game_world_pos) <= nova_manager.nova_radius]
+                                      if unit.position.distance_to(game_world_pos) <= nova_radius]
                     
                     if nearby_enemies:
                         print(f"DEBUG: Best target at {game_world_pos} will hit {len(nearby_enemies)} enemy units")
@@ -255,7 +240,6 @@ class UseDisruptorNova(CombatIndividualBehavior):
         Returns:
             bool: True if target was updated, False otherwise
         """
-        #TODO refactor to be like select_best_target but restricted to the nova ball
         if not self.best_target_pos or not self.unit:
             return False
             
@@ -280,11 +264,8 @@ class UseDisruptorNova(CombatIndividualBehavior):
                 print("DEBUG update_target: No nearby enemy units within reach")
                 return False
             
-            # Remove exclusion mask check for Nova movement - we don't need to check exclusion zones
-            # once the Nova is already in flight
-            
-            # Select the best target position without using exclusion mask
-            new_target = self.select_best_target(nearby_enemies, friendly_units, None)  # Pass None instead of nova_manager
+            # Simply pass nova_manager for targeting - we need its properties
+            new_target = self.select_best_target(nearby_enemies, friendly_units, nova_manager)
             
             if new_target and new_target != self.best_target_pos:
                 print(f"DEBUG update_target: Found potential new target at {new_target}")
@@ -292,15 +273,18 @@ class UseDisruptorNova(CombatIndividualBehavior):
                 # First check if the new target can be registered
                 if nova_manager:
                     try:
-                        # Temporarily register the new target
+                        # First unregister the current target to avoid self-blocking
+                        nova_manager.unregister_nova_target(self.best_target_pos)
+                        
+                        # Now try to register the new target
                         target_registered = nova_manager.register_nova_target(new_target)
                         
                         if not target_registered:
+                            # If the new target couldn't be registered, re-register the old one
                             print(f"DEBUG update_target: New target {new_target} could not be registered, keeping old target")
+                            nova_manager.register_nova_target(self.best_target_pos)
                             return False
                         
-                        # Now we can safely unregister the old target
-                        nova_manager.unregister_nova_target(self.best_target_pos)
                         print(f"DEBUG update_target: Target changed from {self.best_target_pos} to {new_target}")
                         self.best_target_pos = new_target
                         return True
@@ -508,9 +492,9 @@ class UseDisruptorNova(CombatIndividualBehavior):
     def update_info(self):
         """Update Nova tracking state for the current game step.
         
-        Decrements frame counter and recalculates remaining travel distance.
+        Recalculates remaining travel distance based on current frames_left.
+        Note: This does NOT decrement frames_left, which is handled in run_step.
         """
-        self.frames_left -= 1
         self.distance_left = self.calculate_distance_left(self.unit.movement_speed)
     
     def calculate_distance_left(self, unit_speed: float) -> float:
