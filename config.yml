@@ -11,7 +11,7 @@ AutoUploadToAiarena: True
 ########################
 
 UseData: False
-Debug: True
+Debug: False
 GameStep: 4
 DebugGameStep: 4
 
@@ -24,7 +24,7 @@ Features:
 DebugOptions:
     # one of: Air, AirVsGround, Ground, GroundAvoidance, AirAvoidance
     ActiveGrid: TacticalGround
-    ChatDebug: True
+    ChatDebug: False
     DebugSpawn: False
-    ShowPathingCost: True
+    ShowPathingCost: False
     ResourceDebug: False
