@@ -16,7 +16,7 @@ class NovaManager:
     and Nova lifetime management to ensure efficient usage of this powerful ability.
     """
 
-    def __init__(self, bot, mediator, debug_output: bool = True):
+    def __init__(self, bot, mediator, debug_output: bool = False):
         """Initialize the Nova Manager.
         
         Args:
@@ -351,30 +351,31 @@ class NovaManager:
             # Return empty mask on error
             return np.zeros((100, 100), dtype=bool)
 
-    def can_nova_reach_target(self, nova_position: Point2, target_position: Point2, frames_left: int) -> bool:
+    def _draw_nova_radius(self, position: Point2, radius: float):
         """
-        Calculate if a Nova can reach a target before expiring.
+        Draw a debug sphere showing the maximum distance a Nova can travel.
         
-        Uses Nova speed, remaining lifetime, and distance to determine
-        if the target is within the Nova's maximum remaining travel range.
+        This creates a visual representation of the shrinking sphere approach,
+        showing how far a Nova can travel before expiring based on its remaining lifetime.
         
         Args:
-            nova_position: Current Nova position
-            target_position: Potential target position
-            frames_left: Remaining lifetime in frames
-            
-        Returns:
-            bool: True if target is reachable, False otherwise
+            position: Current Nova position
+            radius: Maximum travel distance radius
         """
-        #TODO change this into a sphere that shrinks as the nova expires
-        # Calculate maximum travel distance - using the constant game steps per second (22.4) consistently
-        max_travel_distance = self.nova_speed * (frames_left / 22.4)
-        
-        # Calculate current distance to target
-        current_distance = nova_position.distance_to(target_position)
-        
-        # Return whether the target is reachable
-        return current_distance <= max_travel_distance
+        try:
+            from sc2.position import Point3
+            
+            # Get the height in world coordinates (exactly like in DragonBot._draw_debug_sphere_at_point)
+            height = self.bot.get_terrain_z_height(position)
+            
+            # Convert the 2D point to a 3D point with proper height
+            point3 = Point3((position.x, position.y, height))
+            
+            # Draw the sphere using debug_sphere_out with a fixed red color
+            self.bot.client.debug_sphere_out(point3, radius, color=Point3((255, 0, 0)))
+            
+        except Exception as e:
+            print(f"DEBUG ERROR in _draw_nova_radius: {e}")
 
     def update_units(self, enemy_units, friendly_units):
         """

@@ -6,12 +6,13 @@ Integrates with the Ares combat framework for coordinated unit control.
 from typing import TYPE_CHECKING, List, Optional
 from sc2.data import UnitTypeId
 from sc2.ids.ability_id import AbilityId
+from sc2.unit import Unit
 
 
 from behaviors.combat.individual.combat_individual_behavior import CombatIndividualBehavior
 from ares.managers.manager_mediator import ManagerMediator
 import numpy as np
-from sc2.position import Point2
+from sc2.position import Point2, Point3
 
 class UseDisruptorNova(CombatIndividualBehavior):
     def __init__(self, mediator: ManagerMediator, bot: 'AresBot', position_update_frequency: int = 10):
@@ -452,8 +453,9 @@ class UseDisruptorNova(CombatIndividualBehavior):
                     except Exception as e:
                         print(f"DEBUG ERROR unregistering unused target: {e}")
             return None
+            
+    # _draw_nova_radius method removed - using the implementation from nova_manager instead
 
-    
     def run_step(self, enemy_units: List['Unit'], friendly_units: List['Unit'], nova_manager=None):
         """Process one game step for an active Nova.
         
@@ -468,24 +470,44 @@ class UseDisruptorNova(CombatIndividualBehavior):
         Returns:
             bool: True if Nova is still active, False if expired
         """
-    
+
         if self.frames_left <= 0:
             return False
+        
+        if self.unit is None:
+            print("DEBUG ERROR: Nova unit is None in run_step")
+            return False
+            
         print(f"DEBUG: Nova at {self.unit.position} has {self.frames_left} frames left")
 
         # Update the frame counter
         self.frames_left -= 1
+        
+        # Draw debug sphere showing remaining travel distance only when debugging is enabled
+        try:
+            # Only visualize when we have a valid nova_manager with debug_output enabled
+            if nova_manager and hasattr(nova_manager, 'debug_output') and nova_manager.debug_output:
+                # Calculate the maximum distance the Nova can still travel
+                nova_speed = 5.95  # Nova movement speed in game units per second
+                GAME_STEPS_PER_SECOND = 22.4  # Game steps per second
+                # Calculate effective frames (accounting for the frame we're currently in)
+                effective_frames = max(1, self.frames_left)
+                # Calculate maximum travel distance
+                max_travel_distance = nova_speed * (effective_frames / GAME_STEPS_PER_SECOND)
+                # Use nova_manager's implementation to draw the debug sphere
+                nova_manager._draw_nova_radius(self.unit.position, max_travel_distance)
+        except Exception as e:
+            print(f"DEBUG ERROR drawing Nova radius: {e}")
         
         # Check if we should update our target - do this every frame to be more responsive
         if nova_manager:
             self.update_target_position(enemy_units, friendly_units, nova_manager)
 
         # If a valid target was found and it differs from the current position, command the nova to move
-        if self.best_target_pos is not None and self.best_target_pos != self.unit.position:
+        if self.best_target_pos is not None and self.unit is not None and self.best_target_pos != self.unit.position:
             self.unit.move(self.best_target_pos)
             print(f"Moving Nova to target: {self.best_target_pos}")
         
-        # Optionally, output debug information
         # Continue running until the nova expires
         return self.frames_left > 0
 
@@ -495,7 +517,10 @@ class UseDisruptorNova(CombatIndividualBehavior):
         Recalculates remaining travel distance based on current frames_left.
         Note: This does NOT decrement frames_left, which is handled in run_step.
         """
-        self.distance_left = self.calculate_distance_left(self.unit.movement_speed)
+        if self.unit is not None:
+            self.distance_left = self.calculate_distance_left(self.unit.movement_speed)
+        else:
+            print("DEBUG WARNING: Cannot update Nova info - unit is None")
     
     def calculate_distance_left(self, unit_speed: float) -> float:
         """Calculate maximum remaining travel distance for the Nova.
