@@ -169,9 +169,9 @@ def select_army_composition(bot, main_army: Units) -> dict:
         if bot.debug:
             print(f"Archon percentage: {archon_percentage:.2f} ({archon_count}/{len(main_army)})")
         
-        # If Archons are at least 35% of our army, switch to STANDARD_ARMY_1
+        # If Archons are at least 15% of our army, switch to STANDARD_ARMY_1
         # This threshold matches the High Templar proportion in STANDARD_ARMY_0
-        if archon_percentage >= 0.35:
+        if archon_percentage >= 0.15:
             selected_composition = STANDARD_ARMY_1
             if bot.debug:
                 print("Switching to STANDARD_ARMY_1 due to high Archon count")

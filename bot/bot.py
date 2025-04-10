@@ -84,7 +84,7 @@ class PiG_Bot(AresBot):
         self._is_building = False
 
         # Debug flags
-        self.debug = True
+        self.debug = False
 
 
 
