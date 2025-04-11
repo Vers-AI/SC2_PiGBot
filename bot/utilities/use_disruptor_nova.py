@@ -74,7 +74,7 @@ class UseDisruptorNova(CombatIndividualBehavior):
             Point2: Optimal target position, or None if no suitable target found
         """
         try:
-            disruptor_max_range = 13.0  # Maximum range a disruptor can fire Nova
+            disruptor_max_range = 15.0  # Maximum range a disruptor can fire Nova
             
             # First, ensure we have some units to target
             if not enemy_units:
@@ -454,7 +454,7 @@ class UseDisruptorNova(CombatIndividualBehavior):
                         print(f"DEBUG ERROR unregistering unused target: {e}")
             return None
             
-    # _draw_nova_radius method removed - using the implementation from nova_manager instead
+    # _draw_nova_radius method has been moved to NovaManager._draw_nova_radius
 
     def run_step(self, enemy_units: List['Unit'], friendly_units: List['Unit'], nova_manager=None):
         """Process one game step for an active Nova.
@@ -483,21 +483,10 @@ class UseDisruptorNova(CombatIndividualBehavior):
         # Update the frame counter
         self.frames_left -= 1
         
-        # Draw debug sphere showing remaining travel distance only when debugging is enabled
-        try:
-            # Only visualize when we have a valid nova_manager with debug_output enabled
-            if nova_manager and hasattr(nova_manager, 'debug_output') and nova_manager.debug_output:
-                # Calculate the maximum distance the Nova can still travel
-                nova_speed = 5.95  # Nova movement speed in game units per second
-                GAME_STEPS_PER_SECOND = 22.4  # Game steps per second
-                # Calculate effective frames (accounting for the frame we're currently in)
-                effective_frames = max(1, self.frames_left)
-                # Calculate maximum travel distance
-                max_travel_distance = nova_speed * (effective_frames / GAME_STEPS_PER_SECOND)
-                # Use nova_manager's implementation to draw the debug sphere
-                nova_manager._draw_nova_radius(self.unit.position, max_travel_distance)
-        except Exception as e:
-            print(f"DEBUG ERROR drawing Nova radius: {e}")
+        # Draw debug sphere showing remaining travel distance
+        if nova_manager:
+            # Call directly to the consolidated method in NovaManager
+            nova_manager._draw_nova_radius(self.unit, self.frames_left)
         
         # Check if we should update our target - do this every frame to be more responsive
         if nova_manager:

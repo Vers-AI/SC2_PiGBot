@@ -1,9 +1,7 @@
 from typing import List, Dict, TYPE_CHECKING, Optional, Set, Tuple
 from sc2.ids.unit_typeid import UnitTypeId
-import time
 import numpy as np
 from sc2.position import Point2
-import traceback
 
 if TYPE_CHECKING:
     from bot.utilities.use_disruptor_nova import UseDisruptorNova
@@ -44,7 +42,6 @@ class NovaManager:
         # Unit tracking
         self.enemy_units = []
         self.friendly_units = []
-        self.current_time = time.time()
 
         if self.debug_output:
             print(f"DEBUG: NovaManager initialized with exclusion radius of {self.exclusion_radius} game units")
@@ -98,11 +95,12 @@ class NovaManager:
         Returns:
             str: Unique ID for this pending target
         """
-        # Generate a unique ID for this pending target
-        target_id = f"pending_{time.time()}_{position.x}_{position.y}"
+        # Generate a unique ID using game time instead of wall clock time
+        game_time = self.bot.time
+        target_id = f"pending_{game_time:.2f}_{position.x}_{position.y}"
         self.pending_targets[target_id] = position
         if self.debug_output:
-            print(f"DEBUG: Added pending target at {position} with ID {target_id}")
+            print(f"DEBUG: Added pending target at {position} with ID {target_id} at game time {game_time:.2f}")
         return target_id
     
     def confirm_pending_target(self, target_id: str) -> None:
@@ -115,7 +113,7 @@ class NovaManager:
         if target_id in self.pending_targets:
             position = self.pending_targets[target_id]
             # Generate new target ID with proper prefix for active targets
-            new_target_id = f"target_{time.time()}_{position.x}_{position.y}"
+            new_target_id = f"target_{self.bot.time:.2f}_{position.x}_{position.y}"
             self.current_targets[new_target_id] = position
             del self.pending_targets[target_id]
             if self.debug_output:
@@ -148,7 +146,6 @@ class NovaManager:
             # Update internal state
             self.enemy_units = enemy_units
             self.friendly_units = friendly_units
-            self.current_time = time.time()  # Just for generating unique keys
             
             # Perform periodic cleanup of expired targets
             self.clean_expired_targets()
@@ -234,7 +231,7 @@ class NovaManager:
                     return False
                     
             # If we get here, the target is valid, so register it with a unique key
-            target_key = f"target_{time.time()}_{position.x}_{position.y}"
+            target_key = f"target_{self.bot.time:.2f}_{position.x}_{position.y}"
             self.current_targets[target_key] = position
             if self.debug_output:
                 print(f"DEBUG: Registered new Nova target at {position} with key {target_key}")
@@ -351,7 +348,7 @@ class NovaManager:
             # Return empty mask on error
             return np.zeros((100, 100), dtype=bool)
 
-    def _draw_nova_radius(self, position: Point2, radius: float):
+    def _draw_nova_radius(self, nova_unit, frames_left: float):
         """
         Draw a debug sphere showing the maximum distance a Nova can travel.
         
@@ -359,24 +356,51 @@ class NovaManager:
         showing how far a Nova can travel before expiring based on its remaining lifetime.
         
         Args:
-            position: Current Nova position
-            radius: Maximum travel distance radius
+            nova_unit: The Nova unit to visualize
+            frames_left: Remaining lifetime in frames
         """
+        # Only proceed if debug output is enabled
+        if not self.debug_output:
+            return
+            
+        # Skip if no valid Nova unit
+        if nova_unit is None:
+            return
+            
         try:
+            # Find the unit in game state to get current position
+            current_position = None
+            for unit in self.bot.units:
+                if unit.tag == nova_unit.tag:
+                    current_position = unit.position
+                    break
+                    
+            # Skip if unit not found
+            if current_position is None:
+                return
+                
+            # Calculate maximum travel distance
+            nova_speed = 5.95  # Nova movement speed in game units per second
+            GAME_STEPS_PER_SECOND = 22.4  # Game steps per second
+            effective_frames = max(1, frames_left)
+            max_travel_distance = nova_speed * (effective_frames / GAME_STEPS_PER_SECOND)
+            
+            # Get height at position
             from sc2.position import Point3
+            height = self.bot.get_terrain_z_height(current_position)
+            point3 = Point3((current_position.x, current_position.y, height))
             
-            # Get the height in world coordinates (exactly like in DragonBot._draw_debug_sphere_at_point)
-            height = self.bot.get_terrain_z_height(position)
+            # Draw the sphere
+            self.bot.client.debug_sphere_out(point3, max_travel_distance, color=Point3((255, 0, 0)))
             
-            # Convert the 2D point to a 3D point with proper height
-            point3 = Point3((position.x, position.y, height))
-            
-            # Draw the sphere using debug_sphere_out with a fixed red color
-            self.bot.client.debug_sphere_out(point3, radius, color=Point3((255, 0, 0)))
+            # Log visualization
+            print(f"DEBUG: Drawing Nova radius at {current_position} with radius {max_travel_distance:.2f}")
             
         except Exception as e:
             print(f"DEBUG ERROR in _draw_nova_radius: {e}")
 
+    # draw_nova_visualization method consolidated into _draw_nova_radius
+    
     def update_units(self, enemy_units, friendly_units):
         """
         Update the cached unit lists for the current game step.
@@ -401,29 +425,38 @@ class NovaManager:
             target_type: Description of target type for debug messages (e.g., "active", "pending")
         """
         targets_to_remove = []
-        current_time = time.time()
+        current_game_time = self.bot.time
         
         # Find targets that have been active longer than the specified time
         for target_id, _ in target_dict.items():
-            # Extract timestamp from the target ID if possible
+            # Extract game time from the target ID if possible
             if '_' in target_id:
                 try:
-                    # Format is typically "type_timestamp_x_y"
+                    # Format is typically "type_gametime_x_y"
                     parts = target_id.split('_')
                     if len(parts) >= 2:
-                        timestamp = float(parts[1])
-                        if current_time - timestamp > max_age:
+                        target_game_time = float(parts[1])
+                        age = current_game_time - target_game_time
+                        if age > max_age:
                             targets_to_remove.append(target_id)
+                            if self.debug_output:
+                                print(f"DEBUG: Target {target_id} expired (age: {age:.2f}s, max: {max_age:.2f}s)")
                 except (ValueError, IndexError):
-                    # If we can't parse the timestamp, leave it alone
+                    # If we can't parse the game time, leave it alone
+                    if self.debug_output:
+                        print(f"DEBUG: Could not parse game time from target ID {target_id}")
                     pass
-        
+    
         # Remove the expired targets
         for target_id in targets_to_remove:
             del target_dict[target_id]
             if self.debug_output:
                 print(f"DEBUG: Removed expired {target_type} target {target_id}")
-    
+                
+        # Log how many targets remain
+        if self.debug_output and target_dict:
+            print(f"DEBUG: {len(target_dict)} {target_type} targets remain after cleanup")
+            
     def clean_expired_targets(self) -> None:
         """
         Remove targets that have expired from the target registry.
