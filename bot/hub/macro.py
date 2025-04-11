@@ -193,16 +193,17 @@ async def handle_macro(
     """
     # If our build is done and we haven't detected cheese, do standard macro
     spawn_location = bot.natural_expansion
+    production_location = bot.start_location
 
     if not bot._used_cheese_response:
         macro_plan: MacroPlan = MacroPlan()
-        macro_plan.add(AutoSupply(base_location=spawn_location))
+        macro_plan.add(AutoSupply(base_location=production_location))
         
         # Select army composition based on current army state
         army_composition = select_army_composition(bot, main_army)
         
         # Use the selected army composition for production
-        macro_plan.add(ProductionController(army_composition, base_location=spawn_location, should_repower_structures=True))
+        macro_plan.add(ProductionController(army_composition, base_location=production_location, should_repower_structures=True))
         
         # Calculate optimal worker count based on available resources
         optimal_worker_count = calculate_optimal_worker_count(bot)
@@ -248,12 +249,12 @@ async def handle_macro(
 
             # Build a cheese defense plan
             cheese_defense_plan: MacroPlan = MacroPlan()
-            cheese_defense_plan.add(AutoSupply(base_location=spawn_location))
+            cheese_defense_plan.add(AutoSupply(base_location=production_location))
             cheese_defense_plan.add(
                 SpawnController(CHEESE_DEFENSE_ARMY, spawn_target=spawn_location, freeflow_mode=freeflow)
             )
             cheese_defense_plan.add(
-                ProductionController(CHEESE_DEFENSE_ARMY, base_location=spawn_location, should_repower_structures=True)
+                ProductionController(CHEESE_DEFENSE_ARMY, base_location=production_location, should_repower_structures=True)
             )
 
             bot.register_behavior(cheese_defense_plan)
