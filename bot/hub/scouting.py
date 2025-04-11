@@ -43,13 +43,16 @@ def control_scout(bot, scout_units: Units, main_army: Units) -> None: #TODO figu
                 # Follow army at some offset
                 if main_army:
                     direction_vector = (main_army.center - scout.position).normalized
-                    follow_target = Point2(main_army.center.towards(attack_target(bot, bot.main_army_position), 15)) - direction_vector * scout.radius
+                    # Get the attack target using the army position
+                    target_point = attack_target(bot, main_army.center)
+                    # Position the observer ahead of army in direction of attack target
+                    # Using the towards method to position the observer ahead of the army
+                    follow_target = Point2(main_army.center.towards(target_point, 15))
                     scout_actions.add(
                     PathUnitToTarget(
                         unit=scout,
                         target=follow_target,
-                        grid=air_grid,
-                        danger_distance=10
+                        grid=air_grid
                         )
                     )
                 else:
