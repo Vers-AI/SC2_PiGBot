@@ -81,6 +81,7 @@ class PiG_Bot(AresBot):
         self._under_attack = False
         self._cheese_reaction_completed = False
         self._one_base_reaction_completed = False
+        self._not_worker_rush = True
         self._is_building = False
 
         # Debug flags
@@ -124,7 +125,7 @@ class PiG_Bot(AresBot):
         and reaction modules to handle behavior.
         """
         await super(PiG_Bot, self).on_step(iteration)
-        self.register_behavior(Mining()) #ares Mining 
+        self.register_behavior(Mining(keep_safe=self._not_worker_rush)) #ares Mining 
 
         # Update game state based on game time 
         #TODO change gamestate to a number base, 0 = early, 1 = mid, 2 = late

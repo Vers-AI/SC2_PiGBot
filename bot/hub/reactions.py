@@ -75,9 +75,10 @@ def early_threat_sensor(bot):
     Detects early threats like zergling rush, proxy zealots, etc.
     Sets flags so the bot can respond (e.g., cheese_reaction).
     """
-    # TODO worker rush response
-    if bot.mediator.get_enemy_worker_rushed:
+    if bot.mediator.get_enemy_worker_rushed and bot.time < 180.0:
         print("Rushed worker detected")
+        bot._not_worker_rush = False
+    
 
     elif (
         bot.mediator.get_enemy_ling_rushed
@@ -96,6 +97,7 @@ def early_threat_sensor(bot):
         # Get enemy natural location
         enemy_natural = bot.mediator.get_enemy_nat
         grid: np.ndarray = bot.mediator.get_ground_grid
+        bot._not_worker_rush = True
 
         # Assign BUILD_RUNNER_SCOUT units to SCOUTING role
         if build_runner_scout_units := bot.mediator.get_units_from_role(
@@ -110,6 +112,7 @@ def early_threat_sensor(bot):
             role=UnitRole.SCOUTING, 
             unit_type=bot.worker_type
         )
+
 
         # Check if scout units exist
         if scout_units: 
