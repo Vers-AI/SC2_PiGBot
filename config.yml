@@ -10,7 +10,7 @@ MyBotRace: Protoss
 AutoUploadToAiarena: True
 ########################
 
-UseData: False
+UseData: True
 Debug: False
 GameStep: 4
 DebugGameStep: 4

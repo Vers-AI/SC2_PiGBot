@@ -261,7 +261,6 @@ def threat_detection(bot, main_army: Units) -> None:
             else:
                 if threat >= high_threshold:
                     bot._under_attack = True
-                    #TODO switch the role of the main army to to Defending
             
             if bot._under_attack:
                 threat_position, num_units = cy_find_units_center_mass(enemy_units, 10.0)
@@ -338,13 +337,7 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
         # Only consider attacking if build order is complete and not in early defensive mode
         if bot.build_order_runner.build_completed and not is_early_defensive_mode:
             # Don't attack if enemy army value is suspiciously low (likely unscouted)
-            if enemy_strength_value < 20 and bot.time > 3 * 60:
-                # Enemy army should have some value by this point, likely unscouted
-                if bot.debug:
-                    bot.client.debug_text_2d(f"Enemy army value suspiciously low, not attacking yet", 
-                                            Point2((0.1, 0.26)), None, 14)
-            # Start attack if we're stronger than threshold ratio or have sufficient force
-            elif ((army_strength_value > enemy_strength_value * attack_threshold_ratio or 
+            if ((army_strength_value > enemy_strength_value * attack_threshold_ratio or 
                 army_strength_value > min_attack_strength) and 
                 not bot._under_attack):
                 control_main_army(bot, main_army, attack_target, 
