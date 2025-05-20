@@ -14,38 +14,97 @@ from ares.behaviors.combat import CombatManeuver
 from ares.managers.manager_mediator import ManagerMediator
 
 
-def defend_worker_cannon_rush(bot, enemy_probes, enemy_cannons):
+def defend_worker_cannon_rush(bot, enemy_probes: Units, enemy_cannons: Units):
     """
-    Defends a cannon rush by pulling worker(s) to attack 
-    enemy probes/cannons quickly.
+    Defends against cannon rush by pulling appropriate number of workers.
+    Manages bot state flags to coordinate with other threat responses.
+    
+    Args:
+        bot: The bot instance
+        enemy_probes: Enemy probe units involved in cannon rush
+        enemy_cannons: Enemy cannons (in progress or completed)
     """
-    # End the primary build order
-    bot.build_order_runner.set_build_completed()
-    bot._used_cheese_response = True
-    bot._under_attack = True
+    # Only respond if we haven't completed the cannon rush response
+    if not getattr(bot, '_cannon_rush_completed', False):
+        # Set initial flags if not already set
+        if not getattr(bot, '_cannon_rush_active', False):
+            bot._cannon_rush_active = True
+            bot.build_order_runner.switch_opening("Cheese_Reaction_Build")
+            bot._used_cheese_response = True
+            bot._under_attack = True
+            bot._worker_cannon_rush_response = True
+        
+        #TODO section is working but needs to make sure probes are attacking 
 
-    # Select a worker
-    worker = bot.mediator.select_worker(target_position=bot.start_location)
-    if worker:
-        bot.mediator.assign_role(tag=worker.tag, role=UnitRole.DEFENDING)
-
-    # Retrieve defending workers
-    defending_workers: Units = bot.mediator.get_units_from_role(
-        role=UnitRole.DEFENDING, 
-        unit_type=UnitTypeId.PROBE
-    )
-
-    # Attack enemy probes
-    for probe in enemy_probes:
-        defending_worker = defending_workers.closest_to(probe)
-        if defending_worker:
-            defending_worker.attack(probe)
-
-    # Attack enemy cannons
-    for cannon in enemy_cannons:
-        defending_worker = defending_workers.closest_to(cannon)
-        if defending_worker:
-            defending_worker.attack(cannon)
+        # Calculate how many workers to pull (1 per cannon + 1 per 2 probes, max 8)
+        workers_needed = min(8, len(enemy_cannons) + (len(enemy_probes) // 2) + 1)
+        
+        # Get current defending workers
+        defending_workers = bot.mediator.get_units_from_role(
+            role=UnitRole.DEFENDING,
+            unit_type=UnitTypeId.PROBE
+        )
+        
+        # Get workers that should be mining (not already defending)
+        available_workers = bot.workers.filter(
+            lambda w: w.tag not in defending_workers.tags
+        )
+        
+        # Assign more workers if needed
+        while len(defending_workers) < workers_needed and available_workers:
+            worker = available_workers.closest_to(bot.start_location)
+            if not worker:
+                break
+            bot.mediator.assign_role(tag=worker.tag, role=UnitRole.DEFENDING)
+            defending_workers.append(worker)
+            available_workers.remove(worker)
+        
+        # Target selection and attack logic
+        for worker in defending_workers:
+            # Prioritize cannons that are nearly complete or complete
+            urgent_targets = enemy_cannons.filter(
+                lambda c: c.build_progress > 0.5 or c.is_ready
+            )
+            
+            if urgent_targets:
+                target = urgent_targets.closest_to(worker)
+            elif enemy_probes:
+                target = enemy_probes.closest_to(worker)
+            elif enemy_cannons:  # Only target cannons < 50% if nothing else
+                target = enemy_cannons.closest_to(worker)
+            else:
+                # No targets, return to mineral line
+                if len(bot.townhalls) > 0:
+                    mf = bot.mineral_field.closest_to(bot.townhalls.first.position)
+                    worker.gather(mf)
+                continue
+                
+            # Attack the target
+            worker.attack(target)
+        
+        # Check if threat is over
+        if not enemy_probes and not enemy_cannons:
+            # Small delay before cleaning up to ensure threat is really gone
+            if not hasattr(bot, '_cannon_rush_cleanup_timer'):
+                bot._cannon_rush_cleanup_timer = bot.time
+            elif bot.time - bot._cannon_rush_cleanup_timer > 10:  # 10 second delay
+                # Clean up workers and flags
+                for worker in defending_workers:
+                    bot.mediator.assign_role(tag=worker.tag, role=UnitRole.GATHERING)
+                
+                # Reset flags
+                bot._cannon_rush_completed = True
+                bot._worker_cannon_rush_response = False
+                bot._used_cheese_response = False
+                bot._under_attack = False
+                
+                # Clean up timers
+                if hasattr(bot, '_cannon_rush_cleanup_timer'):
+                    del bot._cannon_rush_cleanup_timer
+        else:
+            # Reset cleanup timer if we see threats again
+            if hasattr(bot, '_cannon_rush_cleanup_timer'):
+                del bot._cannon_rush_cleanup_timer
 
 def cheese_reaction(bot):
     """
@@ -70,6 +129,8 @@ def one_base_reaction(bot):
     if bot.build_order_runner.build_completed:
         bot._one_base_reaction_completed = True
 
+from bot.utilities.intel import get_enemy_cannon_rushed
+
 def early_threat_sensor(bot):
     """
     Detects early threats like zergling rush, proxy zealots, etc.
@@ -78,8 +139,14 @@ def early_threat_sensor(bot):
     if bot.mediator.get_enemy_worker_rushed and bot.time < 180.0:
         print("Rushed worker detected")
         bot._not_worker_rush = False
+        bot._used_cheese_response = True
     
-
+    # Check for cannon rush
+    elif get_enemy_cannon_rushed(bot):
+        print("Cannon rush detected")
+        bot._used_cheese_response = True
+        bot._worker_cannon_rush_response = True
+    
     elif (
         bot.mediator.get_enemy_ling_rushed
         or (bot.mediator.get_enemy_marauder_rush and bot.time < 150.0)

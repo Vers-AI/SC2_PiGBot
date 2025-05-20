@@ -82,7 +82,13 @@ class PiG_Bot(AresBot):
         self._cheese_reaction_completed = False
         self._one_base_reaction_completed = False
         self._not_worker_rush = True
+        self._worker_cannon_rush_response = False
         self._is_building = False
+        
+        # Cannon rush specific flags
+        self._cannon_rush_active = False
+        self._cannon_rush_completed = False
+        self._cannon_rush_cleanup_timer = None
 
         # Debug flags
         self.debug = False
@@ -159,7 +165,10 @@ class PiG_Bot(AresBot):
                 early_threat_sensor(self)
             # If cheese or one-base flags are set, handle them
             if self._used_cheese_response:
-                cheese_reaction(self)
+                if self._worker_cannon_rush_response:
+                    defend_worker_cannon_rush(self, enemy_probes=self.units(UnitTypeId.PROBE), enemy_cannons=self.units(UnitTypeId.PHOTONCANNON))
+                else:
+                    cheese_reaction(self)
             if self._used_one_base_response:
                 one_base_reaction(self)
         else:
@@ -293,12 +302,6 @@ class PiG_Bot(AresBot):
             return True
         return False
 
-    def defend_cannon_rush(self, enemy_probes, enemy_cannons):
-        """
-        Delegates to a function in reactions.py to handle a cannon rush scenario 
-        by pulling and microing worker units.
-        """
-        defend_worker_cannon_rush(self, enemy_probes, enemy_cannons)
 
     @property
     def Standard_Army(self) -> dict:
