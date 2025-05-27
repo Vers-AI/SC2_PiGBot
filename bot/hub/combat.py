@@ -152,6 +152,18 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
 
     return pos_of_main_squad
 
+def gatekeeper_control(bot, gatekeeper: Units) -> None:
+    gate_keep_pos = bot.mediator.get_pvz_nat_gatekeeping_pos
+    
+    if not gate_keep_pos:
+        return
+    for gate in gatekeeper:
+        # Only issue move command if not already at the position
+        if gate.distance_to(gate_keep_pos) > 1.0:  # 1.0 is a small threshold
+            gate.move(gate_keep_pos)
+            gate(AbilityId.HOLDPOSITION, queue=True)
+        else:
+            gate(AbilityId.HOLDPOSITION)
 
 def warp_prism_follower(bot, warp_prisms: Units, main_army: Units) -> None:
     """

@@ -21,6 +21,7 @@ from sc2.ids.ability_id import AbilityId
 from sc2.position import Point2
 from sc2.unit import Unit
 from sc2.units import Units
+from sc2.data import Race
 
 
 
@@ -32,7 +33,8 @@ from bot.hub.combat import (
     threat_detection,
     warp_prism_follower,
     handle_attack_toggles,
-    regroup_army
+    regroup_army,
+    gatekeeper_control
 )
 from bot.hub.scouting import control_scout
 from ares.behaviors.macro import Mining
@@ -119,11 +121,20 @@ class PiG_Bot(AresBot):
 
 
         # Reserve expansions and set flags
-        self.natural_expansion = self.mediator.get_own_nat
+        self.natural_expansion: Point2 = self.mediator.get_own_nat
+        self.gatekeeping_pos = self.mediator.get_pvz_nat_gatekeeping_pos
+
         self.expansions_generator = cycle(self.expansion_locations_list)
         self.freeflow = self.minerals > 800 and self.vespene < 200
 
+        if self.enemy_race == Race.Zerg or self.enemy_race == Race.Protoss:
+            self.rally_point = self.gatekeeping_pos.towards(self.natural_expansion, 7)
+        else:
+            self.rally_point = self.natural_expansion.towards(self.game_info.map_center, 7)
+
+
         print("Build Chosen:", self.build_order_runner.chosen_opening)
+        print("the enemy race is:", self.enemy_race)
 
     async def on_step(self, iteration: int) -> None:
         """
@@ -147,7 +158,16 @@ class PiG_Bot(AresBot):
         main_army = self.mediator.get_units_from_role(role=UnitRole.ATTACKING)
         warp_prism = self.mediator.get_units_from_role(role=UnitRole.DROP_SHIP)
         scout_units = self.mediator.get_units_from_role(role=UnitRole.SCOUTING)
+        gatekeeper = self.mediator.get_units_from_role(role=UnitRole.GATE_KEEPER)
 
+        if not gatekeeper and self.units(UnitTypeId.ZEALOT).ready.amount > 0:
+            self.mediator.clear_role(tag=self.units(UnitTypeId.ZEALOT).first.tag)
+            self.mediator.assign_role(tag=self.units(UnitTypeId.ZEALOT).first.tag, role=UnitRole.GATE_KEEPER)
+            
+        
+
+            
+        
        
 
         # Create Squad
@@ -163,6 +183,8 @@ class PiG_Bot(AresBot):
             self.register_behavior(RestorePower()) # Restore power to depowered buildings
             if not self._under_attack:  # Still use early_threat_sensor for cheese detection
                 early_threat_sensor(self)
+                if gatekeeper and self.enemy_race == Race.Zerg:
+                    gatekeeper_control(self, gatekeeper)    
             # If cheese or one-base flags are set, handle them
             if self._used_cheese_response:
                 if self._worker_cannon_rush_response:
@@ -209,7 +231,16 @@ class PiG_Bot(AresBot):
         # Fail-safe if build order still not done but we have too many minerals
         if self.minerals > 2800 and not self.build_order_runner.build_completed:
             self.build_order_runner.set_build_completed()
-
+    
+    async def on_building_construction_complete(self, unit: Unit) -> None:
+        """
+        Called whenever a new building is completed. 
+        """
+        await super().on_building_construction_complete(unit)
+        if unit.type_id == UnitTypeId.GATEWAY:
+            if self.rally_point:
+                unit(AbilityId.RALLY_BUILDING, self.rally_point)
+            
 
     async def on_unit_created(self, unit: Unit) -> None:
         """
@@ -224,9 +255,10 @@ class PiG_Bot(AresBot):
             return
         if unit.type_id == UnitTypeId.WARPPRISM:
             self.mediator.assign_role(tag=unit.tag, role=UnitRole.DROP_SHIP)
-            unit.move(Point2(self.natural_expansion.towards(self.game_info.map_center, 1)))
+            unit.move(Point2(self.rally_point))
             return
         
+
         if unit.type_id == UnitTypeId.DISRUPTORPHASED:
             # When a DISRUPTORPHASED unit (the nova) is created, send it to the NovaManager
             self.nova_manager.add_nova(unit)
@@ -234,7 +266,7 @@ class PiG_Bot(AresBot):
 
         # Default: Attacking role
         self.mediator.assign_role(tag=unit.tag, role=UnitRole.ATTACKING)
-        unit.attack(Point2(self.natural_expansion.towards(self.game_info.map_center, 2)))
+        unit.attack(Point2(self.rally_point))
 
     async def on_unit_destroyed(self, unit_tag: int) -> None:
         """Track when units get destroyed."""
