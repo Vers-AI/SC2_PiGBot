@@ -23,7 +23,7 @@ from bot.utilities.nova_manager import NovaManager
 
 from cython_extensions import (
    
-    cy_find_units_center_mass, cy_pick_enemy_target, cy_closest_to, cy_distance_to, cy_center
+    cy_find_units_center_mass, cy_pick_enemy_target, cy_closest_to, cy_distance_to, cy_center, cy_distance_to_squared
     
 )
 
@@ -154,16 +154,35 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
 
 def gatekeeper_control(bot, gatekeeper: Units) -> None:
     gate_keep_pos = bot.mediator.get_pvz_nat_gatekeeping_pos
+    any_close = bot.mediator.get_units_in_range(
+        start_points=[gate_keep_pos],
+        distances=10,
+        query_tree=UnitTreeQueryType.EnemyGround,
+        return_as_dict=False,
+    )
+    print(f"DEBUG: any_close: {any_close}")
+
     
     if not gate_keep_pos:
         return
     for gate in gatekeeper:
-        # Only issue move command if not already at the position
-        if gate.distance_to(gate_keep_pos) > 1.0:  # 1.0 is a small threshold
-            gate.move(gate_keep_pos)
-            gate(AbilityId.HOLDPOSITION, queue=True)
+        dist_to_gate: float = cy_distance_to_squared(gate.position, gate_keep_pos)
+        if any_close:
+            if dist_to_gate > 1.0:
+                gate.move(gate_keep_pos)
+                gate(AbilityId.HOLDPOSITION, queue=True)
+            else:
+                gate(AbilityId.HOLDPOSITION)
         else:
-            gate(AbilityId.HOLDPOSITION)
+            # Move 1 distance towards the natural expansion
+            direction = bot.natural_expansion - gate_keep_pos
+            if direction.length > 0:  # Avoid division by zero
+                # Normalize to get direction vector with length 1
+                direction = direction.normalized
+                # Calculate position 1 unit from gate_keep_pos towards natural
+                target_pos = gate_keep_pos + (direction * 3.0) #TODO tweak this so it works on any map
+                gate.move(target_pos)   
+            
 
 def warp_prism_follower(bot, warp_prisms: Units, main_army: Units) -> None:
     """
