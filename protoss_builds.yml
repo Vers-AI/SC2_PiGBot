@@ -8,7 +8,7 @@ BuildChoices:
     test_123:
         BotName: Test
         Cycle:
-            - B2GM_Starting_Build
+            - B2GM_Starting_Build_PVZ
     Protoss:
         BotName: ProtossRace
         Cycle:
