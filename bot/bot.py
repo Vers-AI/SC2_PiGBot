@@ -21,6 +21,7 @@ from sc2.ids.ability_id import AbilityId
 from sc2.position import Point2
 from sc2.unit import Unit
 from sc2.units import Units
+from sc2.data import Race
 
 
 
@@ -32,7 +33,8 @@ from bot.hub.combat import (
     threat_detection,
     warp_prism_follower,
     handle_attack_toggles,
-    regroup_army
+    regroup_army,
+    gatekeeper_control
 )
 from bot.hub.scouting import control_scout
 from ares.behaviors.macro import Mining
@@ -70,7 +72,8 @@ class PiG_Bot(AresBot):
         self.scout_targets = {}
         self.bases = {}
         self.total_health_shield_percentage = 1.0
-        self.game_state = "early"
+        # Game state: 0 = early game, 1 = mid game, 2 = late game
+        self.game_state = 0
         self.early_game_threshold = 360  # 6 minutes in seconds
         self.mid_game_threshold = 720    # 12 minutes in seconds
 
@@ -82,7 +85,13 @@ class PiG_Bot(AresBot):
         self._cheese_reaction_completed = False
         self._one_base_reaction_completed = False
         self._not_worker_rush = True
+        self._worker_cannon_rush_response = False
         self._is_building = False
+        
+        # Cannon rush specific flags
+        self._cannon_rush_active = False
+        self._cannon_rush_completed = False
+        self._cannon_rush_cleanup_timer = None
 
         # Debug flags
         self.debug = False
@@ -113,11 +122,20 @@ class PiG_Bot(AresBot):
 
 
         # Reserve expansions and set flags
-        self.natural_expansion = self.mediator.get_own_nat
+        self.natural_expansion: Point2 = self.mediator.get_own_nat
+        self.gatekeeping_pos = self.mediator.get_pvz_nat_gatekeeping_pos
+
         self.expansions_generator = cycle(self.expansion_locations_list)
         self.freeflow = self.minerals > 800 and self.vespene < 200
 
+        if self.enemy_race == Race.Zerg or self.enemy_race == Race.Protoss:
+            self.rally_point = self.gatekeeping_pos.towards(self.natural_expansion, 7)
+        else:
+            self.rally_point = self.natural_expansion.towards(self.game_info.map_center, 7)
+
+
         print("Build Chosen:", self.build_order_runner.chosen_opening)
+        print("the enemy race is:", self.enemy_race)
 
     async def on_step(self, iteration: int) -> None:
         """
@@ -127,21 +145,20 @@ class PiG_Bot(AresBot):
         await super(PiG_Bot, self).on_step(iteration)
         self.register_behavior(Mining(keep_safe=self._not_worker_rush)) #ares Mining 
 
-        # Update game state based on game time 
-        #TODO change gamestate to a number base, 0 = early, 1 = mid, 2 = late
-        current_time = self.time
-        if current_time >= self.mid_game_threshold and self.game_state != "late":
-            self.game_state = "late"
-            print(f"Game state changed to LATE GAME at {current_time:.1f} seconds")
-        elif current_time >= self.early_game_threshold and self.game_state == "early":
-            self.game_state = "mid"
-            print(f"Game state changed to MID GAME at {current_time:.1f} seconds")
+        
 
         # Retrieve roles
         main_army = self.mediator.get_units_from_role(role=UnitRole.ATTACKING)
         warp_prism = self.mediator.get_units_from_role(role=UnitRole.DROP_SHIP)
         scout_units = self.mediator.get_units_from_role(role=UnitRole.SCOUTING)
+        gatekeeper = self.mediator.get_units_from_role(role=UnitRole.GATE_KEEPER)
 
+        
+            
+        
+
+            
+        
        
 
         # Create Squad
@@ -156,10 +173,13 @@ class PiG_Bot(AresBot):
         if not self.build_order_runner.build_completed:
             self.register_behavior(RestorePower()) # Restore power to depowered buildings
             if not self._under_attack:  # Still use early_threat_sensor for cheese detection
-                early_threat_sensor(self)
+                early_threat_sensor(self)    
             # If cheese or one-base flags are set, handle them
             if self._used_cheese_response:
-                cheese_reaction(self)
+                if self._worker_cannon_rush_response:
+                    defend_worker_cannon_rush(self, enemy_probes=self.units(UnitTypeId.PROBE), enemy_cannons=self.units(UnitTypeId.PHOTONCANNON))
+                else:
+                    cheese_reaction(self)
             if self._used_one_base_response:
                 one_base_reaction(self)
         else:
@@ -200,7 +220,44 @@ class PiG_Bot(AresBot):
         # Fail-safe if build order still not done but we have too many minerals
         if self.minerals > 2800 and not self.build_order_runner.build_completed:
             self.build_order_runner.set_build_completed()
+        
+        # Update game state based on game time
+        current_time = self.time
+        if current_time >= self.mid_game_threshold:
+            self.game_state = 2  # late game
+        elif current_time >= self.early_game_threshold:
+            self.game_state = 1  # mid game
+            if gatekeeper:
+                for zealot in gatekeeper:
+                    self.mediator.clear_role(tag=zealot.tag)
+                    self.mediator.assign_role(tag=zealot.tag, role=UnitRole.ATTACKING)
+        else:
+            self.game_state = 0  # early game
+            if not gatekeeper and self.enemy_race != Race.Terran:
+                zealots = self.units(UnitTypeId.ZEALOT).ready
+                if zealots:
+                    tag = zealots.first.tag
+                    self.mediator.clear_role(tag=tag)
+                    self.mediator.assign_role(tag=tag, role=UnitRole.GATE_KEEPER)
 
+            elif not self._commenced_attack:
+                gatekeeper_control(self, gatekeeper)
+            else:
+                for zealot in gatekeeper:
+                    self.mediator.clear_role(tag=zealot.tag)
+                    self.mediator.assign_role(tag=zealot.tag, role=UnitRole.ATTACKING)
+                    
+                    
+    
+    async def on_building_construction_complete(self, unit: Unit) -> None:
+        """
+        Called whenever a new building is completed. 
+        """
+        await super().on_building_construction_complete(unit)
+        if unit.type_id == UnitTypeId.GATEWAY:
+            if self.rally_point:
+                unit(AbilityId.RALLY_BUILDING, self.rally_point)
+            
 
     async def on_unit_created(self, unit: Unit) -> None:
         """
@@ -215,9 +272,10 @@ class PiG_Bot(AresBot):
             return
         if unit.type_id == UnitTypeId.WARPPRISM:
             self.mediator.assign_role(tag=unit.tag, role=UnitRole.DROP_SHIP)
-            unit.move(Point2(self.natural_expansion.towards(self.game_info.map_center, 1)))
+            unit.move(Point2(self.rally_point))
             return
         
+
         if unit.type_id == UnitTypeId.DISRUPTORPHASED:
             # When a DISRUPTORPHASED unit (the nova) is created, send it to the NovaManager
             self.nova_manager.add_nova(unit)
@@ -225,7 +283,7 @@ class PiG_Bot(AresBot):
 
         # Default: Attacking role
         self.mediator.assign_role(tag=unit.tag, role=UnitRole.ATTACKING)
-        unit.attack(Point2(self.natural_expansion.towards(self.game_info.map_center, 2)))
+        unit.attack(Point2(self.rally_point))
 
     async def on_unit_destroyed(self, unit_tag: int) -> None:
         """Track when units get destroyed."""
@@ -293,12 +351,6 @@ class PiG_Bot(AresBot):
             return True
         return False
 
-    def defend_cannon_rush(self, enemy_probes, enemy_cannons):
-        """
-        Delegates to a function in reactions.py to handle a cannon rush scenario 
-        by pulling and microing worker units.
-        """
-        defend_worker_cannon_rush(self, enemy_probes, enemy_cannons)
 
     @property
     def Standard_Army(self) -> dict:

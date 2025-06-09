@@ -23,7 +23,7 @@ from bot.utilities.nova_manager import NovaManager
 
 from cython_extensions import (
    
-    cy_find_units_center_mass, cy_pick_enemy_target, cy_closest_to, cy_distance_to, cy_center
+    cy_find_units_center_mass, cy_pick_enemy_target, cy_closest_to, cy_distance_to, cy_center, cy_distance_to_squared
     
 )
 
@@ -152,6 +152,37 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
 
     return pos_of_main_squad
 
+def gatekeeper_control(bot, gatekeeper: Units) -> None:
+    gate_keep_pos = bot.mediator.get_pvz_nat_gatekeeping_pos
+    any_close = bot.mediator.get_units_in_range(
+        start_points=[gate_keep_pos],
+        distances=6,
+        query_tree=UnitTreeQueryType.EnemyGround,
+        return_as_dict=False,
+    )[0]
+    
+
+    
+    if not gate_keep_pos:
+        return
+    for gate in gatekeeper:
+        dist_to_gate: float = cy_distance_to_squared(gate.position, gate_keep_pos)
+        if any_close:
+            if dist_to_gate > 1.0:
+                gate.move(gate_keep_pos)
+                gate(AbilityId.HOLDPOSITION, queue=True)
+            else:
+                gate(AbilityId.HOLDPOSITION)
+        else:
+            # Move 1 distance towards the natural expansion
+            direction = bot.natural_expansion - gate_keep_pos
+            if direction.length > 0:  # Avoid division by zero
+                # Normalize to get direction vector with length 1
+                direction = direction.normalized
+                # Calculate position 1 unit from gate_keep_pos towards natural
+                target_pos = gate_keep_pos + (direction * 3.0)
+                gate.move(target_pos)   
+            
 
 def warp_prism_follower(bot, warp_prisms: Units, main_army: Units) -> None:
     """
@@ -294,7 +325,7 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
     # Early game safety - don't attack during cheese or one-base reactions
     is_early_defensive_mode = bot._used_cheese_response or bot._used_one_base_response
     # Only clear early defensive mode when the one-base reaction is completed
-    if (is_early_defensive_mode and bot._one_base_reaction_completed) or bot.game_state == "mid":
+    if (is_early_defensive_mode and bot._one_base_reaction_completed) or bot.game_state == 1:  # mid game
         is_early_defensive_mode = False
     
     # Debug info
