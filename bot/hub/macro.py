@@ -98,9 +98,9 @@ def expansion_checker(bot, main_army) -> int:
     enemy_army_value = enemy_strength(bot)
     
     # Set collection rate threshold based on game state
-    if bot.game_state == "early":
+    if bot.game_state == 0:  # early game
         collection_threshold = 300
-    elif bot.game_state == "mid":
+    elif bot.game_state == 1:  # mid game
         collection_threshold = 600
     else:  # late game
         collection_threshold = 1000
@@ -139,7 +139,7 @@ def expansion_checker(bot, main_army) -> int:
         # print(f"Fallback expansion to 3 bases at 8 min: {expansion_count}")
     
     # Safety check - don't expand too early with little army
-    if current_bases == 1 and len(main_army) < 5 and bot.game_state == "early":
+    if current_bases == 1 and len(main_army) < 5 and bot.game_state == 0:  # early game
         expansion_count = 1
         # print("Limiting expansion count due to safety concerns")
     
@@ -239,7 +239,7 @@ async def handle_macro(
         optimal_worker_count = calculate_optimal_worker_count(bot)
         bot.register_behavior(BuildWorkers(to_count=optimal_worker_count))
         
-        if bot.game_state == "early":
+        if bot.game_state == 0:  # early game
             bot.register_behavior(
                 ExpansionController(to_count=3, max_pending=1)
             )
@@ -270,7 +270,7 @@ async def handle_macro(
     if scout_units:
         return 
     else:
-        if bot.game_state == "mid" or bot.game_state == "late":
+        if bot.game_state >= 1:  # mid or late game
             if bot.structures(UnitTypeId.ROBOTICSFACILITY).ready:
                 if (bot.units(UnitTypeId.OBSERVER).amount < 1 
                     and bot.already_pending(UnitTypeId.OBSERVER) == 0

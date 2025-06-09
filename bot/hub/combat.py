@@ -156,11 +156,11 @@ def gatekeeper_control(bot, gatekeeper: Units) -> None:
     gate_keep_pos = bot.mediator.get_pvz_nat_gatekeeping_pos
     any_close = bot.mediator.get_units_in_range(
         start_points=[gate_keep_pos],
-        distances=10,
+        distances=6,
         query_tree=UnitTreeQueryType.EnemyGround,
         return_as_dict=False,
-    )
-    print(f"DEBUG: any_close: {any_close}")
+    )[0]
+    
 
     
     if not gate_keep_pos:
@@ -180,7 +180,7 @@ def gatekeeper_control(bot, gatekeeper: Units) -> None:
                 # Normalize to get direction vector with length 1
                 direction = direction.normalized
                 # Calculate position 1 unit from gate_keep_pos towards natural
-                target_pos = gate_keep_pos + (direction * 3.0) #TODO tweak this so it works on any map
+                target_pos = gate_keep_pos + (direction * 3.0)
                 gate.move(target_pos)   
             
 
@@ -325,7 +325,7 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
     # Early game safety - don't attack during cheese or one-base reactions
     is_early_defensive_mode = bot._used_cheese_response or bot._used_one_base_response
     # Only clear early defensive mode when the one-base reaction is completed
-    if (is_early_defensive_mode and bot._one_base_reaction_completed) or bot.game_state == "mid":
+    if (is_early_defensive_mode and bot._one_base_reaction_completed) or bot.game_state == 1:  # mid game
         is_early_defensive_mode = False
     
     # Debug info

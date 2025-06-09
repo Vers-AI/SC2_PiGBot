@@ -72,7 +72,8 @@ class PiG_Bot(AresBot):
         self.scout_targets = {}
         self.bases = {}
         self.total_health_shield_percentage = 1.0
-        self.game_state = "early"
+        # Game state: 0 = early game, 1 = mid game, 2 = late game
+        self.game_state = 0
         self.early_game_threshold = 360  # 6 minutes in seconds
         self.mid_game_threshold = 720    # 12 minutes in seconds
 
@@ -144,15 +145,7 @@ class PiG_Bot(AresBot):
         await super(PiG_Bot, self).on_step(iteration)
         self.register_behavior(Mining(keep_safe=self._not_worker_rush)) #ares Mining 
 
-        # Update game state based on game time 
-        #TODO change gamestate to a number base, 0 = early, 1 = mid, 2 = late
-        current_time = self.time
-        if current_time >= self.mid_game_threshold and self.game_state != "late":
-            self.game_state = "late"
-            print(f"Game state changed to LATE GAME at {current_time:.1f} seconds")
-        elif current_time >= self.early_game_threshold and self.game_state == "early":
-            self.game_state = "mid"
-            print(f"Game state changed to MID GAME at {current_time:.1f} seconds")
+        
 
         # Retrieve roles
         main_army = self.mediator.get_units_from_role(role=UnitRole.ATTACKING)
@@ -160,9 +153,7 @@ class PiG_Bot(AresBot):
         scout_units = self.mediator.get_units_from_role(role=UnitRole.SCOUTING)
         gatekeeper = self.mediator.get_units_from_role(role=UnitRole.GATE_KEEPER)
 
-        if not gatekeeper and self.units(UnitTypeId.ZEALOT).ready.amount > 0:
-            self.mediator.clear_role(tag=self.units(UnitTypeId.ZEALOT).first.tag)
-            self.mediator.assign_role(tag=self.units(UnitTypeId.ZEALOT).first.tag, role=UnitRole.GATE_KEEPER)
+        
             
         
 
@@ -182,9 +173,7 @@ class PiG_Bot(AresBot):
         if not self.build_order_runner.build_completed:
             self.register_behavior(RestorePower()) # Restore power to depowered buildings
             if not self._under_attack:  # Still use early_threat_sensor for cheese detection
-                early_threat_sensor(self)
-                if gatekeeper and self.enemy_race == Race.Zerg:
-                    gatekeeper_control(self, gatekeeper)    
+                early_threat_sensor(self)    
             # If cheese or one-base flags are set, handle them
             if self._used_cheese_response:
                 if self._worker_cannon_rush_response:
@@ -231,6 +220,34 @@ class PiG_Bot(AresBot):
         # Fail-safe if build order still not done but we have too many minerals
         if self.minerals > 2800 and not self.build_order_runner.build_completed:
             self.build_order_runner.set_build_completed()
+        
+        # Update game state based on game time
+        current_time = self.time
+        if current_time >= self.mid_game_threshold:
+            self.game_state = 2  # late game
+        elif current_time >= self.early_game_threshold:
+            self.game_state = 1  # mid game
+            if gatekeeper:
+                for zealot in gatekeeper:
+                    self.mediator.clear_role(tag=zealot.tag)
+                    self.mediator.assign_role(tag=zealot.tag, role=UnitRole.ATTACKING)
+        else:
+            self.game_state = 0  # early game
+            if not gatekeeper and self.enemy_race != Race.Terran:
+                zealots = self.units(UnitTypeId.ZEALOT).ready
+                if zealots:
+                    tag = zealots.first.tag
+                    self.mediator.clear_role(tag=tag)
+                    self.mediator.assign_role(tag=tag, role=UnitRole.GATE_KEEPER)
+
+            elif not self._commenced_attack:
+                gatekeeper_control(self, gatekeeper)
+            else:
+                for zealot in gatekeeper:
+                    self.mediator.clear_role(tag=zealot.tag)
+                    self.mediator.assign_role(tag=zealot.tag, role=UnitRole.ATTACKING)
+                    
+                    
     
     async def on_building_construction_complete(self, unit: Unit) -> None:
         """

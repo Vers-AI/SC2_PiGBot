@@ -59,7 +59,6 @@ def main():
         # Local game
         
         map_list: List[str] = [
-            "AbyssalReefAIE",
             "AcropolisAIE",
             "AutomatonAIE",
             "EphemeronAIE",
