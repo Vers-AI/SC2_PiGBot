@@ -8,13 +8,13 @@ from sc2.position import Point2
 
 
 # Ares imports
-from ares.consts import UnitRole
+from ares.consts import UnitRole, UnitTreeQueryType
 from ares.behaviors.combat.individual import PathUnitToTarget, UseAbility
 from ares.behaviors.combat import CombatManeuver
 from ares.managers.manager_mediator import ManagerMediator
 
 
-def defend_worker_cannon_rush(bot, enemy_probes: Units, enemy_cannons: Units):
+def defend_worker_cannon_rush(bot):
     """
     Defends against cannon rush by pulling appropriate number of workers.
     Manages bot state flags to coordinate with other threat responses.
@@ -25,6 +25,11 @@ def defend_worker_cannon_rush(bot, enemy_probes: Units, enemy_cannons: Units):
         enemy_cannons: Enemy cannons (in progress or completed)
     """
     # Only respond if we haven't completed the cannon rush response
+    enemy_units: Units = bot.mediator.get_units_in_range(
+                        start_points=[bot.start_location],
+                        distances=14,
+                        query_tree=UnitTreeQueryType.AllEnemy,
+                    )[0]
     if not getattr(bot, '_cannon_rush_completed', False):
         # Set initial flags if not already set
         if not getattr(bot, '_cannon_rush_active', False):
@@ -34,7 +39,9 @@ def defend_worker_cannon_rush(bot, enemy_probes: Units, enemy_cannons: Units):
             bot._under_attack = True
             bot._worker_cannon_rush_response = True
         
-        #TODO section is working but needs to make sure probes are attacking 
+        #TODO section is working but need to control the ammount of probes that are attacking 
+        enemy_probes = enemy_units.filter(lambda u: u.type_id == UnitTypeId.PROBE)
+        enemy_cannons = enemy_units.filter(lambda u: u.type_id == UnitTypeId.PHOTONCANNON)
 
         # Calculate how many workers to pull (1 per cannon + 1 per 2 probes, max 8)
         workers_needed = min(8, len(enemy_cannons) + (len(enemy_probes) // 2) + 1)
