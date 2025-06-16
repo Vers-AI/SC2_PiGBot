@@ -59,20 +59,19 @@ def main():
         # Local game
         
         map_list: List[str] = [
-            "AcropolisAIE",
-            "AutomatonAIE",
-            "EphemeronAIE",
-            "InterloperAIE",
-            "ThunderbirdAIE"
+            #"TorchesAIE",
+            #"PylonAIE",
+            #"PersephoneAIE",
+            "AcropolisAIE"
         ]
 
-        random_race = Race.Terran #random.choice([Race.Zerg, Race.Terran, Race.Protoss])
+        random_race = random.choice([Race.Zerg, Race.Terran, Race.Protoss])
         print("Starting local game...")
         run_game(
             maps.get(random.choice(map_list)),
             [
                 bot1,
-                Computer(Race.Zerg, Difficulty.Medium, ai_build=AIBuild.Rush),
+                Computer(Race.Protoss, Difficulty.Medium, ai_build=AIBuild.Rush),
             ],
             realtime=False,
         )

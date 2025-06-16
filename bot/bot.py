@@ -6,7 +6,7 @@ import numpy as np
 
 # Ares imports (framework-specific)
 from ares import AresBot
-from ares.consts import ALL_STRUCTURES, WORKER_TYPES, UnitRole 
+from ares.consts import ALL_STRUCTURES, WORKER_TYPES, UnitRole
 # from ares.managers.unit_manager import UnitManager
 from ares.managers.squad_manager import UnitSquad
 from ares.managers.manager_mediator import ManagerMediator
@@ -123,15 +123,20 @@ class PiG_Bot(AresBot):
 
         # Reserve expansions and set flags
         self.natural_expansion: Point2 = self.mediator.get_own_nat
-        self.gatekeeping_pos = self.mediator.get_pvz_nat_gatekeeping_pos
+        
 
         self.expansions_generator = cycle(self.expansion_locations_list)
         self.freeflow = self.minerals > 800 and self.vespene < 200
 
-        if self.enemy_race == Race.Zerg or self.enemy_race == Race.Protoss:
-            self.rally_point = self.gatekeeping_pos.towards(self.natural_expansion, 7)
+        if self.enemy_race == Race.Zerg:
+            self.gatekeeping_pos = self.mediator.get_pvz_nat_gatekeeping_pos
+            if self.gatekeeping_pos is not None:
+                self.rally_point = self.gatekeeping_pos.towards(self.natural_expansion, 5)
+            else:
+                self.rally_point = self.natural_expansion.towards(self.game_info.map_center, 5)
+
         else:
-            self.rally_point = self.natural_expansion.towards(self.game_info.map_center, 7)
+            self.rally_point = self.natural_expansion.towards(self.game_info.map_center, 5)
 
 
         print("Build Chosen:", self.build_order_runner.chosen_opening)
@@ -153,13 +158,6 @@ class PiG_Bot(AresBot):
         scout_units = self.mediator.get_units_from_role(role=UnitRole.SCOUTING)
         gatekeeper = self.mediator.get_units_from_role(role=UnitRole.GATE_KEEPER)
 
-        
-            
-        
-
-            
-        
-       
 
         # Create Squad
         squads: list[UnitSquad] = self.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15)
@@ -177,10 +175,10 @@ class PiG_Bot(AresBot):
             # If cheese or one-base flags are set, handle them
             if self._used_cheese_response:
                 if self._worker_cannon_rush_response:
-                    defend_worker_cannon_rush(self, enemy_probes=self.units(UnitTypeId.PROBE), enemy_cannons=self.units(UnitTypeId.PHOTONCANNON))
+                    defend_worker_cannon_rush(self)
                 else:
                     cheese_reaction(self)
-            if self._used_one_base_response:
+            elif self._used_one_base_response:
                 one_base_reaction(self)
         else:
             # Macro calls (only run if build order is complete)
@@ -233,19 +231,20 @@ class PiG_Bot(AresBot):
                     self.mediator.assign_role(tag=zealot.tag, role=UnitRole.ATTACKING)
         else:
             self.game_state = 0  # early game
-            if not gatekeeper and self.enemy_race != Race.Terran:
-                zealots = self.units(UnitTypeId.ZEALOT).ready
-                if zealots:
-                    tag = zealots.first.tag
-                    self.mediator.clear_role(tag=tag)
+            if self.enemy_race == Race.Zerg:
+                if not gatekeeper:
+                    zealots = self.units(UnitTypeId.ZEALOT).ready
+                    if zealots:
+                        tag = zealots.first.tag
+                        self.mediator.clear_role(tag=tag)
                     self.mediator.assign_role(tag=tag, role=UnitRole.GATE_KEEPER)
 
-            elif not self._commenced_attack:
-                gatekeeper_control(self, gatekeeper)
-            else:
-                for zealot in gatekeeper:
-                    self.mediator.clear_role(tag=zealot.tag)
-                    self.mediator.assign_role(tag=zealot.tag, role=UnitRole.ATTACKING)
+                elif not self._commenced_attack:
+                    gatekeeper_control(self, gatekeeper)
+                else:
+                    for zealot in gatekeeper:
+                        self.mediator.clear_role(tag=zealot.tag)
+                        self.mediator.assign_role(tag=zealot.tag, role=UnitRole.ATTACKING)
                     
                     
     
