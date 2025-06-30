@@ -27,6 +27,7 @@ from sc2.data import Race
 
 # Modular imports for separated concerns
 from bot.hub.macro import handle_macro
+from bot.hub.reactions import defend_cannon_rush, defend_worker_rush, early_threat_sensor, cheese_reaction, one_base_reaction
 from bot.hub.combat import (
     attack_target,
     control_main_army,
@@ -41,7 +42,7 @@ from ares.behaviors.macro import Mining
 from bot.hub.reactions import (
     early_threat_sensor,
     cheese_reaction,
-    defend_worker_cannon_rush,
+    defend_cannon_rush,
     one_base_reaction
 )
 #debugs
@@ -85,7 +86,7 @@ class PiG_Bot(AresBot):
         self._cheese_reaction_completed = False
         self._one_base_reaction_completed = False
         self._not_worker_rush = True
-        self._worker_cannon_rush_response = False
+        self._cannon_rush_response = False
         self._is_building = False
         
         # Cannon rush specific flags
@@ -174,9 +175,14 @@ class PiG_Bot(AresBot):
                 early_threat_sensor(self)    
             # If cheese or one-base flags are set, handle them
             if self._used_cheese_response:
-                if self._worker_cannon_rush_response:
-                    defend_worker_cannon_rush(self)
+                if not self._not_worker_rush:
+                    # Handle worker rush defense
+                    defend_worker_rush(self)
+                elif self._cannon_rush_response:
+                    # Handle cannon rush defense
+                    defend_cannon_rush(self)
                 else:
+                    # Handle other cheese responses
                     cheese_reaction(self)
             elif self._used_one_base_response:
                 one_base_reaction(self)

@@ -9,12 +9,13 @@ from sc2.position import Point2
 
 # Ares imports
 from ares.consts import UnitRole, UnitTreeQueryType
-from ares.behaviors.combat.individual import PathUnitToTarget, UseAbility
+from ares.behaviors.combat.individual import PathUnitToTarget, WorkerKiteBack
 from ares.behaviors.combat import CombatManeuver
 from ares.managers.manager_mediator import ManagerMediator
 
 
-def defend_worker_cannon_rush(bot):
+
+def defend_cannon_rush(bot):
     """
     Defends against cannon rush by pulling appropriate number of workers.
     Manages bot state flags to coordinate with other threat responses.
@@ -83,10 +84,7 @@ def defend_worker_cannon_rush(bot):
                 target = enemy_pylons.closest_to(worker)
             else:
                 # No targets, return to mineral line
-                if len(bot.townhalls) > 0:
-                    mf = bot.mineral_field.closest_to(bot.townhalls.first.position)
-                    worker.gather(mf)
-                continue
+                bot.mediator.assign_role(tag=worker.tag, role=UnitRole.GATHERING)
                 
             # Attack the target
             worker.attack(target)
@@ -103,7 +101,7 @@ def defend_worker_cannon_rush(bot):
                 
                 # Reset flags
                 bot._cannon_rush_completed = True
-                bot._worker_cannon_rush_response = False
+                bot._cannon_rush_response = False
                 bot._used_cheese_response = False
                 bot._under_attack = False
                 
@@ -114,6 +112,94 @@ def defend_worker_cannon_rush(bot):
             # Reset cleanup timer if we see threats again
             if hasattr(bot, '_cannon_rush_cleanup_timer'):
                 del bot._cannon_rush_cleanup_timer
+
+def defend_worker_rush(bot):
+    """
+    Defends against worker rush by pulling appropriate number of workers.
+    Manages bot state flags to coordinate with other threat responses.
+    
+    Args:
+        bot: The bot instance
+    """
+    #TODO if there are no enemy within our main base i.e they left return to mining
+    #TODO once all enemies a dead return to mining - check flags
+    # Get all enemy units in our base and filter for workers
+    enemy_units = bot.mediator.get_units_in_range(
+        start_points=[bot.start_location],
+        distances=20,  # Larger radius to catch workers coming in
+        query_tree=UnitTreeQueryType.AllEnemy,
+    )[0]
+    enemy_workers = enemy_units.filter(lambda u: u.type_id == UnitTypeId.PROBE)
+
+    # Only respond if we actually see enemy workers
+    if not enemy_workers:
+        return
+
+    # Set initial flags if not already set
+    if not getattr(bot, '_worker_rush_active', False):
+        bot._worker_rush_active = True
+        bot.build_order_runner.switch_opening("Cheese_Reaction_Build")
+        bot._used_cheese_response = True
+        bot._under_attack = True
+        bot._not_worker_rush = False
+
+    # Get current defending workers
+    defending_workers = bot.mediator.get_units_from_role(
+        role=UnitRole.DEFENDING,
+        unit_type=UnitTypeId.PROBE
+    )
+    
+    # Calculate how many workers to pull (1.5x enemy workers, min 4, max 16)
+    workers_needed = min(16, max(4, int(len(enemy_workers) * 1.5)))
+    
+    # Get workers that should be mining (not already defending)
+    available_workers = bot.workers.filter(
+        lambda w: w.tag not in defending_workers.tags
+    )
+    
+    # Assign more workers if needed
+    while len(defending_workers) < workers_needed and available_workers:
+        worker = available_workers.closest_to(bot.start_location)
+        if not worker:
+            break
+        bot.mediator.assign_role(tag=worker.tag, role=UnitRole.DEFENDING)
+        defending_workers.append(worker)
+        available_workers.remove(worker)
+    
+    # Target selection and attack logic
+    for worker in defending_workers:
+        # Find closest enemy worker to this worker
+        if enemy_workers:
+            target = enemy_workers.closest_to(worker)
+            # Use WorkerKiteBack behavior for better micro
+            bot.register_behavior(WorkerKiteBack(unit=worker, target=target))
+        else:
+            # No targets, return to mining
+            bot.mediator.assign_role(tag=worker.tag, role=UnitRole.GATHERING)
+    
+    # Check if threat is over (no enemy workers for 5 seconds)
+    if not enemy_workers:
+        if not hasattr(bot, '_worker_rush_cleanup_timer'):
+            bot._worker_rush_cleanup_timer = bot.time
+        elif bot.time - bot._worker_rush_cleanup_timer > 5.0:  # 5 second delay
+            # Clean up workers by returning them to gathering
+            for worker in defending_workers:
+                bot.mediator.assign_role(tag=worker.tag, role=UnitRole.GATHERING)
+            
+            # Reset flags
+            bot._worker_rush_active = False
+            bot._not_worker_rush = True
+            bot._used_cheese_response = False
+            bot._under_attack = False
+            
+            # Clean up timer
+            if hasattr(bot, '_worker_rush_cleanup_timer'):
+                del bot._worker_rush_cleanup_timer
+    else:
+        # Reset cleanup timer if we see threats again
+        if hasattr(bot, '_worker_rush_cleanup_timer'):
+            del bot._worker_rush_cleanup_timer
+
 
 def cheese_reaction(bot):
     """
@@ -145,7 +231,7 @@ def early_threat_sensor(bot):
     Detects early threats like zergling rush, proxy zealots, etc.
     Sets flags so the bot can respond (e.g., cheese_reaction).
     """
-    if bot.mediator.get_enemy_worker_rushed and bot.time < 180.0:
+    if bot.mediator.get_enemy_worker_rushed and bot.game_state == 0:
         print("Rushed worker detected")
         bot._not_worker_rush = False
         bot._used_cheese_response = True
@@ -154,7 +240,7 @@ def early_threat_sensor(bot):
     elif get_enemy_cannon_rushed(bot):
         print("Cannon rush detected")
         bot._used_cheese_response = True
-        bot._worker_cannon_rush_response = True
+        bot._cannon_rush_response = True
     
     elif (
         bot.mediator.get_enemy_ling_rushed
