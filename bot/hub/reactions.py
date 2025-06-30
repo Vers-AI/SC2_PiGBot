@@ -39,12 +39,12 @@ def defend_worker_cannon_rush(bot):
             bot._under_attack = True
             bot._worker_cannon_rush_response = True
         
-        #TODO section is working but need to control the ammount of probes that are attacking 
         enemy_probes = enemy_units.filter(lambda u: u.type_id == UnitTypeId.PROBE)
         enemy_cannons = enemy_units.filter(lambda u: u.type_id == UnitTypeId.PHOTONCANNON)
+        enemy_pylons = enemy_units.filter(lambda u: u.type_id == UnitTypeId.PYLON)
 
         # Calculate how many workers to pull (1 per cannon + 1 per 2 probes, max 8)
-        workers_needed = min(8, len(enemy_cannons) + (len(enemy_probes) // 2) + 1)
+        workers_needed = min(24, len(enemy_cannons) + (len(enemy_probes) // 2) + 8)
         
         # Get current defending workers
         defending_workers = bot.mediator.get_units_from_role(
@@ -79,6 +79,8 @@ def defend_worker_cannon_rush(bot):
                 target = enemy_probes.closest_to(worker)
             elif enemy_cannons:  # Only target cannons < 50% if nothing else
                 target = enemy_cannons.closest_to(worker)
+            elif enemy_pylons:
+                target = enemy_pylons.closest_to(worker)
             else:
                 # No targets, return to mineral line
                 if len(bot.townhalls) > 0:
@@ -90,7 +92,7 @@ def defend_worker_cannon_rush(bot):
             worker.attack(target)
         
         # Check if threat is over
-        if not enemy_probes and not enemy_cannons:
+        if not enemy_probes and not enemy_cannons and not enemy_pylons:
             # Small delay before cleaning up to ensure threat is really gone
             if not hasattr(bot, '_cannon_rush_cleanup_timer'):
                 bot._cannon_rush_cleanup_timer = bot.time
