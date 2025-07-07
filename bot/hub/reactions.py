@@ -121,12 +121,12 @@ def defend_worker_rush(bot):
     Args:
         bot: The bot instance
     """
-    #TODO if there are no enemy within our main base i.e they left return to mining
-    #TODO once all enemies a dead return to mining - check flags
+    #TODO Fix why Probes dont' return to work after worker rush
     # Get all enemy units in our base and filter for workers
+    
     enemy_units = bot.mediator.get_units_in_range(
-        start_points=[bot.start_location],
-        distances=20,  # Larger radius to catch workers coming in
+        start_points=[bot.natural_expansion if bot.structures.closer_than(8, bot.natural_expansion) else bot.start_location],
+        distances=25,  # Larger radius to catch workers coming in
         query_tree=UnitTreeQueryType.AllEnemy,
     )[0]
     enemy_workers = enemy_units.filter(lambda u: u.type_id == UnitTypeId.PROBE)
@@ -175,6 +175,9 @@ def defend_worker_rush(bot):
             bot.register_behavior(WorkerKiteBack(unit=worker, target=target))
         else:
             # No targets, return to mining
+            if bot.mineral_field:
+                mf = bot.mineral_field.closest_to(bot.start_location)
+                worker.gather(mf)
             bot.mediator.assign_role(tag=worker.tag, role=UnitRole.GATHERING)
     
     # Check if threat is over (no enemy workers for 5 seconds)
