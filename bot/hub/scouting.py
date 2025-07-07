@@ -10,7 +10,7 @@ from ares.consts import UnitRole, UnitTreeQueryType
 from bot.hub.combat import attack_target
 
 
-def control_scout(bot, scout_units: Units, main_army: Units) -> None: #TODO figure out why observer isn't moving straight to target and not scouting to locaions
+def control_scout(bot, scout_units: Units, main_army: Units) -> None: 
     """
     Controls your scouting units: decides whether to follow the main army
     or visit expansion locations when safe.
@@ -42,12 +42,27 @@ def control_scout(bot, scout_units: Units, main_army: Units) -> None: #TODO figu
             else:
                 # Follow army at some offset
                 if main_army:
-                    direction_vector = (main_army.center - scout.position).normalized
-                    # Get the attack target using the army position
-                    target_point = attack_target(bot, main_army.center)
-                    # Position the observer ahead of army in direction of attack target
-                    # Using the towards method to position the observer ahead of the army
-                    follow_target = Point2(main_army.center.towards(target_point, 15))
+                    # Compute direction towards attack target
+                    target_point: Point2 = attack_target(bot, main_army.center)
+
+                    # --- Dynamic lead distance -------------------------------------------------
+                    # Base lead distance (safe situation)
+                    lead_distance: int = 12
+                    # Sample the influence value on the air grid at the desired lead spot.
+                    tentative_target: Point2 = Point2(main_army.center.towards(target_point, lead_distance))
+
+                    try:
+                        # Grid is indexed in (x, y) order according to SC2 coordinate convention
+                        influence: float = air_grid[int(tentative_target.x)][int(tentative_target.y)]
+                        # If influence > 1 (enemy threat), shorten the lead distance to stay safer.
+                        if influence > 1:
+                            lead_distance = 6
+                    except Exception:
+                        # Fallback in case of index error or grid issue
+                        lead_distance = 10
+
+                    # Final follow target ahead of army taking into account the adjusted lead distance
+                    follow_target: Point2 = Point2(main_army.center.towards(target_point, lead_distance))
                     scout_actions.add(
                     PathUnitToTarget(
                         unit=scout,
