@@ -73,13 +73,13 @@ poetry run python run.py
 ```
 
 ## Project Structure
-
+```
 /bot/             # Core bot logic
 ├── /utilities/   # Helper functions and utilities
 ├── /managers/    # Bot behavior managers
 /data/            # Game data and configs
 /run.py           # Entry point to run the bot
-
+```
 ## Contributing Guidelines
 
 ### How to Contribute
