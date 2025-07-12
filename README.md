@@ -74,11 +74,11 @@ poetry run python run.py
 
 ## Project Structure
 
-- `/bot/` - Core bot logic
-  - `/utilities/` - Helper functions and utilities
-  - `/managers/` - Different aspects of bot behavior management
-- `/data/` - Game data and configuration files
-- `/run.py` - Main entry point for running the bot
+/bot/             # Core bot logic
+├── /utilities/   # Helper functions and utilities
+├── /managers/    # Bot behavior managers
+/data/            # Game data and configs
+/run.py           # Entry point to run the bot
 
 ## Contributing Guidelines
 
