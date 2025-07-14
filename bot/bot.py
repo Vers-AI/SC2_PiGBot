@@ -26,9 +26,9 @@ from sc2.data import Race
 
 
 # Modular imports for separated concerns
-from bot.hub.macro import handle_macro
-from bot.hub.reactions import defend_cannon_rush, defend_worker_rush, early_threat_sensor, cheese_reaction, one_base_reaction
-from bot.hub.combat import (
+from bot.managers.macro import handle_macro
+from bot.managers.reactions import defend_cannon_rush, defend_worker_rush, early_threat_sensor, cheese_reaction, one_base_reaction
+from bot.managers.combat import (
     attack_target,
     control_main_army,
     threat_detection,
@@ -37,9 +37,9 @@ from bot.hub.combat import (
     regroup_army,
     gatekeeper_control
 )
-from bot.hub.scouting import control_scout
+from bot.managers.scouting import control_scout
 from ares.behaviors.macro import Mining
-from bot.hub.reactions import (
+from bot.managers.reactions import (
     early_threat_sensor,
     cheese_reaction,
     defend_cannon_rush,
@@ -77,6 +77,14 @@ class PiG_Bot(AresBot):
         self.game_state = 0
         self.early_game_threshold = 360  # 6 minutes in seconds
         self.mid_game_threshold = 720    # 12 minutes in seconds
+        
+        # Observer assignments
+        self.observer_assignments = {
+            "primary": None,      # The first observer (enemy nat)
+            "army": None,         # The second observer (follows army)
+            "patrol": [],         # Additional observers (map locations)
+        }
+        self.observer_targets = {}  # Maps observer.tag -> current target
 
         # Flags for in-game logic
         self._commenced_attack = False
@@ -142,6 +150,7 @@ class PiG_Bot(AresBot):
 
         print("Build Chosen:", self.build_order_runner.chosen_opening)
         print("the enemy race is:", self.enemy_race)
+        print("the enemy OL spot near natural is:", self.mediator.get_ol_spot_near_enemy_nat) #TODO talk to rasper about this 
 
     async def on_step(self, iteration: int) -> None:
         """
@@ -214,7 +223,9 @@ class PiG_Bot(AresBot):
             regroup_army(self, main_army)
 
         # Scouting actions
-        control_scout(self, scout_units, main_army)
+        from bot.managers.scouting import control_observers
+        observers = self.units(UnitTypeId.OBSERVER)
+        control_observers(self, observers, main_army)
 
         # Merge Archons if we have 2 or more High Templar
         if self.units(UnitTypeId.HIGHTEMPLAR).amount >= 2:
@@ -273,8 +284,20 @@ class PiG_Bot(AresBot):
             return
 
         if unit.type_id == UnitTypeId.OBSERVER:
-            self.mediator.assign_role(tag=unit.tag, role=UnitRole.SCOUTING)
+            # First Observer - primary scout (enemy natural in mid-game)
+            if self.observer_assignments["primary"] is None:
+                self.observer_assignments["primary"] = unit.tag
+                self.mediator.assign_role(tag=unit.tag, role=UnitRole.SCOUTING)
+            # Second Observer - army follower
+            elif self.observer_assignments["army"] is None:
+                self.observer_assignments["army"] = unit.tag
+                self.mediator.assign_role(tag=unit.tag, role=UnitRole.CONTROL_GROUP_EIGHT)
+            # Additional Observers - patrol key map positions
+            else:
+                self.observer_assignments["patrol"].append(unit.tag)
+                self.mediator.assign_role(tag=unit.tag, role=UnitRole.CONTROL_GROUP_NINE)
             return
+            
         if unit.type_id == UnitTypeId.WARPPRISM:
             self.mediator.assign_role(tag=unit.tag, role=UnitRole.DROP_SHIP)
             unit.move(Point2(self.rally_point))
@@ -293,6 +316,34 @@ class PiG_Bot(AresBot):
     async def on_unit_destroyed(self, unit_tag: int) -> None:
         """Track when units get destroyed."""
         await super(PiG_Bot, self).on_unit_destroyed(unit_tag)
+        
+        # Handle observer reassignment if destroyed
+        if unit_tag == self.observer_assignments.get("primary"):
+            self.observer_assignments["primary"] = None
+            # Try to promote a patrol observer if available
+            if self.observer_assignments["patrol"]:
+                self.observer_assignments["primary"] = self.observer_assignments["patrol"].pop(0)
+                # Update the role if the unit still exists
+                if self.observer_assignments["primary"] in [unit.tag for unit in self.units]:
+                    self.mediator.clear_role(tag=self.observer_assignments["primary"])
+                    self.mediator.assign_role(tag=self.observer_assignments["primary"], role=UnitRole.SCOUTING)
+        
+        elif unit_tag == self.observer_assignments.get("army"):
+            self.observer_assignments["army"] = None
+            # Try to promote a patrol observer if available
+            if self.observer_assignments["patrol"]:
+                self.observer_assignments["army"] = self.observer_assignments["patrol"].pop(0)
+                # Update the role if the unit still exists
+                if self.observer_assignments["army"] in [unit.tag for unit in self.units]:
+                    self.mediator.clear_role(tag=self.observer_assignments["army"])
+                    self.mediator.assign_role(tag=self.observer_assignments["army"], role=UnitRole.CONTROL_GROUP_EIGHT)
+        
+        elif unit_tag in self.observer_assignments.get("patrol", []):
+            self.observer_assignments["patrol"].remove(unit_tag)
+            
+        # Clean up observer targets if needed
+        if unit_tag in self.observer_targets:
+            del self.observer_targets[unit_tag]
 
     async def on_unit_type_changed(self, unit: Unit, previous_type: UnitTypeId) -> None:
         """Called when a unit changes type, like Disruptor firing a Nova."""
