@@ -1,4 +1,4 @@
-# bot/hub/reactions.py
+# bot/managers/reactions.py
 import numpy as np
 
 from sc2.ids.unit_typeid import UnitTypeId
