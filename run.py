@@ -60,7 +60,8 @@ def main():
             #"TorchesAIE",
             #"PylonAIE",
             #"PersephoneAIE",
-            "AcropolisAIE"
+            "InterloperAIE"
+
         ]
 
         print("Starting local game...")
@@ -68,7 +69,7 @@ def main():
             maps.get(random.choice(map_list)),
             [
                 bot1,
-                Computer(Race.Random, Difficulty.Medium, ai_build=AIBuild.Macro),
+                Computer(Race.Random, Difficulty.Easy, ai_build=AIBuild.Macro),
             ],
             realtime=False,
         )
