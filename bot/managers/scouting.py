@@ -2,13 +2,14 @@
 
 import numpy as np
 from typing import Dict, List, Optional, Set
+from sc2.data import AbilityId
 from sc2.units import Units
 from sc2.position import Point2
 from sc2.unit import Unit
 from sc2.ids.unit_typeid import UnitTypeId
 
 from ares.behaviors.combat import CombatManeuver
-from ares.behaviors.combat.individual import KeepUnitSafe, PathUnitToTarget
+from ares.behaviors.combat.individual import KeepUnitSafe, PathUnitToTarget, UseAbility
 from ares.consts import UnitRole, UnitTreeQueryType
 from bot.managers.combat import attack_target
 
@@ -142,6 +143,8 @@ def control_primary_observer(bot, observer: Optional[Unit], main_army: Units) ->
                     grid=air_grid,
                     danger_distance=15
                 ))
+                if observer.position.distance_to(ol_spot) < 1:
+                    observer(AbilityId.MORPH_SURVEILLANCEMODE)
             else:
                 # Fallback if no overlord spot defined
                 actions.add(PathUnitToTarget(
