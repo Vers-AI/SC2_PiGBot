@@ -71,7 +71,7 @@ class NovaManager:
             print(f"DEBUG: NovaManager movement speed set to {self.nova_speed} game units/second")
 
         if not hasattr(nova, 'update_info'):
-            nova_instance = UseDisruptorNova(mediator=self.mediator, bot=self.bot)
+            nova_instance = UseDisruptorNova(mediator=self.mediator, bot=self.bot, debug_output=self.debug_output)
             nova_instance.load_info(nova)
             self.active_novas.append(nova_instance)
         else:

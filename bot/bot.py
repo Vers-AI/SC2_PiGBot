@@ -117,8 +117,12 @@ class PiG_Bot(AresBot):
 
         # Debug on start
         self.map_data: MapData  = self.mediator.get_map_data_object
-        self.use_disruptor_nova = UseDisruptorNova(mediator=self.mediator, bot=self)
-        self.nova_manager = NovaManager(bot=self, mediator=self.mediator)  # Initialize the NovaManager
+        
+        # Debug control - set to True to enable debug output for disruptor nova system
+        debug_disruptor_nova = False
+        
+        self.use_disruptor_nova = UseDisruptorNova(mediator=self.mediator, bot=self, debug_output=debug_disruptor_nova)
+        self.nova_manager = NovaManager(bot=self, mediator=self.mediator, debug_output=debug_disruptor_nova)  # Initialize the NovaManager
 
         self.current_base_target = self.enemy_start_locations[0]
 
@@ -150,7 +154,6 @@ class PiG_Bot(AresBot):
 
         print("Build Chosen:", self.build_order_runner.chosen_opening)
         print("the enemy race is:", self.enemy_race)
-        print("the enemy OL spot near natural is:", self.mediator.get_ol_spot_near_enemy_nat) #TODO talk to rasper about this 
 
     async def on_step(self, iteration: int) -> None:
         """
