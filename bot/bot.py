@@ -73,6 +73,8 @@ class PiG_Bot(AresBot):
         self.scout_targets = {}
         self.bases = {}
         self.total_health_shield_percentage = 1.0
+        self.enemy_army = None
+        self.own_army = None
         # Game state: 0 = early game, 1 = mid game, 2 = late game
         self.game_state = 0
         self.early_game_threshold = 360  # 6 minutes in seconds
@@ -163,7 +165,7 @@ class PiG_Bot(AresBot):
         await super(PiG_Bot, self).on_step(iteration)
         self.register_behavior(Mining(keep_safe=self._not_worker_rush)) #ares Mining 
 
-        
+        self.enemy_army = self.mediator.get_cached_enemy_army
 
         # Retrieve roles
         main_army = self.mediator.get_units_from_role(role=UnitRole.ATTACKING)
@@ -179,6 +181,8 @@ class PiG_Bot(AresBot):
         # This ensures we're always responding to immediate threats regardless of build order status
         if main_army:  # Only run detection if we have an army to use for defense
             threat_detection(self, main_army)
+            self.own_army = self.mediator.get_own_army
+
 
         # Early game logic
         if not self.build_order_runner.build_completed:

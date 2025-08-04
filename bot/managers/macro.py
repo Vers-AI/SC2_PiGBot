@@ -16,9 +16,10 @@ from ares.behaviors.macro import (
     GasBuildingController,
 )
 from ares.dicts.unit_data import UNIT_DATA
+from ares.consts import LOSS_MARGINAL_OR_BETTER
 
 from bot.managers.scouting import control_scout
-from bot.managers.combat import COMMON_UNIT_IGNORE_TYPES, enemy_strength, army_strength
+from bot.managers.combat import COMMON_UNIT_IGNORE_TYPES
 
 # Army composition constants 
 STANDARD_ARMY_0 = {
@@ -92,11 +93,6 @@ def expansion_checker(bot, main_army) -> int:
     mineral_collection_rate = bot.state.score.collection_rate_minerals
     vespene_collection_rate = bot.state.score.collection_rate_vespene
     
-    # Get our army value using the army_strength function
-    own_army_value = army_strength(main_army)
-    
-    # Get enemy army value using the enemy_strength function
-    enemy_army_value = enemy_strength(bot)
     
     # Set collection rate threshold based on game state
     if bot.game_state == 0:  # early game
@@ -121,7 +117,13 @@ def expansion_checker(bot, main_army) -> int:
         # Step 2: Check if we have saturation 
         if worker_saturation > 0.8:
             # Step 3: Check army values
-            if own_army_value > enemy_army_value * 0.8 or own_army_value > 1000:
+            if bot.mediator.can_win_fight(
+                own_units=bot.own_army,
+                enemy_units=bot.enemy_army,
+                timing_adjust=True,
+                good_positioning=False,
+                workers_do_no_damage=True,
+            ) in LOSS_MARGINAL_OR_BETTER:
                 # Safe to expand
                 expansion_count = current_bases + 1
                 # print(f"Expanding based on army advantage: {expansion_count}")

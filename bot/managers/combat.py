@@ -5,7 +5,7 @@ from sc2.units import Units
 from sc2.unit import Unit
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.ability_id import AbilityId
-from ares.consts import UnitTreeQueryType
+from ares.consts import LOSS_MARGINAL_OR_WORSE, TIE_OR_BETTER, UnitTreeQueryType
 
 from ares.behaviors.combat import CombatManeuver
 from ares.behaviors.combat.individual import (
@@ -15,6 +15,7 @@ from ares.behaviors.combat.group import (
     AMoveGroup, PathGroupToTarget
 )
 from ares.managers.squad_manager import UnitSquad
+
 from ares.consts import UnitRole
 from ares.dicts.unit_data import UNIT_DATA
 
@@ -308,20 +309,11 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
     Controls when to attack and when to retreat based on relative army strength
     and threat assessment.
     """
-    # Calculate strength values for decision making
-    army_strength_value = army_strength(main_army)
-    enemy_strength_value = enemy_strength(bot)
     
     # Assess the threat level of enemy units
     enemy_threat_level = assess_threat(bot, bot.enemy_units, main_army)
 
-    # Set attack threshold ratio (1.2 means we attack when our army is 120% or more of enemy strength)
-    attack_threshold_ratio = 1.2
-    # Set minimum army strength before attacking regardless of enemy strength
-    min_attack_strength = 300
-    # Set retreat threshold ratio (0.6 means we retreat if our army falls below 60% of enemy strength)
-    retreat_threshold_ratio = 0.6
-    
+    enemy_army = bot.enemy_army
     # Early game safety - don't attack during cheese or one-base reactions
     is_early_defensive_mode = bot._used_cheese_response or bot._used_one_base_response
     # Only clear early defensive mode when the one-base reaction is completed
@@ -330,8 +322,9 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
     
     # Debug info
     if bot.debug:
-        bot.client.debug_text_2d(f"Army: {army_strength_value:.0f} Enemy: {enemy_strength_value:.0f} Ratio: {(army_strength_value/max(enemy_strength_value, 1)):.2f}", 
-                                Point2((0.1, 0.2)), None, 14)
+        print(bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=False, good_positioning=False, workers_do_no_damage=False))
+        print(bot.enemy_army)
+
         bot.client.debug_text_2d(f"Attack: {bot._commenced_attack} Threat: {enemy_threat_level} Under Attack: {bot._under_attack}", 
                                 Point2((0.1, 0.22)), None, 14)
         bot.client.debug_text_2d(f"EarlyDefMode: {is_early_defensive_mode} Cheese: {bot._used_cheese_response} OneBase: {bot._used_one_base_response}", 
@@ -347,8 +340,7 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
                 control_main_army(bot, main_army, nearest_base.position, 
                                 bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
         # Decide whether to retreat based on army ratio
-        elif (army_strength_value < enemy_strength_value * retreat_threshold_ratio and 
-            army_strength_value < min_attack_strength):
+        elif (bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=True, good_positioning=False, workers_do_no_damage=True) in LOSS_MARGINAL_OR_WORSE):
             # Retreat to the closest base if we're outmatched
             bot._commenced_attack = False
             nearest_base = bot.townhalls.closest_to(main_army.center)
@@ -366,10 +358,8 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
                             bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
     else:
         # Only consider attacking if build order is complete and not in early defensive mode
-        if bot.build_order_runner.build_completed and not is_early_defensive_mode:
-            # Don't attack if enemy army value is suspiciously low (likely unscouted)
-            if ((army_strength_value > enemy_strength_value * attack_threshold_ratio or 
-                army_strength_value > min_attack_strength) and 
+        if not is_early_defensive_mode:
+            if ((bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=True, good_positioning=False, workers_do_no_damage=True) in TIE_OR_BETTER) and 
                 not bot._under_attack):
                 control_main_army(bot, main_army, attack_target, 
                                 bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
@@ -448,31 +438,3 @@ def regroup_army(bot, main_army: Units) -> None:
         print("Regrouping army")
 
 
-def army_strength(main_army_power: Units) -> float:
-    """
-    Returns the total strength of the main army.
-    """
-    total_strength = 0.0
-    for unit in main_army_power:
-        if unit.type_id not in COMMON_UNIT_IGNORE_TYPES:
-            power = UNIT_DATA[unit.type_id]['army_value']
-            # Multiply power by the effective power (health + shield) scaled by 50.0, tweak if needed
-            total_strength += power * unit.shield_health_percentage #((unit.health + unit.shield) / 50.0)
-
-    return total_strength
-
-
-def enemy_strength(bot) -> float:
-    """
-    Returns the total strength of the enemy army.
-    """
-    total_strength = 0.0
-    enemy_units = bot.mediator.get_cached_enemy_army
-    
-    for unit in enemy_units:
-        if unit.type_id in UNIT_DATA and unit.type_id not in COMMON_UNIT_IGNORE_TYPES:
-            enemy_army_value = UNIT_DATA[unit.type_id]['army_value']
-            # Multiply power by the effective power (health + shield) scaled by 50.0, tweak if needed
-            total_strength += enemy_army_value * unit.shield_health_percentage #* ((unit.health + unit.shield) / 50.0)
-
-    return total_strength
