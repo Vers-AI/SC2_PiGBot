@@ -160,6 +160,7 @@ def control_primary_observer(bot, observer: Optional[Unit], main_army: Units) ->
 def control_army_observer(bot, observer: Optional[Unit], main_army: Units) -> None:
     """
     Control the army observer to follow and provide vision for the main army.
+    Prioritizes moving towards cloaked/burrowed enemies near the army if present.
     
     Parameters:
     - bot: The bot instance
@@ -179,29 +180,55 @@ def control_army_observer(bot, observer: Optional[Unit], main_army: Units) -> No
             grid=air_grid
         ))
     elif main_army:
-        # Compute direction towards attack target
-        target_point = attack_target(bot, main_army.center)
+        # Check for cloaked/burrowed enemies near the army that need detection
+        army_center = main_army.center
+        army_threat_radius = 15  # Range to check for enemies near army
         
-        # Dynamic lead distance based on threat level
-        lead_distance = 12
-        tentative_target = Point2(main_army.center.towards(target_point, lead_distance))
+        # Get enemies near the army
+        nearby_enemies = bot.enemy_units.closer_than(army_threat_radius, army_center)
         
-        try:
-            # Grid is indexed in (x, y) order according to SC2 coordinate convention
-            influence = air_grid[int(tentative_target.x)][int(tentative_target.y)]
-            # If influence > 1 (enemy threat), shorten the lead distance to stay safer
-            if influence > 1:
-                lead_distance = 6
-        except Exception:
-            # Fallback in case of index error or grid issue
-            lead_distance = 10
+        # Filter for enemies that are cloaked or burrowed (excluding drones and observer siege mode)
+        priority_enemies = nearby_enemies.filter(lambda u: 
+            u.is_cloaked or 
+            u.is_burrowed or
+            u.type_id in {
+                UnitTypeId.LURKERMPBURROWED,
+                UnitTypeId.ROACHBURROWED, UnitTypeId.ZERGLINGBURROWED,
+                UnitTypeId.HYDRALISKBURROWED, UnitTypeId.ULTRALISKBURROWED,
+                UnitTypeId.WIDOWMINEBURROWED
+            }
+        )
         
-        # Final follow target ahead of army taking into account the adjusted lead distance
-        follow_target = Point2(main_army.center.towards(target_point, lead_distance))
+        if priority_enemies:
+            # Priority: move towards the closest cloaked/burrowed enemy
+            closest_priority_enemy = priority_enemies.closest_to(army_center)
+            follow_target = closest_priority_enemy.position
+        else:
+            # Normal behavior: look ahead of the army
+            target_point = attack_target(bot, main_army.center)
+            
+            # Dynamic lead distance based on threat level
+            lead_distance = 12
+            tentative_target = Point2(main_army.center.towards(target_point, lead_distance))
+            
+            try:
+                # Grid is indexed in (x, y) order according to SC2 coordinate convention
+                influence = air_grid[int(tentative_target.x)][int(tentative_target.y)]
+                # If influence > 1 (enemy threat), shorten the lead distance to stay safer
+                if influence > 1:
+                    lead_distance = 6
+            except Exception:
+                # Fallback in case of index error or grid issue
+                lead_distance = 10
+            
+            # Final follow target ahead of army taking into account the adjusted lead distance
+            follow_target = Point2(main_army.center.towards(target_point, lead_distance))
+        
         actions.add(PathUnitToTarget(
             unit=observer,
             target=follow_target,
-            grid=air_grid
+            grid=air_grid,
+            sense_danger=False
         ))
     else:
         # No army to follow, stay near main base
