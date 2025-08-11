@@ -298,8 +298,7 @@ def threat_detection(bot, main_army: Units) -> None:
                 threat_position, num_units = cy_find_units_center_mass(enemy_units, 10.0)
                 threat_position = Point2(threat_position)
                 control_main_army(bot, main_army, threat_position, bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
-                if bot._one_base_reaction_completed:
-                    bot.use_overcharge(main_army) # TODO remove overcharge
+               
 
 
 def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:

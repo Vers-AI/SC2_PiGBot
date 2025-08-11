@@ -384,35 +384,66 @@ class PiG_Bot(AresBot):
     # Utility / Additional Methods
     # -------------------------------------
     
-    def use_overcharge(self, main_army: Units) -> bool:
+    def use_recharge(self, main_army: Units) -> bool:
         """
-        Checks conditions for Shield Battery Overcharge if army is near 
-        a Nexus with enough energy.
+        Uses Energy Recharge on the unit with the lowest energy percentage within range of the closest Nexus.
+        
+        Targets specific energy-using units: Mothership, High Templar, Oracle, and Sentry.
+        
+        Args:
+            main_army: Units to consider for the army center calculation
+            
+        Returns:
+            bool: True if Energy Recharge was used, False otherwise
         """
-        if self.total_health_shield_percentage >= 0.75:
+        #TODO Test this
+        if not main_army:
             return False
 
-        # Find nearest Nexus
+        # Define energy-using unit types in priority order
+        priority_unit_types = [
+            UnitTypeId.MOTHERSHIP,
+            UnitTypeId.HIGHTEMPLAR,
+            UnitTypeId.ORACLE,
+            UnitTypeId.SENTRY
+        ]
+
+        # Find the closest Nexus to the army center
         closest_nexus = None
         closest_distance = float("inf")
         for nexus in self.structures(UnitTypeId.NEXUS).ready:
+            if nexus.energy < 50:  # Need enough energy for the ability
+                continue
             distance = main_army.center.distance_to(nexus.position)
             if distance < closest_distance:
                 closest_distance = distance
                 closest_nexus = nexus
 
-        if not closest_nexus or closest_distance > 12:
+        if not closest_nexus:
             return False
 
-        shield_batteries = self.structures(UnitTypeId.SHIELDBATTERY).closer_than(9, closest_nexus)
-        if not shield_batteries:
+        # Find target unit by priority order
+        target_unit = None
+        for unit_type in priority_unit_types:
+            # Get all units of this type within range that need energy
+            candidates = []
+            for unit in self.units:
+                if (unit.type_id == unit_type and 
+                    unit.distance_to(closest_nexus) <= 12 and
+                    unit.energy_percentage < 1.0):  # Unit needs energy
+                    candidates.append(unit)
+            
+            # If we found candidates of this priority type, pick the one with lowest energy
+            if candidates:
+                target_unit = min(candidates, key=lambda u: u.energy_percentage)
+                break
+
+        if not target_unit:
             return False
 
-        if closest_nexus.energy >= 50 and shield_batteries.ready:
-            battery = shield_batteries.closest_to(closest_nexus)
-            closest_nexus(AbilityId.BATTERYOVERCHARGE_BATTERYOVERCHARGE, battery)
-            return True
-        return False
+        # Cast Energy Recharge on the target unit
+        closest_nexus(AbilityId.ENERGYRECHARGE_ENERGYRECHARGE, target_unit)
+        return True
 
 
     @property
