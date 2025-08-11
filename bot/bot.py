@@ -6,7 +6,7 @@ import numpy as np
 
 # Ares imports (framework-specific)
 from ares import AresBot
-from ares.consts import ALL_STRUCTURES, WORKER_TYPES, UnitRole 
+from ares.consts import ALL_STRUCTURES, WORKER_TYPES, UnitRole
 # from ares.managers.unit_manager import UnitManager
 from ares.managers.squad_manager import UnitSquad
 from ares.managers.manager_mediator import ManagerMediator
@@ -26,8 +26,9 @@ from sc2.data import Race
 
 
 # Modular imports for separated concerns
-from bot.hub.macro import handle_macro
-from bot.hub.combat import (
+from bot.managers.macro import handle_macro
+from bot.managers.reactions import defend_cannon_rush, defend_worker_rush, early_threat_sensor, cheese_reaction, one_base_reaction
+from bot.managers.combat import (
     attack_target,
     control_main_army,
     threat_detection,
@@ -36,12 +37,12 @@ from bot.hub.combat import (
     regroup_army,
     gatekeeper_control
 )
-from bot.hub.scouting import control_scout
+from bot.managers.scouting import control_scout
 from ares.behaviors.macro import Mining
-from bot.hub.reactions import (
+from bot.managers.reactions import (
     early_threat_sensor,
     cheese_reaction,
-    defend_worker_cannon_rush,
+    defend_cannon_rush,
     one_base_reaction
 )
 #debugs
@@ -72,10 +73,20 @@ class PiG_Bot(AresBot):
         self.scout_targets = {}
         self.bases = {}
         self.total_health_shield_percentage = 1.0
+        self.enemy_army = None
+        self.own_army = None
         # Game state: 0 = early game, 1 = mid game, 2 = late game
         self.game_state = 0
         self.early_game_threshold = 360  # 6 minutes in seconds
         self.mid_game_threshold = 720    # 12 minutes in seconds
+        
+        # Observer assignments
+        self.observer_assignments = {
+            "primary": None,      # The first observer (enemy nat)
+            "army": None,         # The second observer (follows army)
+            "patrol": [],         # Additional observers (map locations)
+        }
+        self.observer_targets = {}  # Maps observer.tag -> current target
 
         # Flags for in-game logic
         self._commenced_attack = False
@@ -85,7 +96,7 @@ class PiG_Bot(AresBot):
         self._cheese_reaction_completed = False
         self._one_base_reaction_completed = False
         self._not_worker_rush = True
-        self._worker_cannon_rush_response = False
+        self._cannon_rush_response = False
         self._is_building = False
         
         # Cannon rush specific flags
@@ -108,8 +119,12 @@ class PiG_Bot(AresBot):
 
         # Debug on start
         self.map_data: MapData  = self.mediator.get_map_data_object
-        self.use_disruptor_nova = UseDisruptorNova(mediator=self.mediator, bot=self)
-        self.nova_manager = NovaManager(bot=self, mediator=self.mediator)  # Initialize the NovaManager
+        
+        # Debug control - set to True to enable debug output for disruptor nova system
+        debug_disruptor_nova = False
+        
+        self.use_disruptor_nova = UseDisruptorNova(mediator=self.mediator, bot=self, debug_output=debug_disruptor_nova)
+        self.nova_manager = NovaManager(bot=self, mediator=self.mediator, debug_output=debug_disruptor_nova)  # Initialize the NovaManager
 
         self.current_base_target = self.enemy_start_locations[0]
 
@@ -123,15 +138,20 @@ class PiG_Bot(AresBot):
 
         # Reserve expansions and set flags
         self.natural_expansion: Point2 = self.mediator.get_own_nat
-        self.gatekeeping_pos = self.mediator.get_pvz_nat_gatekeeping_pos
+        
 
         self.expansions_generator = cycle(self.expansion_locations_list)
         self.freeflow = self.minerals > 800 and self.vespene < 200
 
-        if self.enemy_race == Race.Zerg or self.enemy_race == Race.Protoss:
-            self.rally_point = self.gatekeeping_pos.towards(self.natural_expansion, 7)
+        if self.enemy_race == Race.Zerg:
+            self.gatekeeping_pos = self.mediator.get_pvz_nat_gatekeeping_pos
+            if self.gatekeeping_pos is not None:
+                self.rally_point = self.gatekeeping_pos.towards(self.natural_expansion, 5)
+            else:
+                self.rally_point = self.natural_expansion.towards(self.game_info.map_center, 5)
+
         else:
-            self.rally_point = self.natural_expansion.towards(self.game_info.map_center, 7)
+            self.rally_point = self.natural_expansion.towards(self.game_info.map_center, 5)
 
 
         print("Build Chosen:", self.build_order_runner.chosen_opening)
@@ -145,7 +165,7 @@ class PiG_Bot(AresBot):
         await super(PiG_Bot, self).on_step(iteration)
         self.register_behavior(Mining(keep_safe=self._not_worker_rush)) #ares Mining 
 
-        
+        self.enemy_army = self.mediator.get_cached_enemy_army
 
         # Retrieve roles
         main_army = self.mediator.get_units_from_role(role=UnitRole.ATTACKING)
@@ -153,13 +173,6 @@ class PiG_Bot(AresBot):
         scout_units = self.mediator.get_units_from_role(role=UnitRole.SCOUTING)
         gatekeeper = self.mediator.get_units_from_role(role=UnitRole.GATE_KEEPER)
 
-        
-            
-        
-
-            
-        
-       
 
         # Create Squad
         squads: list[UnitSquad] = self.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15)
@@ -168,6 +181,8 @@ class PiG_Bot(AresBot):
         # This ensures we're always responding to immediate threats regardless of build order status
         if main_army:  # Only run detection if we have an army to use for defense
             threat_detection(self, main_army)
+            self.own_army = self.mediator.get_own_army
+
 
         # Early game logic
         if not self.build_order_runner.build_completed:
@@ -176,11 +191,16 @@ class PiG_Bot(AresBot):
                 early_threat_sensor(self)    
             # If cheese or one-base flags are set, handle them
             if self._used_cheese_response:
-                if self._worker_cannon_rush_response:
-                    defend_worker_cannon_rush(self, enemy_probes=self.units(UnitTypeId.PROBE), enemy_cannons=self.units(UnitTypeId.PHOTONCANNON))
+                if not self._not_worker_rush:
+                    # Handle worker rush defense
+                    defend_worker_rush(self)
+                elif self._cannon_rush_response:
+                    # Handle cannon rush defense
+                    defend_cannon_rush(self)
                 else:
+                    # Handle other cheese responses
                     cheese_reaction(self)
-            if self._used_one_base_response:
+            elif self._used_one_base_response:
                 one_base_reaction(self)
         else:
             # Macro calls (only run if build order is complete)
@@ -210,7 +230,9 @@ class PiG_Bot(AresBot):
             regroup_army(self, main_army)
 
         # Scouting actions
-        control_scout(self, scout_units, main_army)
+        from bot.managers.scouting import control_observers
+        observers = self.units(UnitTypeId.OBSERVER)
+        control_observers(self, observers, main_army)
 
         # Merge Archons if we have 2 or more High Templar
         if self.units(UnitTypeId.HIGHTEMPLAR).amount >= 2:
@@ -233,19 +255,20 @@ class PiG_Bot(AresBot):
                     self.mediator.assign_role(tag=zealot.tag, role=UnitRole.ATTACKING)
         else:
             self.game_state = 0  # early game
-            if not gatekeeper and self.enemy_race != Race.Terran:
-                zealots = self.units(UnitTypeId.ZEALOT).ready
-                if zealots:
-                    tag = zealots.first.tag
-                    self.mediator.clear_role(tag=tag)
-                    self.mediator.assign_role(tag=tag, role=UnitRole.GATE_KEEPER)
+            if self.enemy_race == Race.Zerg:
+                if not gatekeeper:
+                    zealots = self.units(UnitTypeId.ZEALOT).ready
+                    if zealots:
+                        tag = zealots.first.tag
+                        self.mediator.clear_role(tag=tag)
+                        self.mediator.assign_role(tag=tag, role=UnitRole.GATE_KEEPER)
 
-            elif not self._commenced_attack:
-                gatekeeper_control(self, gatekeeper)
-            else:
-                for zealot in gatekeeper:
-                    self.mediator.clear_role(tag=zealot.tag)
-                    self.mediator.assign_role(tag=zealot.tag, role=UnitRole.ATTACKING)
+                elif not self._commenced_attack:
+                    gatekeeper_control(self, gatekeeper)
+                else:
+                    for zealot in gatekeeper:
+                        self.mediator.clear_role(tag=zealot.tag)
+                        self.mediator.assign_role(tag=zealot.tag, role=UnitRole.ATTACKING)
                     
                     
     
@@ -268,8 +291,20 @@ class PiG_Bot(AresBot):
             return
 
         if unit.type_id == UnitTypeId.OBSERVER:
-            self.mediator.assign_role(tag=unit.tag, role=UnitRole.SCOUTING)
+            # First Observer - primary scout (enemy natural in mid-game)
+            if self.observer_assignments["primary"] is None:
+                self.observer_assignments["primary"] = unit.tag
+                self.mediator.assign_role(tag=unit.tag, role=UnitRole.SCOUTING)
+            # Second Observer - army follower
+            elif self.observer_assignments["army"] is None:
+                self.observer_assignments["army"] = unit.tag
+                self.mediator.assign_role(tag=unit.tag, role=UnitRole.CONTROL_GROUP_EIGHT)
+            # Additional Observers - patrol key map positions
+            else:
+                self.observer_assignments["patrol"].append(unit.tag)
+                self.mediator.assign_role(tag=unit.tag, role=UnitRole.CONTROL_GROUP_NINE)
             return
+            
         if unit.type_id == UnitTypeId.WARPPRISM:
             self.mediator.assign_role(tag=unit.tag, role=UnitRole.DROP_SHIP)
             unit.move(Point2(self.rally_point))
@@ -288,6 +323,34 @@ class PiG_Bot(AresBot):
     async def on_unit_destroyed(self, unit_tag: int) -> None:
         """Track when units get destroyed."""
         await super(PiG_Bot, self).on_unit_destroyed(unit_tag)
+        
+        # Handle observer reassignment if destroyed
+        if unit_tag == self.observer_assignments.get("primary"):
+            self.observer_assignments["primary"] = None
+            # Try to promote a patrol observer if available
+            if self.observer_assignments["patrol"]:
+                self.observer_assignments["primary"] = self.observer_assignments["patrol"].pop(0)
+                # Update the role if the unit still exists
+                if self.observer_assignments["primary"] in [unit.tag for unit in self.units]:
+                    self.mediator.clear_role(tag=self.observer_assignments["primary"])
+                    self.mediator.assign_role(tag=self.observer_assignments["primary"], role=UnitRole.SCOUTING)
+        
+        elif unit_tag == self.observer_assignments.get("army"):
+            self.observer_assignments["army"] = None
+            # Try to promote a patrol observer if available
+            if self.observer_assignments["patrol"]:
+                self.observer_assignments["army"] = self.observer_assignments["patrol"].pop(0)
+                # Update the role if the unit still exists
+                if self.observer_assignments["army"] in [unit.tag for unit in self.units]:
+                    self.mediator.clear_role(tag=self.observer_assignments["army"])
+                    self.mediator.assign_role(tag=self.observer_assignments["army"], role=UnitRole.CONTROL_GROUP_EIGHT)
+        
+        elif unit_tag in self.observer_assignments.get("patrol", []):
+            self.observer_assignments["patrol"].remove(unit_tag)
+            
+        # Clean up observer targets if needed
+        if unit_tag in self.observer_targets:
+            del self.observer_targets[unit_tag]
 
     async def on_unit_type_changed(self, unit: Unit, previous_type: UnitTypeId) -> None:
         """Called when a unit changes type, like Disruptor firing a Nova."""
@@ -321,35 +384,66 @@ class PiG_Bot(AresBot):
     # Utility / Additional Methods
     # -------------------------------------
     
-    def use_overcharge(self, main_army: Units) -> bool:
+    def use_recharge(self, main_army: Units) -> bool:
         """
-        Checks conditions for Shield Battery Overcharge if army is near 
-        a Nexus with enough energy.
+        Uses Energy Recharge on the unit with the lowest energy percentage within range of the closest Nexus.
+        
+        Targets specific energy-using units: Mothership, High Templar, Oracle, and Sentry.
+        
+        Args:
+            main_army: Units to consider for the army center calculation
+            
+        Returns:
+            bool: True if Energy Recharge was used, False otherwise
         """
-        if self.total_health_shield_percentage >= 0.75:
+        #TODO Test this
+        if not main_army:
             return False
 
-        # Find nearest Nexus
+        # Define energy-using unit types in priority order
+        priority_unit_types = [
+            UnitTypeId.MOTHERSHIP,
+            UnitTypeId.HIGHTEMPLAR,
+            UnitTypeId.ORACLE,
+            UnitTypeId.SENTRY
+        ]
+
+        # Find the closest Nexus to the army center
         closest_nexus = None
         closest_distance = float("inf")
         for nexus in self.structures(UnitTypeId.NEXUS).ready:
+            if nexus.energy < 50:  # Need enough energy for the ability
+                continue
             distance = main_army.center.distance_to(nexus.position)
             if distance < closest_distance:
                 closest_distance = distance
                 closest_nexus = nexus
 
-        if not closest_nexus or closest_distance > 12:
+        if not closest_nexus:
             return False
 
-        shield_batteries = self.structures(UnitTypeId.SHIELDBATTERY).closer_than(9, closest_nexus)
-        if not shield_batteries:
+        # Find target unit by priority order
+        target_unit = None
+        for unit_type in priority_unit_types:
+            # Get all units of this type within range that need energy
+            candidates = []
+            for unit in self.units:
+                if (unit.type_id == unit_type and 
+                    unit.distance_to(closest_nexus) <= 12 and
+                    unit.energy_percentage < 1.0):  # Unit needs energy
+                    candidates.append(unit)
+            
+            # If we found candidates of this priority type, pick the one with lowest energy
+            if candidates:
+                target_unit = min(candidates, key=lambda u: u.energy_percentage)
+                break
+
+        if not target_unit:
             return False
 
-        if closest_nexus.energy >= 50 and shield_batteries.ready:
-            battery = shield_batteries.closest_to(closest_nexus)
-            closest_nexus(AbilityId.BATTERYOVERCHARGE_BATTERYOVERCHARGE, battery)
-            return True
-        return False
+        # Cast Energy Recharge on the target unit
+        closest_nexus(AbilityId.ENERGYRECHARGE_ENERGYRECHARGE, target_unit)
+        return True
 
 
     @property

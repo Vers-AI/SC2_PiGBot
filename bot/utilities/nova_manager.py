@@ -2,6 +2,8 @@ from typing import List, Dict, TYPE_CHECKING, Optional, Set, Tuple
 from sc2.ids.unit_typeid import UnitTypeId
 import numpy as np
 from sc2.position import Point2
+from ares.managers.grid_manager import GridManager
+
 
 if TYPE_CHECKING:
     from bot.utilities.use_disruptor_nova import UseDisruptorNova
@@ -34,7 +36,7 @@ class NovaManager:
         # Nova constants
         self.nova_speed = 4.25  # Movement speed (game units/second)
         self.nova_lifetime = 2.1  # Lifetime (seconds)
-        self.nova_radius = 1.5  # Explosion radius
+        self.nova_radius = GridManager.NOVA_RADIUS  # Purification Nova Explosion radius
         
         # Targeting parameters
         self.exclusion_radius = 3.0  # Exclusion radius in game units
@@ -71,7 +73,7 @@ class NovaManager:
             print(f"DEBUG: NovaManager movement speed set to {self.nova_speed} game units/second")
 
         if not hasattr(nova, 'update_info'):
-            nova_instance = UseDisruptorNova(mediator=self.mediator, bot=self.bot)
+            nova_instance = UseDisruptorNova(mediator=self.mediator, bot=self.bot, debug_output=self.debug_output)
             nova_instance.load_info(nova)
             self.active_novas.append(nova_instance)
         else:

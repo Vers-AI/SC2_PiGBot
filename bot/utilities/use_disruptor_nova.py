@@ -15,13 +15,14 @@ import numpy as np
 from sc2.position import Point2, Point3
 
 class UseDisruptorNova(CombatIndividualBehavior):
-    def __init__(self, mediator: ManagerMediator, bot: 'AresBot', position_update_frequency: int = 10):
+    def __init__(self, mediator: ManagerMediator, bot: 'AresBot', position_update_frequency: int = 10, debug_output: bool = False):
         """Initialize the Disruptor Nova behavior controller.
         
         Args:
             mediator: Access point for game state and tactical information
             bot: Reference to the main bot instance
             position_update_frequency: How often to update Nova position (in frames)
+            debug_output: Enable debug output for troubleshooting
         """
         # Nova ability constants
         self.cooldown = 21.4  # Cooldown in seconds
@@ -37,11 +38,13 @@ class UseDisruptorNova(CombatIndividualBehavior):
         self.distance_left = 0.0
         self.mediator = mediator
         self.bot = bot
+        self.debug_output = debug_output
         
         # Tactical grid reference - retrieved fresh when needed
         self.influence_grid = None
         
-        print("DEBUG: UseDisruptorNova initialized")
+        if self.debug_output:
+            print("DEBUG: UseDisruptorNova initialized")
         
         # Position tracking
         self.position_update_frequency = position_update_frequency
@@ -78,10 +81,12 @@ class UseDisruptorNova(CombatIndividualBehavior):
             
             # First, ensure we have some units to target
             if not enemy_units:
-                print("DEBUG: No enemy units available to target")
+                if self.debug_output:
+                    print("DEBUG: No enemy units available to target")
                 return None
                 
-            print(f"DEBUG: Found {len(enemy_units)} enemy units to consider")
+            if self.debug_output:
+                print(f"DEBUG: Found {len(enemy_units)} enemy units to consider")
                 
             # Get the disruptor unit to determine position
             disruptor_unit = None
@@ -91,24 +96,28 @@ class UseDisruptorNova(CombatIndividualBehavior):
                     break
                     
             if not disruptor_unit:
-                print("DEBUG: No disruptor unit found in friendly units")
+                if self.debug_output:
+                    print("DEBUG: No disruptor unit found in friendly units")
                 return None
                 
-            print(f"DEBUG: Using disruptor at position {disruptor_unit.position}")
+            if self.debug_output:
+                print(f"DEBUG: Using disruptor at position {disruptor_unit.position}")
                 
             # Get tactical ground grid to access influence values - use property syntax
             try:
                 tactical_grid = self.mediator.get_tactical_ground_grid
                 if tactical_grid is None:
-                    print("DEBUG: Tactical grid is None - cannot select target")
+                    if self.debug_output:
+                        print("DEBUG: Tactical grid is None - cannot select target")
                     return None
                     
-                print(f"DEBUG: Tactical grid shape: {tactical_grid.shape}")
+                if self.debug_output:
+                    print(f"DEBUG: Tactical grid shape: {tactical_grid.shape}")
                 
-                # Debug check for NaN and infinite values
-                nan_count = np.isnan(tactical_grid).sum()
-                inf_count = np.isinf(tactical_grid).sum()
-                print(f"DEBUG: Grid contains {nan_count} NaN values and {inf_count} infinite values")
+                    # Debug check for NaN and infinite values
+                    nan_count = np.isnan(tactical_grid).sum()
+                    inf_count = np.isinf(tactical_grid).sum()
+                    print(f"DEBUG: Grid contains {nan_count} NaN values and {inf_count} infinite values")
             except Exception as e:
                 print(f"ERROR accessing tactical grid: {str(e)}")
                 return None
@@ -118,7 +127,8 @@ class UseDisruptorNova(CombatIndividualBehavior):
             if nova_manager:
                 try:
                     exclusion_mask = nova_manager.get_exclusion_mask(tactical_grid)
-                    print(f"DEBUG: Got exclusion mask with {np.sum(exclusion_mask)} cells excluded out of {tactical_grid.size}")
+                    if self.debug_output:
+                        print(f"DEBUG: Got exclusion mask with {np.sum(exclusion_mask)} cells excluded out of {tactical_grid.size}")
                 except Exception as e:
                     print(f"ERROR getting exclusion mask: {e}")
             
@@ -132,7 +142,8 @@ class UseDisruptorNova(CombatIndividualBehavior):
             disruptor_pos = disruptor_unit.position.rounded
             pos_x, pos_y = int(disruptor_pos.x), int(disruptor_pos.y)  # x, y for game coords
             
-            print(f"DEBUG: Disruptor grid position: ({pos_x}, {pos_y})")
+            if self.debug_output:
+                print(f"DEBUG: Disruptor grid position: ({pos_x}, {pos_y})")
             
             # Find the highest influence area within disruptor range
             try:
@@ -140,10 +151,12 @@ class UseDisruptorNova(CombatIndividualBehavior):
                 points = bounded_circle(center=(pos_x, pos_y), radius=disruptor_max_range, shape=tactical_grid.shape)
                 
                 if len(points[0]) == 0:
-                    print(f"DEBUG: No points found within range {disruptor_max_range} of disruptor")
+                    if self.debug_output:
+                        print(f"DEBUG: No points found within range {disruptor_max_range} of disruptor")
                     return None
                     
-                print(f"DEBUG: Found {len(points[0])} points within range {disruptor_max_range}")
+                if self.debug_output:
+                    print(f"DEBUG: Found {len(points[0])} points within range {disruptor_max_range}")
                 
                 # Get values at those points
                 values = tactical_grid[points]
@@ -153,7 +166,8 @@ class UseDisruptorNova(CombatIndividualBehavior):
                 
                 # If we have no finite values, we can't target anything
                 if np.sum(finite_mask) == 0:
-                    print("DEBUG: No finite influence values found in range")
+                    if self.debug_output:
+                        print("DEBUG: No finite influence values found in range")
                     return None
                 
                 # Get only the finite values
@@ -173,7 +187,8 @@ class UseDisruptorNova(CombatIndividualBehavior):
                         finite_values = finite_values[non_excluded_mask]
                         finite_indices = finite_indices[non_excluded_mask]
                     else:
-                        print("DEBUG: All points are excluded, no valid targets")
+                        if self.debug_output:
+                            print("DEBUG: All points are excluded, no valid targets")
                         return None
                 
                 # Find the index of the maximum value
@@ -190,10 +205,11 @@ class UseDisruptorNova(CombatIndividualBehavior):
                 game_world_pos = Point2((max_x, max_y))
                 
                 # Print positions of enemy units for debugging
-                if enemy_units:
+                if self.debug_output and enemy_units:
                     print(f"DEBUG: Enemy unit positions: {[unit.position for unit in enemy_units]}")
                 
-                print(f"DEBUG: Found maximum influence value {max_value} at position {game_world_pos}")
+                if self.debug_output:
+                    print(f"DEBUG: Found maximum influence value {max_value} at position {game_world_pos}")
                 
                 # Check if the influence value is high enough to be worth targeting
                 influence_threshold = 205 
@@ -205,13 +221,16 @@ class UseDisruptorNova(CombatIndividualBehavior):
                                       if unit.position.distance_to(game_world_pos) <= nova_radius]
                     
                     if nearby_enemies:
-                        print(f"DEBUG: Best target at {game_world_pos} will hit {len(nearby_enemies)} enemy units")
+                        if self.debug_output:
+                            print(f"DEBUG: Best target at {game_world_pos} will hit {len(nearby_enemies)} enemy units")
                         return game_world_pos
                     else:
-                        print(f"DEBUG: No enemy units would be hit at position {game_world_pos}")
+                        if self.debug_output:
+                            print(f"DEBUG: No enemy units would be hit at position {game_world_pos}")
                         return None
                 else:
-                    print(f"DEBUG: Maximum influence value {max_value} below threshold {influence_threshold}")
+                    if self.debug_output:
+                        print(f"DEBUG: Maximum influence value {max_value} below threshold {influence_threshold}")
                     return None
                 
             except Exception as e:
@@ -262,14 +281,16 @@ class UseDisruptorNova(CombatIndividualBehavior):
                              if unit.position.distance_to(current_position) <= MAX_SEARCH_RADIUS]
             
             if not nearby_enemies:
-                print("DEBUG update_target: No nearby enemy units within reach")
+                if self.debug_output:
+                    print("DEBUG update_target: No nearby enemy units within reach")
                 return False
             
             # Simply pass nova_manager for targeting - we need its properties
             new_target = self.select_best_target(nearby_enemies, friendly_units, nova_manager)
             
             if new_target and new_target != self.best_target_pos:
-                print(f"DEBUG update_target: Found potential new target at {new_target}")
+                if self.debug_output:
+                    print(f"DEBUG update_target: Found potential new target at {new_target}")
                 
                 # First check if the new target can be registered
                 if nova_manager:
@@ -282,20 +303,24 @@ class UseDisruptorNova(CombatIndividualBehavior):
                         
                         if not target_registered:
                             # If the new target couldn't be registered, re-register the old one
-                            print(f"DEBUG update_target: New target {new_target} could not be registered, keeping old target")
+                            if self.debug_output:
+                                print(f"DEBUG update_target: New target {new_target} could not be registered, keeping old target")
                             nova_manager.register_nova_target(self.best_target_pos)
                             return False
                         
-                        print(f"DEBUG update_target: Target changed from {self.best_target_pos} to {new_target}")
+                        if self.debug_output:
+                            print(f"DEBUG update_target: Target changed from {self.best_target_pos} to {new_target}")
                         self.best_target_pos = new_target
                         return True
                     except Exception as e:
-                        print(f"DEBUG ERROR registering new target: {e}")
+                        if self.debug_output:
+                            print(f"DEBUG ERROR registering new target: {e}")
                         return False
                 else:
                     # If no nova_manager, just update the target
                     self.best_target_pos = new_target
-                    print(f"DEBUG update_target: Target changed to {new_target} (no nova_manager)")
+                    if self.debug_output:
+                        print(f"DEBUG update_target: Target changed to {new_target} (no nova_manager)")
                     return True
             
             return False
@@ -332,7 +357,8 @@ class UseDisruptorNova(CombatIndividualBehavior):
         """
         # Check if ability can be used 
         if not self.can_use(disruptor_unit):
-            print(f"DEBUG: Disruptor {disruptor_unit.tag} cannot use Nova - ability not ready")
+            if self.debug_output:
+                print(f"DEBUG: Disruptor {disruptor_unit.tag} cannot use Nova - ability not ready")
             return None
 
         # Get exclusion mask from nova_manager if provided
@@ -342,29 +368,36 @@ class UseDisruptorNova(CombatIndividualBehavior):
                 # Fresh call to get the grid
                 grid = self.mediator.get_tactical_ground_grid
                 if grid is None:
-                    print("DEBUG: Tactical grid is None in execute")
+                    if self.debug_output:
+                        print("DEBUG: Tactical grid is None in execute")
                     return None
                 
                 # Then get the exclusion mask using the grid
                 exclusion_mask = nova_manager.get_exclusion_mask(grid)
-                print(f"DEBUG: Got exclusion mask with {np.sum(exclusion_mask)} cells excluded")
+                if self.debug_output:
+                    print(f"DEBUG: Got exclusion mask with {np.sum(exclusion_mask)} cells excluded")
             except Exception as e:
-                print(f"DEBUG ERROR getting exclusion mask: {e}")
+                if self.debug_output:
+                    print(f"DEBUG ERROR getting exclusion mask: {e}")
                 exclusion_mask = None
 
         # Select a target, considering exclusion zones
-        print(f"DEBUG: Selecting target for Disruptor {disruptor_unit.tag}, {len(enemy_units)} enemy units, {len(friendly_units)} friendly units")
+        if self.debug_output:
+            print(f"DEBUG: Selecting target for Disruptor {disruptor_unit.tag}, {len(enemy_units)} enemy units, {len(friendly_units)} friendly units")
         target = None
         try:
             target = self.select_best_target(enemy_units, friendly_units, nova_manager)
         except Exception as e:
-            print(f"DEBUG ERROR in select_best_target: {e}")
+            if self.debug_output:
+                print(f"DEBUG ERROR in select_best_target: {e}")
             
         if not target:
-            print(f"DEBUG: No valid target found for Disruptor {disruptor_unit.tag}")
+            if self.debug_output:
+                print(f"DEBUG: No valid target found for Disruptor {disruptor_unit.tag}")
             return None
         else:
-            print(f"DEBUG: Found target at {target}")
+            if self.debug_output:
+                print(f"DEBUG: Found target at {target}")
             
         # Register this target with the nova manager if provided
         target_registered = False
@@ -373,18 +406,21 @@ class UseDisruptorNova(CombatIndividualBehavior):
             try:
                 # First register it as pending to immediately affect other targeting Disruptors
                 pending_target_id = nova_manager.add_pending_target(target)
-                print(f"DEBUG: Target {target} registered as pending with ID {pending_target_id}")
+                if self.debug_output:
+                    print(f"DEBUG: Target {target} registered as pending with ID {pending_target_id}")
                 
                 # Now try to register it as a real target, passing our pending ID so it doesn't self-reject
                 target_registered = nova_manager.register_nova_target(target, source_pending_id=pending_target_id)
                 if not target_registered:
-                    print(f"DEBUG: Target {target} rejected by nova_manager - not firing to avoid wasting Nova")
+                    if self.debug_output:
+                        print(f"DEBUG: Target {target} rejected by nova_manager - not firing to avoid wasting Nova")
                     # Ensure we clean up the pending target
                     if pending_target_id:
                         nova_manager.cancel_pending_target(pending_target_id)
                     return None
                 else:
-                    print(f"DEBUG: Target registered successfully")
+                    if self.debug_output:
+                        print(f"DEBUG: Target registered successfully")
                     # Confirm the pending target (moving it to active)
                     if pending_target_id:
                         nova_manager.confirm_pending_target(pending_target_id)
@@ -411,7 +447,8 @@ class UseDisruptorNova(CombatIndividualBehavior):
         effective_max_distance = max_travel_distance - safety_margin
         
         # Debug info
-        print(f"Target distance: {current_distance:.2f}, Max travel distance: {max_travel_distance:.2f}, Effective distance with safety margin: {effective_max_distance:.2f}")
+        if self.debug_output:
+            print(f"Target distance: {current_distance:.2f}, Max travel distance: {max_travel_distance:.2f}, Effective distance with safety margin: {effective_max_distance:.2f}")
         
         # Check if the target is within range (with safety margin)
         if current_distance <= effective_max_distance:
@@ -419,17 +456,20 @@ class UseDisruptorNova(CombatIndividualBehavior):
             try:
                 did_fire = disruptor_unit(ability_id, target)
             except Exception as e:
-                print(f"DEBUG ERROR firing Nova: {e}")
+                if self.debug_output:
+                    print(f"DEBUG ERROR firing Nova: {e}")
                 did_fire = False
         else:
             # Target is out of range, move the Disruptor closer
             # Find a position that moves toward the target but not all the way
             move_position = disruptor_unit.position.towards(target, 5.0)
             disruptor_unit.move(move_position)
-            print(f"Target out of range. Moving Disruptor to: {move_position}")
+            if self.debug_output:
+                print(f"Target out of range. Moving Disruptor to: {move_position}")
             did_fire = False
             
-        print(f"DEBUG: Disruptor execute result: {did_fire}")
+        if self.debug_output:
+            print(f"DEBUG: Disruptor execute result: {did_fire}")
         
         if did_fire:
             # On successful fire, initialize the nova instance and add to active novas
@@ -444,14 +484,16 @@ class UseDisruptorNova(CombatIndividualBehavior):
                     try:
                         nova_manager.cancel_pending_target(pending_target_id)
                     except Exception as e:
-                        print(f"DEBUG ERROR canceling pending target: {e}")
+                        if self.debug_output:
+                            print(f"DEBUG ERROR canceling pending target: {e}")
                         
                 # Unregister the main target if we registered it
                 if target_registered:
                     try:
                         nova_manager.unregister_nova_target(target)
                     except Exception as e:
-                        print(f"DEBUG ERROR unregistering unused target: {e}")
+                        if self.debug_output:
+                            print(f"DEBUG ERROR unregistering unused target: {e}")
             return None
             
     # _draw_nova_radius method has been moved to NovaManager._draw_nova_radius
@@ -475,10 +517,12 @@ class UseDisruptorNova(CombatIndividualBehavior):
             return False
         
         if self.unit is None:
-            print("DEBUG ERROR: Nova unit is None in run_step")
+            if self.debug_output:
+                print("DEBUG ERROR: Nova unit is None in run_step")
             return False
             
-        print(f"DEBUG: Nova at {self.unit.position} has {self.frames_left} frames left")
+        if self.debug_output:
+            print(f"DEBUG: Nova at {self.unit.position} has {self.frames_left} frames left")
 
         # Update the frame counter
         self.frames_left -= 1
@@ -495,7 +539,8 @@ class UseDisruptorNova(CombatIndividualBehavior):
         # If a valid target was found and it differs from the current position, command the nova to move
         if self.best_target_pos is not None and self.unit is not None and self.best_target_pos != self.unit.position:
             self.unit.move(self.best_target_pos)
-            print(f"Moving Nova to target: {self.best_target_pos}")
+            if self.debug_output:
+                print(f"Moving Nova to target: {self.best_target_pos}")
         
         # Continue running until the nova expires
         return self.frames_left > 0
@@ -509,18 +554,19 @@ class UseDisruptorNova(CombatIndividualBehavior):
         if self.unit is not None:
             self.distance_left = self.calculate_distance_left(self.unit.movement_speed)
         else:
-            print("DEBUG WARNING: Cannot update Nova info - unit is None")
+            if self.debug_output:
+                print("DEBUG WARNING: Cannot update Nova info - unit is None")
     
     def calculate_distance_left(self, unit_speed: float) -> float:
         """Calculate maximum remaining travel distance for the Nova.
     
-    Converts unit speed (game units per second) to distance per game step,
-    then multiplies by remaining game steps to get total possible distance.
+        Converts unit speed (game units per second) to distance per game step,
+        then multiplies by remaining game steps to get total possible distance.
     
-    Args:
-        unit_speed: Movement speed of the Nova in game units per second
-        
-    Returns:
-        float: Maximum remaining travel distance in game units
-    """
+        Args:
+            unit_speed: Movement speed of the Nova in game units per second
+            
+        Returns:
+            float: Maximum remaining travel distance in game units
+        """
         return self.frames_left * (unit_speed / 22.4)

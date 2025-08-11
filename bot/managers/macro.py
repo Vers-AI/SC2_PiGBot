@@ -1,5 +1,6 @@
-# bot/hub/macro.py
+# bot/managers/macro.py
 
+from sc2.data import Race
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.ability_id import AbilityId
 from sc2.position import Point2
@@ -15,9 +16,10 @@ from ares.behaviors.macro import (
     GasBuildingController,
 )
 from ares.dicts.unit_data import UNIT_DATA
+from ares.consts import LOSS_MARGINAL_OR_BETTER
 
-from bot.hub.scouting import control_scout
-from bot.hub.combat import COMMON_UNIT_IGNORE_TYPES, enemy_strength, army_strength
+from bot.managers.scouting import control_scout
+from bot.managers.combat import COMMON_UNIT_IGNORE_TYPES
 
 # Army composition constants 
 STANDARD_ARMY_0 = {
@@ -91,11 +93,6 @@ def expansion_checker(bot, main_army) -> int:
     mineral_collection_rate = bot.state.score.collection_rate_minerals
     vespene_collection_rate = bot.state.score.collection_rate_vespene
     
-    # Get our army value using the army_strength function
-    own_army_value = army_strength(main_army)
-    
-    # Get enemy army value using the enemy_strength function
-    enemy_army_value = enemy_strength(bot)
     
     # Set collection rate threshold based on game state
     if bot.game_state == 0:  # early game
@@ -120,7 +117,13 @@ def expansion_checker(bot, main_army) -> int:
         # Step 2: Check if we have saturation 
         if worker_saturation > 0.8:
             # Step 3: Check army values
-            if own_army_value > enemy_army_value * 0.8 or own_army_value > 1000:
+            if bot.mediator.can_win_fight(
+                own_units=bot.own_army,
+                enemy_units=bot.enemy_army,
+                timing_adjust=True,
+                good_positioning=False,
+                workers_do_no_damage=True,
+            ) in LOSS_MARGINAL_OR_BETTER:
                 # Safe to expand
                 expansion_count = current_bases + 1
                 # print(f"Expanding based on army advantage: {expansion_count}")
@@ -266,17 +269,32 @@ async def handle_macro(
         
 
 
-    # Scout control or build observer if no scout
-    if scout_units:
-        return 
-    else:
-        if bot.game_state >= 1:  # mid or late game
-            if bot.structures(UnitTypeId.ROBOTICSFACILITY).ready:
-                if (bot.units(UnitTypeId.OBSERVER).amount < 1 
-                    and bot.already_pending(UnitTypeId.OBSERVER) == 0
-                    and bot.can_afford(UnitTypeId.OBSERVER)):
-                    bot.train(UnitTypeId.OBSERVER)
+    # Controls how many Observers we have
+    if bot.game_state == 0:  # Early game
+        if (bot.units(UnitTypeId.OBSERVER).amount < 1 
+            and bot.already_pending(UnitTypeId.OBSERVER) == 0
+            and bot.can_afford(UnitTypeId.OBSERVER)):
+            for facility in bot.structures(UnitTypeId.ROBOTICSFACILITY).ready:
+                facility.train(UnitTypeId.OBSERVER)
+                break
+    else:  # Mid game and beyond
+        # High priority observer - always build one if we don't have any
+        if (bot.units(UnitTypeId.OBSERVER).amount < 1 
+            and bot.already_pending(UnitTypeId.OBSERVER) == 0
+            and bot.can_afford(UnitTypeId.OBSERVER)):
+            for facility in bot.structures(UnitTypeId.ROBOTICSFACILITY).ready:
+                facility.train(UnitTypeId.OBSERVER)
+                break
+        # Additional observers based on opponent race
+        target_count = 3 if bot.enemy_race in {Race.Zerg, Race.Terran} else 2
+        if (bot.units(UnitTypeId.OBSERVER).amount < target_count
+            and bot.already_pending(UnitTypeId.OBSERVER) == 0
+            and bot.can_afford(UnitTypeId.OBSERVER)):
+            for facility in bot.structures(UnitTypeId.ROBOTICSFACILITY).ready.idle:
+                facility.train(UnitTypeId.OBSERVER)
+                break
 
+    
     
 
     # Merge Archons if we have at least 2 High Templars

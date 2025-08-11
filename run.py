@@ -9,15 +9,13 @@ sys.path.append('ares-sc2/src/ares')
 sys.path.append('ares-sc2/src')
 sys.path.append('ares-sc2')
 
-
-
-
 from sc2 import maps
+from sc2.bot_ai import BotAI
 from sc2.data import AIBuild, Difficulty, Race
 from sc2.main import run_game
-from sc2.player import Bot, Computer
-
-
+from sc2.player import Bot, Computer, AbstractPlayer
+from sc2.ids.unit_typeid import UnitTypeId
+from sc2.units import Units
 
 import yaml
 
@@ -59,23 +57,47 @@ def main():
         # Local game
         
         map_list: List[str] = [
-            "AcropolisAIE",
-            "AutomatonAIE",
-            "EphemeronAIE",
-            "InterloperAIE",
-            "ThunderbirdAIE"
+            "TorchesAIE",
+            "PylonAIE",
+            "PersephoneAIE",
+            #"InterloperAIE"
+
         ]
 
-        random_race = Race.Terran #random.choice([Race.Zerg, Race.Terran, Race.Protoss])
         print("Starting local game...")
         run_game(
             maps.get(random.choice(map_list)),
             [
                 bot1,
-                Computer(Race.Zerg, Difficulty.Medium, ai_build=AIBuild.Rush),
+                Computer(Race.Random, Difficulty.VeryHard, ai_build=AIBuild.Macro),
             ],
             realtime=False,
         )
+
+
+class WorkerRushBot(BotAI):
+    """A simple bot that rushes with workers to the enemy start location."""
+    
+    async def on_step(self, iteration: int):
+        # Get all our workers
+        workers = self.units(UnitTypeId.PROBE).idle
+        
+        # If we don't have any idle workers, try to get any workers
+        if not workers:
+            workers = self.units(UnitTypeId.PROBE)
+            
+        # If we still don't have any workers, we're probably dead
+        if not workers:
+            return
+            
+        # Get the enemy start location (our target)
+        enemy_start = self.game_info.map_center  # Fallback
+        if self.enemy_start_locations:
+            enemy_start = self.enemy_start_locations[0]
+            
+        # Send all workers to attack the enemy start location
+        for worker in workers:
+            worker.attack(enemy_start)
 
 
 # Start game
