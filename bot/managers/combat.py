@@ -5,11 +5,11 @@ from sc2.units import Units
 from sc2.unit import Unit
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.ability_id import AbilityId
-from ares.consts import LOSS_MARGINAL_OR_WORSE, TIE_OR_BETTER, UnitTreeQueryType
+from ares.consts import LOSS_MARGINAL_OR_WORSE, TIE_OR_BETTER, UnitTreeQueryType, EngagementResult, VICTORY_DECISIVE_OR_BETTER
 
 from ares.behaviors.combat import CombatManeuver
 from ares.behaviors.combat.individual import (
-    KeepUnitSafe, PathUnitToTarget, StutterUnitBack, UseAbility
+    KeepUnitSafe, PathUnitToTarget, StutterUnitBack, AMove
 )
 from ares.behaviors.combat.group import (
     AMoveGroup, PathGroupToTarget
@@ -59,6 +59,7 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
     """
     pos_of_main_squad: Point2 = bot.mediator.get_position_of_main_squad(role=UnitRole.ATTACKING)
     grid: np.ndarray = bot.mediator.get_ground_grid
+    avoid_grid: np.ndarray = bot.mediator.get_ground_avoidance_grid
     
     if main_army:
         bot.total_health_shield_percentage = (
@@ -91,9 +92,12 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
             for r_unit in ranged:
                 ranged_maneuver = CombatManeuver()
                 if r_unit.shield_health_percentage < 0.2:
-                    ranged_maneuver.add(KeepUnitSafe(r_unit, grid))
+                    ranged_maneuver.add(KeepUnitSafe(r_unit, avoid_grid))
                 else:
-                    ranged_maneuver.add(StutterUnitBack(r_unit, target=enemy_target, grid=grid))
+                    if not r_unit.weapon_ready:
+                        ranged_maneuver.add(StutterUnitBack(r_unit, target=enemy_target, grid=avoid_grid))
+                    else:
+                        ranged_maneuver.add(AMove(r_unit, target=enemy_target.position))
                 bot.register_behavior(ranged_maneuver)
 
             # Melee engages directly
@@ -116,7 +120,7 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                         except Exception as e:
                             print(f"DEBUG ERROR in disruptor handling: {e}")
                     else:
-                        bot.register_behavior(KeepUnitSafe(disruptor, grid))
+                        bot.register_behavior(KeepUnitSafe(disruptor, avoid_grid))
                 # Update Nova Manager with current units
                 if hasattr(bot, 'nova_manager'):
                     try:
@@ -141,7 +145,7 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                         group=units,
                         group_tags=squad_tags,
                         target=pos_of_main_squad,
-                        grid=grid,
+                        grid=avoid_grid,
                         sense_danger=False,
                         success_at_distance=0.1
                     )
@@ -321,8 +325,10 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
     
     # Debug info
     if bot.debug:
-        print(bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=False, good_positioning=False, workers_do_no_damage=False))
-        print(bot.enemy_army)
+        fight_result = bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=True, good_positioning=False, workers_do_no_damage=True)
+        print(f"Can win fight: {fight_result}")
+        print(f"Enemy army: {bot.enemy_army}")
+        print(f"Own army: {bot.own_army}")
 
         bot.client.debug_text_2d(f"Attack: {bot._commenced_attack} Threat: {enemy_threat_level} Under Attack: {bot._under_attack}", 
                                 Point2((0.1, 0.22)), None, 14)
@@ -339,27 +345,41 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
                 control_main_army(bot, main_army, nearest_base.position, 
                                 bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
         # Decide whether to retreat based on army ratio
-        elif (bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=True, good_positioning=False, workers_do_no_damage=True) in LOSS_MARGINAL_OR_WORSE):
-            # Retreat to the closest base if we're outmatched
-            bot._commenced_attack = False
-            nearest_base = bot.townhalls.closest_to(main_army.center)
-            if nearest_base:
-                control_main_army(bot, main_army, nearest_base.position, 
-                                bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
-        # If high threat detected, redirect to engage the enemy units
-        elif enemy_threat_level >= 5:
-            enemy_center, _ = cy_find_units_center_mass(bot.enemy_units, 10.0)
-            control_main_army(bot, main_army, Point2(enemy_center), 
-                            bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
-        # Otherwise, continue attacking the original target
         else:
+            fight_result = bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=True, good_positioning=False, workers_do_no_damage=True)
+            if fight_result in LOSS_MARGINAL_OR_WORSE:
+                # Retreat to the closest base if we're outmatched
+                bot._commenced_attack = False
+                nearest_base = bot.townhalls.closest_to(main_army.center)
+                if nearest_base:
+                    control_main_army(bot, main_army, nearest_base.position, 
+                                    bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
+            # If high threat detected but we can win, stay and fight at enemy position
+            elif fight_result in TIE_OR_BETTER and enemy_threat_level >= 5:
+                enemy_center, _ = cy_find_units_center_mass(bot.enemy_units, 10.0)
+                control_main_army(bot, main_army, Point2(enemy_center), 
+                                bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
+            # If high threat detected and unclear advantage, redirect to engage the enemy units
+            elif enemy_threat_level >= 5:
+                enemy_center, _ = cy_find_units_center_mass(bot.enemy_units, 10.0)
+                control_main_army(bot, main_army, Point2(enemy_center), 
+                                bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
+            # Otherwise, continue attacking the original target
+            else:
+                control_main_army(bot, main_army, attack_target, 
+                                bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
+    else:
+        # Check our fighting capability first
+        fight_result = bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=True, good_positioning=False, workers_do_no_damage=True)
+        
+        # Attack if we have a clear advantage (decisive victory or better), regardless of defensive flags
+        if fight_result in VICTORY_DECISIVE_OR_BETTER:
             control_main_army(bot, main_army, attack_target, 
                             bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
-    else:
+            bot._commenced_attack = True
         # Only consider attacking if build order is complete and not in early defensive mode
-        if not is_early_defensive_mode:
-            if ((bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=True, good_positioning=False, workers_do_no_damage=True) in TIE_OR_BETTER) and 
-                not bot._under_attack):
+        elif not is_early_defensive_mode:
+            if (fight_result in TIE_OR_BETTER and not bot._under_attack):
                 control_main_army(bot, main_army, attack_target, 
                                 bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
                 bot._commenced_attack = True
@@ -430,8 +450,8 @@ def regroup_army(bot, main_army: Units) -> None:
         total_distance += unit.position.distance_to(center)
     avg_distance = total_distance / main_army.amount
 
-    # If the army is scattered (avg distance > 10) and not in combat, regroup
-    if avg_distance > 10 and not bot._under_attack and not bot._commenced_attack:
+    # If the army is scattered (avg distance > 15) and not in combat, regroup
+    if avg_distance > 15 and not bot._under_attack and not bot._commenced_attack:
         # Command the main army to regroup by using control_main_army with the natural expansion as target
         control_main_army(bot, main_army, bot.natural_expansion.towards(bot.game_info.map_center, 2), bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
         print("Regrouping army")
