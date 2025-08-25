@@ -24,7 +24,7 @@ Features:
 DebugOptions:
     # one of: Air, AirVsGround, Ground, GroundAvoidance, AirAvoidance
     ActiveGrid: TacticalGround
-    ChatDebug: False
-    DebugSpawn: False
+    ChatDebug: True
+    DebugSpawn: True
     ShowPathingCost: False
     ResourceDebug: False
