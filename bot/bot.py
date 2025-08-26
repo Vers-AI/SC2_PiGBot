@@ -144,7 +144,11 @@ class PiG_Bot(AresBot):
         self.freeflow = self.minerals > 800 and self.vespene < 200
 
         if self.enemy_race == Race.Zerg:
-            self.gatekeeping_pos = self.mediator.get_pvz_nat_gatekeeping_pos
+            if self.mediator.get_pvz_nat_gatekeeping_pos is not None:
+                self.gatekeeping_pos = self.mediator.get_pvz_nat_gatekeeping_pos
+            else:
+                self.gatekeeping_pos = self.natural_expansion.towards(self.game_info.map_center, 6)
+            
             if self.gatekeeping_pos is not None:
                 self.rally_point = self.gatekeeping_pos.towards(self.natural_expansion, 5)
             else:
@@ -152,8 +156,7 @@ class PiG_Bot(AresBot):
 
         else:
             self.rally_point = self.natural_expansion.towards(self.game_info.map_center, 5)
-
-
+        
         print("Build Chosen:", self.build_order_runner.chosen_opening)
         print("the enemy race is:", self.enemy_race)
 

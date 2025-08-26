@@ -91,13 +91,12 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
             # Ranged micro example
             for r_unit in ranged:
                 ranged_maneuver = CombatManeuver()
-                if r_unit.shield_health_percentage < 0.2:
+                closest_enemy = cy_closest_to(r_unit.position, all_close)
+                if not r_unit.weapon_ready:
                     ranged_maneuver.add(KeepUnitSafe(r_unit, avoid_grid))
+                    ranged_maneuver.add(StutterUnitBack(r_unit, target=closest_enemy, grid=grid))
                 else:
-                    if not r_unit.weapon_ready:
-                        ranged_maneuver.add(StutterUnitBack(r_unit, target=enemy_target, grid=avoid_grid))
-                    else:
-                        ranged_maneuver.add(AMove(r_unit, target=enemy_target.position))
+                    ranged_maneuver.add(AMove(r_unit, target=closest_enemy.position))
                 bot.register_behavior(ranged_maneuver)
 
             # Melee engages directly
@@ -114,9 +113,7 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     if AbilityId.EFFECT_PURIFICATIONNOVA in disruptor.abilities:
                         try:
                             nova_manager = bot.nova_manager if hasattr(bot, 'nova_manager') else None
-                            print(f"DEBUG: Using nova_manager: {nova_manager is not None}")
                             result = bot.use_disruptor_nova.execute(disruptor, all_close, units, nova_manager)
-                            print(f"DEBUG: Disruptor execute result: {result is not None}")
                         except Exception as e:
                             print(f"DEBUG ERROR in disruptor handling: {e}")
                     else:
@@ -151,14 +148,14 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     )
                 )
             else:
-                maneuver.add(AMoveGroup(group=units, group_tags=squad_tags, target=target))
+                maneuver.add(AMoveGroup(group=units, group_tags=squad_tags, target=target.position))
 
             bot.register_behavior(maneuver)
 
     return pos_of_main_squad
 
 def gatekeeper_control(bot, gatekeeper: Units) -> None:
-    gate_keep_pos = bot.mediator.get_pvz_nat_gatekeeping_pos
+    gate_keep_pos = bot.gatekeeping_pos
     any_close = bot.mediator.get_units_in_range(
         start_points=[gate_keep_pos],
         distances=6,
