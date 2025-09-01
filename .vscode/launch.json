@@ -14,7 +14,8 @@
             "python": "${workspaceFolder}/venv/Scripts/python.exe",
             "env": {
                 "SC2PATH": "D:\\StarCraft II",
-                "PYTHONPATH": "${workspaceFolder}/ares-sc2/src:${workspaceFolder}"
+                "PYTHONPATH": "${workspaceFolder}/ares-sc2/src:${workspaceFolder}",
+                "PYTHONUNBUFFERED": "1"
             }
         },
         {
@@ -28,7 +29,8 @@
             "python": "${workspaceFolder}/venv/Scripts/python.exe",
             "env": {
                 "SC2PATH": "D:\\StarCraft II",
-                "PYTHONPATH": "${workspaceFolder}/ares-sc2/src:${workspaceFolder}"
+                "PYTHONPATH": "${workspaceFolder}/ares-sc2/src:${workspaceFolder}",
+                "PYTHONUNBUFFERED": "1"
             }
         },
         {
