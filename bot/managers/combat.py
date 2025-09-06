@@ -322,7 +322,7 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
     
     # Debug info
     if bot.debug:
-        fight_result = bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=True, good_positioning=False, workers_do_no_damage=True)
+        fight_result = bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=True, good_positioning=True, workers_do_no_damage=True)
         print(f"Can win fight: {fight_result}")
         print(f"Enemy army: {bot.enemy_army}")
         print(f"Own army: {bot.own_army}")
@@ -343,7 +343,7 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
                                 bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
         # Decide whether to retreat based on army ratio
         else:
-            fight_result = bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=True, good_positioning=False, workers_do_no_damage=True)
+            fight_result = bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=True, good_positioning=True, workers_do_no_damage=True)
             if fight_result in LOSS_MARGINAL_OR_WORSE:
                 # Retreat to the closest base if we're outmatched
                 bot._commenced_attack = False
@@ -367,7 +367,7 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
                                 bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
     else:
         # Check our fighting capability first
-        fight_result = bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=True, good_positioning=False, workers_do_no_damage=True)
+        fight_result = bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=True, good_positioning=True, workers_do_no_damage=True)
         
         # Attack if we have a clear advantage (decisive victory or better), regardless of defensive flags
         if fight_result in VICTORY_DECISIVE_OR_BETTER:
