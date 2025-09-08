@@ -209,7 +209,9 @@ async def handle_macro(
         macro_plan.add(ProductionController(army_composition, base_location=production_location, should_repower_structures=True))
         
         # Calculate optimal worker count based on available resources
-        optimal_worker_count = calculate_optimal_worker_count(bot)
+        # Dynamic worker limit: 66 in mid game, 80 in late game
+        worker_limit = 80 if bot.game_state >= 2 else 66
+        optimal_worker_count = min(calculate_optimal_worker_count(bot), worker_limit)
         bot.register_behavior(BuildWorkers(to_count=optimal_worker_count))
         
         bot.register_behavior(
@@ -239,7 +241,9 @@ async def handle_macro(
     else:
         print("Cheese reaction")
         # Calculate optimal worker count for cheese defense too
-        optimal_worker_count = calculate_optimal_worker_count(bot)
+        # Dynamic worker limit: 66 in mid game, 80 in late game
+        worker_limit = 80 if bot.game_state >= 2 else 66
+        optimal_worker_count = min(calculate_optimal_worker_count(bot), worker_limit)
         bot.register_behavior(BuildWorkers(to_count=optimal_worker_count))
         
         if bot.game_state == 0:  # early game
