@@ -106,6 +106,10 @@ class PiG_Bot(AresBot):
 
         # Debug flags
         self.debug = False
+        
+        # Target persistence for stable attack behavior
+        self.current_attack_target = None
+        self.target_lock_distance = 25.0  # Don't switch targets unless new one is 25+ units closer
 
 
 

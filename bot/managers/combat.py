@@ -351,17 +351,12 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
                 if nearest_base:
                     control_main_army(bot, main_army, nearest_base.position, 
                                     bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
-            # If high threat detected but we can win, stay and fight at enemy position
-            elif fight_result in TIE_OR_BETTER and enemy_threat_level >= 5:
-                enemy_center, _ = cy_find_units_center_mass(bot.enemy_units, 10.0)
-                control_main_army(bot, main_army, Point2(enemy_center), 
-                                bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
-            # If high threat detected and unclear advantage, redirect to engage the enemy units
+            # Only override target if threat is very high (consolidated logic)
             elif enemy_threat_level >= 5:
                 enemy_center, _ = cy_find_units_center_mass(bot.enemy_units, 10.0)
                 control_main_army(bot, main_army, Point2(enemy_center), 
                                 bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
-            # Otherwise, continue attacking the original target
+            # Otherwise, stick with current attack target for stability
             else:
                 control_main_army(bot, main_army, attack_target, 
                                 bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15))
@@ -390,37 +385,84 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
 def attack_target(bot, main_army_position: Point2) -> Point2:
     """
     Determines where our main attacking units should move toward.
-    If we see an enemy structure, we target the closest one. Otherwise,
-    we may fallback to expansions or the enemy start location.
+    Enhanced with target persistence to reduce bouncing behavior.
     """
 
+    # Check if we should prioritize enemy army over structures (borrowed from example)
+    enemy_army = bot.enemy_units.filter(lambda u: u.type_id not in COMMON_UNIT_IGNORE_TYPES and not u.is_structure)
+    enemy_supply = sum(bot.calculate_supply_cost(u.type_id) for u in enemy_army)
+    
+    if enemy_supply >= 6 and enemy_army:
+        enemy_center, _ = cy_find_units_center_mass(enemy_army, 10.0)
+        # If we have significant enemy forces, prioritize them over structures
+        all_close_enemy = bot.mediator.get_units_in_range(
+            start_points=[Point2(enemy_center)],
+            distances=11.5,
+            query_tree=UnitTreeQueryType.EnemyGround,
+            return_as_dict=False,
+        )[0]
+        if sum(bot.calculate_supply_cost(u.type_id) for u in all_close_enemy) >= 7:
+            bot.current_attack_target = Point2(enemy_center)
+            return bot.current_attack_target
+
     if bot.enemy_structures:
-        # Prioritize the closest enemy structure to the main army
-        closest_structure = cy_closest_to(main_army_position, bot.enemy_structures).position
+        closest_structure = cy_closest_to(main_army_position, bot.enemy_structures)
         
-        # # Check if the closest structure is far away and if so, fallback to a stable target
-        # if closest_structure.distance_to(main_army_position) > 50.0:
-        #     return fallback_target(bot)
+        # Distance-based stickiness - if we're close to enemy structures, don't get distracted
+        if (bot.current_attack_target is not None and 
+            cy_distance_to_squared(main_army_position, bot.current_attack_target) < 450.0):
+            return bot.current_attack_target
         
-        return Point2(closest_structure.position)
+        # If we have a current target, only switch if new target is significantly closer
+        if bot.current_attack_target is not None:
+            current_distance = main_army_position.distance_to(bot.current_attack_target)
+            new_distance = main_army_position.distance_to(closest_structure.position)
+            
+            # Only switch if new target is meaningfully closer
+            if new_distance < current_distance - bot.target_lock_distance:
+                bot.current_attack_target = Point2(closest_structure.position)
+                
+            # Check if current target is still valid (structure still exists nearby)
+            elif (bot.is_visible(bot.current_attack_target) and 
+                  not bot.enemy_structures.closer_than(5, bot.current_attack_target)):
+                # Target area is clear, allow new target selection
+                bot.current_attack_target = Point2(closest_structure.position)
+        else:
+            # First time setting target
+            bot.current_attack_target = Point2(closest_structure.position)
+            
+        return bot.current_attack_target
         
     # Not seen anything in early game, just head to enemy spawn
     elif bot.time < 240.0:
-        return bot.enemy_start_locations[0]
+        fallback = bot.enemy_start_locations[0]
+        bot.current_attack_target = fallback
+        return fallback
     
     # Else search the map
     else:
-        return fallback_target(bot)
+        fallback = fallback_target(bot)
+        bot.current_attack_target = fallback
+        return fallback
 
 
 def fallback_target(bot) -> Point2:
     """
     Provides a fallback target for the main army when no clear target is available.
-    Cycles through expansion locations.
+    Cycles through expansion locations with mineral field validation (borrowed from example).
     """
-    # Cycle through expansion locations
+    # Cycle through expansion locations with better validation
     if bot.is_visible(bot.current_base_target):
-        bot.current_base_target = next(bot.expansions_generator)
+        # Check if there are mineral fields near this base location
+        if mineral_fields := [
+            mf for mf in bot.mineral_field 
+            if cy_distance_to_squared(mf.position, bot.current_base_target) < 144.0
+        ]:
+            closest_mineral = cy_closest_to(bot.current_base_target, mineral_fields).position
+            if bot.is_visible(closest_mineral):
+                bot.current_base_target = next(bot.expansions_generator)
+        else:
+            bot.current_base_target = next(bot.expansions_generator)
     
     return bot.current_base_target
 
