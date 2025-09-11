@@ -57,10 +57,11 @@ def main():
         # Local game
         
         map_list: List[str] = [
-            #"TorchesAIE",
+            "TorchesAIE",
             #"PylonAIE",
             #"PersephoneAIE",
-            "IncorporealAIE_v4"
+            #"IncorporealAIE_v4"
+            #"LeyLinesAIE_v3"
 
         ]
 
