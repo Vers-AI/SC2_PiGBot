@@ -423,7 +423,6 @@ def attack_target(bot, main_army_position: Point2) -> Point2:
     """
     
     
-    # 1. Calculate structure position once (following example pattern)
     enemy_structure_pos: Point2 = None
     if bot.enemy_structures:
         valid_structures = bot.enemy_structures.filter(lambda s: s.type_id not in COMMON_UNIT_IGNORE_TYPES)
@@ -432,13 +431,11 @@ def attack_target(bot, main_army_position: Point2) -> Point2:
         if valid_structures:
             enemy_structure_pos = cy_closest_to(bot.mediator.get_enemy_nat, valid_structures).position
     
-    # 2. Proximity stickiness - key anti-bouncing mechanism from example
     if (enemy_structure_pos and 
         cy_distance_to_squared(main_army_position, enemy_structure_pos) < 450.0):
         bot.current_attack_target = enemy_structure_pos
         return enemy_structure_pos
     
-    # 3. Army targeting with supply thresholds (following example)
     enemy_army = bot.enemy_units.filter(lambda u: 
         u.type_id not in COMMON_UNIT_IGNORE_TYPES 
         and not u.is_structure 
@@ -447,11 +444,9 @@ def attack_target(bot, main_army_position: Point2) -> Point2:
     )
     enemy_supply = sum(bot.calculate_supply_cost(u.type_id) for u in enemy_army)
     
-    # Only prioritize army if substantial (following example thresholds)
     if enemy_supply >= 6 and enemy_army:
         enemy_center, _ = cy_find_units_center_mass(enemy_army, 10.0)
         
-        # Check clustered supply around army center
         all_close_enemy = bot.mediator.get_units_in_range(
             start_points=[Point2(enemy_center)],
             distances=11.5,
