@@ -12,6 +12,11 @@ from ares.consts import UnitRole, UnitTreeQueryType
 from ares.behaviors.combat.individual import PathUnitToTarget, WorkerKiteBack
 from ares.behaviors.combat import CombatManeuver
 from ares.managers.manager_mediator import ManagerMediator
+from ares.dicts.unit_data import UNIT_DATA
+
+from cython_extensions import (
+    cy_distance_to, cy_distance_to_squared, cy_center, cy_find_units_center_mass
+)
 
 
 
@@ -312,3 +317,328 @@ def early_threat_sensor(bot):
                 target_position=bot.mediator.get_enemy_nat, force_close=True
             ):
                 bot.mediator.assign_role(tag=worker.tag, role=UnitRole.SCOUTING)
+
+
+# ===== THREAT ASSESSMENT FUNCTIONS =====
+# Moved from combat.py for better separation of concerns
+
+def assess_threat_severity(bot, enemy_units: Units, threat_location: Point2) -> dict:
+    """
+    Enhanced threat assessment that determines both severity and appropriate response.
+    Returns dict with threat_level, required_units, and response_type.
+    """
+    if not enemy_units:
+        return {"threat_level": 0, "required_units": 0, "response_type": "none"}
+    
+    # Calculate base threat value
+    threat_value = 0
+    unit_count = enemy_units.amount
+    
+    # Categorize threats by type
+    harassment_units = enemy_units.filter(lambda u: u.type_id in {
+        UnitTypeId.REAPER, UnitTypeId.ADEPT, UnitTypeId.ORACLE,
+        UnitTypeId.HELLION, UnitTypeId.BANSHEE, UnitTypeId.LIBERATORAG
+    })
+    
+    combat_units = enemy_units.filter(lambda u: u.type_id not in {
+        UnitTypeId.REAPER, UnitTypeId.ADEPT, UnitTypeId.ORACLE,
+        UnitTypeId.HELLION, UnitTypeId.BANSHEE, UnitTypeId.LIBERATORAG,
+        UnitTypeId.PROBE, UnitTypeId.SCV, UnitTypeId.DRONE
+    })
+    
+    # Weight different unit types
+    for unit in enemy_units:
+        if unit.type_id in UNIT_DATA:
+            base_weight = UNIT_DATA[unit.type_id]['army_value']
+            # Scale by health percentage
+            health_factor = (unit.health + unit.shield) / (unit.health_max + unit.shield_max)
+            threat_value += base_weight * health_factor
+    
+    # Distance factor - closer threats are more urgent
+    closest_base = min(bot.townhalls, key=lambda th: cy_distance_to_squared(th.position, threat_location))
+    distance_to_base = cy_distance_to(threat_location, closest_base.position)
+    distance_factor = max(0.5, 2.0 - (distance_to_base / 20.0))
+    threat_value *= distance_factor
+    
+    # Determine response type and required units
+    if harassment_units.amount >= unit_count * 0.8 and unit_count <= 6:
+        # Mostly harassment units
+        response_type = "harassment_response"
+        required_units = min(4, max(2, unit_count))
+        threat_level = min(3, threat_value)
+    elif combat_units.amount > 3 or threat_value > 15:
+        # Significant combat threat
+        response_type = "combat_response" 
+        required_units = max(6, int(threat_value * 0.8))
+        threat_level = min(10, threat_value)
+    else:
+        # Mixed or small threat
+        response_type = "patrol_response"
+        required_units = min(3, max(1, unit_count // 2))
+        threat_level = min(5, threat_value)
+    
+    return {
+        "threat_level": int(threat_level),
+        "required_units": required_units,
+        "response_type": response_type,
+        "harassment_ratio": harassment_units.amount / max(1, unit_count),
+        "unit_count": unit_count,
+        "threat_value": threat_value
+    }
+
+
+def assess_threat(bot, enemy_units: Units, own_forces: Units, return_details: bool = False):
+    """
+    Enhanced threat assessment that can return simple score or detailed analysis.
+    
+    Args:
+        return_details: If True, returns dict with detailed analysis. If False, returns int score.
+    """
+    if not enemy_units:
+        return {"threat_level": 0, "required_units": 0, "response_type": "none"} if return_details else 0
+    
+    # Calculate base threat value
+    threat_value = 0
+    unit_count = enemy_units.amount
+    
+    # Check for damage-dealing low threats (e.g., lings attacking probes/buildings)
+    damage_bonus = _assess_damage_threat(bot, enemy_units)
+    
+    # Categorize threats by type  
+    harassment_units = enemy_units.filter(lambda u: u.type_id in {
+        UnitTypeId.REAPER, UnitTypeId.ADEPT, UnitTypeId.ORACLE,
+        UnitTypeId.HELLION, UnitTypeId.BANSHEE, UnitTypeId.LIBERATORAG
+    })
+    
+    # Weight different unit types
+    for unit in enemy_units:
+        if unit.type_id in UNIT_DATA:
+            base_weight = UNIT_DATA[unit.type_id]['army_value']
+            # Scale by health percentage
+            health_factor = (unit.health + unit.shield) / max(1, unit.health_max + unit.shield_max)
+            threat_value += base_weight * health_factor
+    
+    # Density check: adjust threat level based on enemy clustering
+    center = cy_center(enemy_units)
+    cluster_count = 0
+    for unit in enemy_units:
+        if cy_distance_to(unit.position, center) <= 5.0:
+            cluster_count += 1
+    
+    # If fewer than 3 enemy units are clustered, scale down the threat level
+    if cluster_count < 3:
+        threat_value *= 0.5
+    
+    # Apply damage bonus for units actively damaging our assets
+    threat_value += damage_bonus
+    
+    # Simple integer return for backward compatibility
+    if not return_details:
+        return max(round(threat_value), 0)
+    
+    # Enhanced details for new system
+    # (This replaces assess_threat_severity functionality)
+    if len(bot.townhalls) > 0:
+        closest_base = min(bot.townhalls, key=lambda th: cy_distance_to_squared(th.position, center))
+        distance_to_base = cy_distance_to(center, closest_base.position)
+        distance_factor = max(0.5, 2.0 - (distance_to_base / 20.0))
+        threat_value *= distance_factor
+    
+    # Apply damage bonus again after distance factor (for detailed analysis)
+    threat_value += damage_bonus
+    
+    # Determine response type and required units
+    # Damage-dealing threats get elevated response even if low unit count
+    if damage_bonus > 2.0:  # Critical damage being dealt
+        response_type = "damage_response"
+        required_units = min(3, max(1, unit_count + 1))  # +1 extra for damage threats
+        threat_level = min(6, max(3, threat_value))  # Minimum level 3 for damage threats
+    elif harassment_units.amount >= unit_count * 0.8 and unit_count <= 6:
+        response_type = "harassment_response"
+        required_units = min(4, max(2, unit_count))
+        threat_level = min(3, threat_value)
+    elif unit_count > 3 and threat_value > 10:
+        response_type = "combat_response" 
+        required_units = max(6, int(threat_value * 0.8))
+        threat_level = min(10, threat_value)
+    else:
+        response_type = "patrol_response"
+        required_units = min(3, max(1, unit_count // 2))
+        threat_level = min(5, threat_value)
+    
+    return {
+        "threat_level": int(threat_level),
+        "required_units": required_units,
+        "response_type": response_type,
+        "harassment_ratio": harassment_units.amount / max(1, unit_count),
+        "unit_count": unit_count,
+        "threat_value": threat_value
+    }
+
+
+def _assess_damage_threat(bot, enemy_units: Units) -> float:
+    """
+    Assess if low-threat units are actively doing damage to our assets.
+    Returns bonus threat value for units near damaged/low-health friendly units.
+    """
+    damage_bonus = 0.0
+    
+    # Get our damaged units (buildings + workers)
+    damaged_buildings = bot.structures.filter(lambda s: s.health_percentage < 1.0)
+    damaged_workers = bot.workers.filter(lambda w: w.health_percentage < 1.0)
+    
+    # Get very low health units that need immediate attention
+    critical_buildings = bot.structures.filter(lambda s: s.health_percentage < 0.5)
+    critical_workers = bot.workers.filter(lambda w: w.health_percentage < 0.3)
+    
+    # Check if enemy units are near damaged assets
+    for enemy in enemy_units:
+        # Higher bonus for units near critical assets
+        if critical_buildings:
+            closest_critical = critical_buildings.closest_to(enemy.position)
+            if cy_distance_to(enemy.position, closest_critical.position) <= 3.0:
+                damage_bonus += 3.0  # High priority for units attacking critical buildings
+        
+        if critical_workers:
+            closest_critical_worker = critical_workers.closest_to(enemy.position)
+            if cy_distance_to(enemy.position, closest_critical_worker.position) <= 2.0:
+                damage_bonus += 2.0  # Medium priority for units attacking low-health workers
+        
+        # Medium bonus for units near damaged assets
+        if damaged_buildings:
+            closest_damaged = damaged_buildings.closest_to(enemy.position)
+            if cy_distance_to(enemy.position, closest_damaged.position) <= 3.0:
+                damage_bonus += 1.5
+        
+        if damaged_workers:
+            closest_damaged_worker = damaged_workers.closest_to(enemy.position)
+            if cy_distance_to(enemy.position, closest_damaged_worker.position) <= 2.0:
+                damage_bonus += 1.0
+    
+    return damage_bonus
+
+
+def allocate_defensive_forces(bot, threat_info: dict, threat_location: Point2) -> Units:
+    """
+    Allocates appropriate forces to handle a specific threat.
+    Returns the units that should respond to this threat.
+    """
+    available_units = bot.mediator.get_units_from_role(role=UnitRole.ATTACKING)
+    
+    if not available_units:
+        return Units([], bot)
+    
+    response_type = threat_info["response_type"]
+    required_count = threat_info["required_units"]
+    
+    # For damage-dealing threats, send closest available units immediately
+    if response_type == "damage_response":
+        # Prioritize any available units - speed is critical
+        closest_units = available_units.sorted(lambda u: cy_distance_to_squared(u.position, threat_location))
+        return closest_units[:required_count]
+    
+    # For harassment, prefer fast units
+    elif response_type == "harassment_response":
+        fast_units = available_units.filter(lambda u: u.type_id in {
+            UnitTypeId.STALKER, UnitTypeId.ADEPT, UnitTypeId.ZEALOT
+        })
+        if fast_units:
+            # Take closest units to threat
+            selected = fast_units.sorted(lambda u: cy_distance_to_squared(u.position, threat_location))
+            return selected[:required_count]
+    
+    # For combat threats, take a balanced mix but not the entire army
+    elif response_type == "combat_response":
+        # Don't take more than 60% of army for local defense unless it's overwhelming
+        max_units = min(required_count, int(available_units.amount * 0.6))
+        if threat_info["threat_level"] >= 8:  # Overwhelming threat
+            max_units = available_units.amount
+        
+        # Prefer units closest to threat
+        selected = available_units.sorted(lambda u: cy_distance_to_squared(u.position, threat_location))
+        return selected[:max_units]
+    
+    # For patrol response, send minimal force
+    elif response_type == "patrol_response":
+        closest_units = available_units.sorted(lambda u: cy_distance_to_squared(u.position, threat_location))
+        return closest_units[:min(required_count, 3)]
+    
+    return Units([], bot)
+
+
+def threat_detection(bot, main_army: Units) -> None:
+    """
+    Enhanced threat detection with smart force allocation.
+    Detects threats near bases and responds with appropriate force levels
+    instead of always redirecting the entire main army.
+    """
+    # Import here to avoid circular dependency
+    from bot.managers.combat import control_main_army
+    
+    ground_near = bot.mediator.get_ground_enemy_near_bases
+    flying_near = bot.mediator.get_flying_enemy_near_bases
+
+    if ground_near or flying_near:
+        # Combine ground + air threats
+        all_threats = {}
+        for key, value in ground_near.items():
+            all_threats[key] = value.copy()
+        for key, value in flying_near.items():
+            all_threats.setdefault(key, set()).update(value)
+
+        main_army_should_respond = False
+        
+        for _, enemy_tags in all_threats.items():
+            enemy_units = bot.enemy_units.tags_in(enemy_tags)
+            if not enemy_units:
+                continue
+                
+            threat_position, _ = cy_find_units_center_mass(enemy_units, 10.0)
+            threat_position = Point2(threat_position)
+            
+            # Use enhanced threat assessment (now consolidated)
+            threat_info = assess_threat(bot, enemy_units, main_army, return_details=True)
+            # Type assertion since we know return_details=True returns dict
+            assert isinstance(threat_info, dict), "assess_threat with return_details=True should return dict"
+            current_threat_level = threat_info["threat_level"]  # For original hysteresis thresholds
+            
+            # Preserve original hysteresis thresholds for bot._under_attack flag
+            if bot.time < 3 * 60 and bot._used_cheese_response:
+                high_threshold = 2
+                low_threshold = 1
+            else:
+                high_threshold = 5
+                low_threshold = 2
+            
+            # Update global threat status using original hysteresis thresholds
+            if bot._under_attack:
+                if current_threat_level < low_threshold:
+                    bot._under_attack = False
+            else:
+                if current_threat_level >= high_threshold:
+                    bot._under_attack = True
+            
+            # Smart force allocation instead of all-or-nothing response
+            if bot._under_attack or threat_info["threat_level"] >= 3:
+                # Allocate appropriate defensive forces first
+                defensive_units = allocate_defensive_forces(bot, threat_info, threat_position)
+                
+                if defensive_units:
+                    # Assign defensive roles and control them
+                    for unit in defensive_units:
+                        bot.mediator.assign_role(tag=unit.tag, role=UnitRole.DEFENDING)
+                    
+                    defensive_squads = bot.mediator.get_squads(role=UnitRole.DEFENDING, squad_radius=6.0)
+                    if defensive_squads:
+                        control_main_army(bot, defensive_units, threat_position, defensive_squads)
+                
+                # Only redirect main army for overwhelming threats (preserving critical defense)
+                if (threat_info["threat_level"] >= 8 or 
+                    (threat_info["response_type"] == "combat_response" and threat_info["unit_count"] > 8) or
+                    current_threat_level >= high_threshold * 2):  # Very high threat by original standards
+                    main_army_should_respond = True
+                    control_main_army(bot, main_army, threat_position, 
+                                    bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
+        
+        # Store whether main army responded for other systems to check
+        bot._main_army_defending = main_army_should_respond

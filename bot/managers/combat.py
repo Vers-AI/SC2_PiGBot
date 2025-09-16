@@ -21,6 +21,7 @@ from ares.dicts.unit_data import UNIT_DATA
 
 from bot.utilities.use_disruptor_nova import UseDisruptorNova
 from bot.utilities.nova_manager import NovaManager
+from bot.managers.reactions import assess_threat, allocate_defensive_forces
 
 from cython_extensions import (
    
@@ -228,91 +229,24 @@ def warp_prism_follower(bot, warp_prisms: Units, main_army: Units) -> None:
 
     bot.register_behavior(maneuver)
 
-#TODO Move all threat logics to reactions.py
-def assess_threat(bot, enemy_units: Units, own_forces: Units) -> int: 
-    """
-    Assigns a 'threat level' based on unit composition.
-    You can refine logic to suit your needs.
-    """
-    threat_level = 0
-    
-    for unit in enemy_units:
-        weight = UNIT_DATA[unit.type_id]['army_value']
-        # Multiply weight by the effective power (health + shield) scaled by 50.0, tweak if needed
-        threat_level += weight * ((unit.health + unit.shield) / 50.0)
-
-    # Density check: adjust threat level based on enemy clustering
-    if enemy_units.amount > 0:
-        center = cy_center(enemy_units)
-
-        cluster_count = 0
-        for unit in enemy_units:
-            if cy_distance_to(unit.position, center) <= 5.0:
-                cluster_count += 1
-
-        # If fewer than 3 enemy units are clustered, scale down the threat level
-        if cluster_count < 3:
-            threat_level *= 0.5
-
-    # Adjust threat if our forces significantly outnumber enemy units (not used, caused distortion)
-    # if own_forces.amount > enemy_units.amount * 2:
-    #     threat_level -= 2
-
-    return max(round(threat_level), 0)
-
-
-def threat_detection(bot, main_army: Units) -> None:
-    """
-    Detects if we have ground or air enemies near bases; calls 
-    assess_threat and possibly redirects the main army to defend.
-    """
-    ground_near = bot.mediator.get_ground_enemy_near_bases
-    flying_near = bot.mediator.get_flying_enemy_near_bases
-
-    if ground_near or flying_near:
-        # Combine ground + air threats
-        all_threats = {}
-        for key, value in ground_near.items():
-            all_threats[key] = value.copy()
-        for key, value in flying_near.items():
-            all_threats.setdefault(key, set()).update(value)
-
-        for _, enemy_tags in all_threats.items():
-            enemy_units = bot.enemy_units.tags_in(enemy_tags)
-            # Begin two-threshold (hysteresis) defense logic:
-            threat = assess_threat(bot, enemy_units, main_army)
-            
-            if bot.time < 3 * 60 and bot._used_cheese_response:
-                high_threshold = 2
-                low_threshold = 1
-            else:
-                high_threshold = 5
-                low_threshold = 2
-            
-            if bot._under_attack:
-                if threat < low_threshold:
-                    bot._under_attack = False
-            else:
-                if threat >= high_threshold:
-                    bot._under_attack = True
-            
-            if bot._under_attack:
-                threat_position, num_units = cy_find_units_center_mass(enemy_units, 10.0)
-                threat_position = Point2(threat_position)
-                control_main_army(bot, main_army, threat_position, bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
-               
-
 
 def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
     """
-    Handles the attack toggles logic.
+    Enhanced attack toggles logic with smart threat response.
     
     Controls when to attack and when to retreat based on relative army strength
-    and threat assessment.
+    and intelligent threat assessment that prevents bouncing.
     """
     
-    # Assess the threat level of enemy units
-    enemy_threat_level = assess_threat(bot, bot.enemy_units, main_army)
+    # Check if main army is currently handling defense (set by threat_detection)
+    if hasattr(bot, '_main_army_defending') and bot._main_army_defending and not bot._under_attack:
+        # Main army is handling a major threat, don't interfere
+        return
+    
+    # Assess the threat level of enemy units for main combat decisions
+    enemy_threat_level = assess_threat(bot, bot.enemy_units, main_army)  # Returns simple int
+    # Type assertion since return_details=False (default) returns int
+    assert isinstance(enemy_threat_level, int), "assess_threat without return_details should return int"
 
     enemy_army = bot.enemy_army
     # Early game safety - don't attack during cheese or one-base reactions
@@ -378,7 +312,7 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
                 if nearest_base:
                     control_main_army(bot, main_army, nearest_base.position, 
                                     bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
-            # Only override target if threat is very high AND there are enemy units to fight
+            # Only override target if threat is very high AND there are enemy units to fight  
             elif enemy_threat_level >= 5 and bot.enemy_army:
                 enemy_center, _ = cy_find_units_center_mass(bot.enemy_army, 10.0)
                 control_main_army(bot, main_army, Point2(enemy_center), 
@@ -407,11 +341,20 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
                 bot._attack_commenced_time = bot.time
             else:
                 pass
-        # When build order isn't complete or in defensive mode, focus on defending if needed
+        # When build order isn't complete or in defensive mode, only redirect for major threats
         elif bot._under_attack and bot.enemy_units:
+            # Use enhanced threat assessment to avoid bouncing
             enemy_center, _ = cy_find_units_center_mass(bot.enemy_units, 10.0)
-            control_main_army(bot, main_army, Point2(enemy_center), 
-                            bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
+            major_threat_info = assess_threat(bot, bot.enemy_units, main_army, return_details=True)
+            # Type assertion since we know return_details=True returns dict
+            assert isinstance(major_threat_info, dict), "assess_threat with return_details=True should return dict"
+            
+            # Only pull main army for significant threats
+            if (major_threat_info["threat_level"] >= 7 or 
+                major_threat_info["response_type"] == "combat_response"):
+                control_main_army(bot, main_army, Point2(enemy_center), 
+                                bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
+            # Otherwise let allocated forces handle it
         else:
             pass
 
@@ -506,5 +449,45 @@ def fallback_target(bot) -> Point2:
     
     return bot.current_base_target
 
+
+def manage_defensive_unit_roles(bot) -> None:
+    """
+    Manages units assigned to temporary defensive roles.
+    Returns them to attacking role when threats are cleared.
+    """
+    defending_units = bot.mediator.get_units_from_role(role=UnitRole.DEFENDING)
+    
+    if not defending_units:
+        return
+    
+    # Check if there are still active threats near bases
+    ground_near = bot.mediator.get_ground_enemy_near_bases
+    flying_near = bot.mediator.get_flying_enemy_near_bases
+    
+    active_threats = False
+    if ground_near or flying_near:
+        # Combine ground + air threats
+        all_threats = {}
+        for key, value in ground_near.items():
+            all_threats[key] = value.copy()
+        for key, value in flying_near.items():
+            all_threats.setdefault(key, set()).update(value)
+        
+        # Check if any significant threats remain
+        for base_location, enemy_tags in all_threats.items():
+            enemy_units = bot.enemy_units.tags_in(enemy_tags)
+            if enemy_units:
+                threat_position, _ = cy_find_units_center_mass(enemy_units, 10.0)
+                threat_info = assess_threat(bot, enemy_units, Units([], bot), return_details=True)
+                # Type assertion since we know return_details=True returns dict
+                assert isinstance(threat_info, dict), "assess_threat with return_details=True should return dict"
+                if threat_info["threat_level"] >= 2:  # Still has meaningful threat
+                    active_threats = True
+                    break
+    
+    # If no active threats, return defensive units to attacking role
+    if not active_threats:
+        for unit in defending_units:
+            bot.mediator.assign_role(tag=unit.tag, role=UnitRole.ATTACKING)
 
 

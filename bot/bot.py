@@ -27,15 +27,15 @@ from sc2.data import Race
 
 # Modular imports for separated concerns
 from bot.managers.macro import handle_macro
-from bot.managers.reactions import defend_cannon_rush, defend_worker_rush, early_threat_sensor, cheese_reaction, one_base_reaction
+from bot.managers.reactions import defend_cannon_rush, defend_worker_rush, early_threat_sensor, cheese_reaction, one_base_reaction, threat_detection
 from bot.managers.combat import (
     control_main_army,
     assess_threat,
-    threat_detection,
     warp_prism_follower,
     handle_attack_toggles,
     attack_target,
-    gatekeeper_control
+    gatekeeper_control,
+    manage_defensive_unit_roles
 )
 from bot.managers.scouting import control_scout
 from ares.behaviors.macro import Mining
@@ -220,6 +220,9 @@ class PiG_Bot(AresBot):
                 freeflow=self.freeflow,
             )
 
+        # Manage defensive unit roles (return them to attacking when threats are cleared)
+        manage_defensive_unit_roles(self)
+        
         # Handle attack toggles if main_army exists
         if main_army:
             self.main_army_position = self.mediator.get_position_of_main_squad(role=UnitRole.ATTACKING)
