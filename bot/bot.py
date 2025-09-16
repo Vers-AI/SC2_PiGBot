@@ -105,7 +105,7 @@ class PiG_Bot(AresBot):
         self._cannon_rush_cleanup_timer = None
 
         # Debug flags
-        self.debug = False
+        self.debug = True  # Enable debug output for targeting analysis
         
         # Target persistence for stable attack behavior
         self.current_attack_target = None
@@ -181,8 +181,8 @@ class PiG_Bot(AresBot):
         gatekeeper = self.mediator.get_units_from_role(role=UnitRole.GATE_KEEPER)
 
 
-        # Create Squad
-        squads: list[UnitSquad] = self.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15)
+        # Create Squad with tighter radius for better cohesion
+        squads: list[UnitSquad] = self.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0)
 
         # Always run combat-oriented threat detection first
         # This ensures we're always responding to immediate threats regardless of build order status
@@ -232,9 +232,7 @@ class PiG_Bot(AresBot):
         # Warp Prism following main army
         warp_prism_follower(self, warp_prism, main_army)
 
-        # Check if the main army needs to regroup when not under attack or engaged in attack
-        if not self._under_attack and not self._commenced_attack and main_army:
-            regroup_army(self, main_army)
+        # Army cohesion is now handled proactively by the main squad coordination system
 
         # Scouting actions
         from bot.managers.scouting import control_observers
