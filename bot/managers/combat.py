@@ -49,7 +49,6 @@ COMMON_UNIT_IGNORE_TYPES: set[UnitTypeId] = {
     UnitTypeId.CHANGELINGMARINE,
     UnitTypeId.CHANGELINGZEALOT,
     UnitTypeId.CHANGELINGZERGLING,
-    UnitTypeId.BROODLING
 }
 
 # Note: ATTACK_TARGET_IGNORE was redundant - all items already in COMMON_UNIT_IGNORE_TYPES
@@ -151,22 +150,7 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                         
         else:
             # No enemies nearby - use continuous cohesion approach
-            # Main squad goes to target, secondary squads converge on main squad
-            dist_to_target = move_to.distance_to(squad_position)
-            if dist_to_target > 0.1:
-                maneuver.add(
-                    PathGroupToTarget(
-                        start=squad_position,
-                        group=units,
-                        group_tags=squad_tags,
-                        target=move_to,
-                        grid=avoid_grid,
-                        sense_danger=False,
-                        success_at_distance=0.1
-                    )
-                )
-            else:
-                maneuver.add(AMoveGroup(group=units, group_tags=squad_tags, target=move_to))
+            maneuver.add(AMoveGroup(group=units, group_tags=squad_tags, target=move_to))
 
             bot.register_behavior(maneuver)
 
@@ -405,11 +389,11 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
                 if nearest_base:
                     control_main_army(bot, main_army, nearest_base.position, 
                                     bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
-            # Only override target if threat is very high (consolidated logic)
-            elif enemy_threat_level >= 5:
+            # Only override target if threat is very high AND there are enemy units to fight
+            elif enemy_threat_level >= 5 and bot.enemy_army:
                 if bot.debug:
-                    print(f"DEBUG ATTACK_TOGGLES: High threat detected - REDIRECTING to enemy center")
-                enemy_center, _ = cy_find_units_center_mass(bot.enemy_units, 10.0)
+                    print(f"DEBUG ATTACK_TOGGLES: High threat detected with enemy army - REDIRECTING to enemy center")
+                enemy_center, _ = cy_find_units_center_mass(bot.enemy_army, 10.0)
                 control_main_army(bot, main_army, Point2(enemy_center), 
                                 bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
             # Otherwise, stick with current attack target for stability
