@@ -58,9 +58,10 @@ def main():
         
         map_list: List[str] = [
             "TorchesAIE",
-            "PylonAIE",
-            "PersephoneAIE",
-            #"InterloperAIE"
+            #"PylonAIE",
+            #"PersephoneAIE",
+            #"IncorporealAIE_v4"
+            #"LeyLinesAIE_v3"
 
         ]
 
@@ -69,7 +70,7 @@ def main():
             maps.get(random.choice(map_list)),
             [
                 bot1,
-                Computer(Race.Random, Difficulty.VeryHard, ai_build=AIBuild.Macro),
+                Computer(Race.Zerg, Difficulty.VeryHard, ai_build=AIBuild.Macro),
             ],
             realtime=False,
         )

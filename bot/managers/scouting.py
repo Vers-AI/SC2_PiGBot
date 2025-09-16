@@ -195,7 +195,7 @@ def control_army_observer(bot, observer: Optional[Unit], main_army: Units) -> No
                 UnitTypeId.LURKERMPBURROWED,
                 UnitTypeId.ROACHBURROWED, UnitTypeId.ZERGLINGBURROWED,
                 UnitTypeId.HYDRALISKBURROWED, UnitTypeId.ULTRALISKBURROWED,
-                UnitTypeId.WIDOWMINEBURROWED
+                UnitTypeId.WIDOWMINEBURROWED, UnitTypeId.DARKTEMPLAR
             }
         )
         

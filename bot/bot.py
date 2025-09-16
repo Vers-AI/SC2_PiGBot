@@ -29,12 +29,12 @@ from sc2.data import Race
 from bot.managers.macro import handle_macro
 from bot.managers.reactions import defend_cannon_rush, defend_worker_rush, early_threat_sensor, cheese_reaction, one_base_reaction
 from bot.managers.combat import (
-    attack_target,
     control_main_army,
+    assess_threat,
     threat_detection,
     warp_prism_follower,
     handle_attack_toggles,
-    regroup_army,
+    attack_target,
     gatekeeper_control
 )
 from bot.managers.scouting import control_scout
@@ -105,7 +105,11 @@ class PiG_Bot(AresBot):
         self._cannon_rush_cleanup_timer = None
 
         # Debug flags
-        self.debug = False
+        self.debug = False  # Enable debug output for targeting analysis
+        
+        # Target persistence for stable attack behavior
+        self.current_attack_target = None
+        self.target_lock_distance = 25.0  # Don't switch targets unless new one is 25+ units closer
 
 
 
@@ -144,7 +148,11 @@ class PiG_Bot(AresBot):
         self.freeflow = self.minerals > 800 and self.vespene < 200
 
         if self.enemy_race == Race.Zerg:
-            self.gatekeeping_pos = self.mediator.get_pvz_nat_gatekeeping_pos
+            if self.mediator.get_pvz_nat_gatekeeping_pos is not None:
+                self.gatekeeping_pos = self.mediator.get_pvz_nat_gatekeeping_pos
+            else:
+                self.gatekeeping_pos = self.natural_expansion.towards(self.game_info.map_center, 6)
+            
             if self.gatekeeping_pos is not None:
                 self.rally_point = self.gatekeeping_pos.towards(self.natural_expansion, 5)
             else:
@@ -152,8 +160,7 @@ class PiG_Bot(AresBot):
 
         else:
             self.rally_point = self.natural_expansion.towards(self.game_info.map_center, 5)
-
-
+        
         print("Build Chosen:", self.build_order_runner.chosen_opening)
         print("the enemy race is:", self.enemy_race)
 
@@ -174,8 +181,8 @@ class PiG_Bot(AresBot):
         gatekeeper = self.mediator.get_units_from_role(role=UnitRole.GATE_KEEPER)
 
 
-        # Create Squad
-        squads: list[UnitSquad] = self.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=15)
+        # Create Squad with tighter radius for better cohesion
+        squads: list[UnitSquad] = self.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0)
 
         # Always run combat-oriented threat detection first
         # This ensures we're always responding to immediate threats regardless of build order status
@@ -225,9 +232,7 @@ class PiG_Bot(AresBot):
         # Warp Prism following main army
         warp_prism_follower(self, warp_prism, main_army)
 
-        # Check if the main army needs to regroup when not under attack or engaged in attack
-        if not self._under_attack and not self._commenced_attack and main_army:
-            regroup_army(self, main_army)
+        # Army cohesion is now handled proactively by the main squad coordination system
 
         # Scouting actions
         from bot.managers.scouting import control_observers
