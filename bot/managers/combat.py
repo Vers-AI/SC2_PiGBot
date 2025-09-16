@@ -5,7 +5,7 @@ from sc2.units import Units
 from sc2.unit import Unit
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.ability_id import AbilityId
-from ares.consts import LOSS_MARGINAL_OR_WORSE, TIE_OR_BETTER, UnitTreeQueryType, EngagementResult, VICTORY_DECISIVE_OR_BETTER
+from ares.consts import LOSS_MARGINAL_OR_WORSE, TIE_OR_BETTER, UnitTreeQueryType, EngagementResult, VICTORY_DECISIVE_OR_BETTER, VICTORY_MARGINAL_OR_BETTER, LOSS_OVERWHELMING_OR_WORSE
 
 from ares.behaviors.combat import CombatManeuver
 from ares.behaviors.combat.individual import (
@@ -51,7 +51,7 @@ COMMON_UNIT_IGNORE_TYPES: set[UnitTypeId] = {
     UnitTypeId.CHANGELINGZERGLING,
 }
 
-# Note: ATTACK_TARGET_IGNORE was redundant - all items already in COMMON_UNIT_IGNORE_TYPES
+
 
 
 def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSquad]) -> Point2:
@@ -150,8 +150,7 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                         
         else:
             # No enemies nearby - use continuous cohesion approach
-            maneuver.add(AMoveGroup(group=units, group_tags=squad_tags, target=move_to))
-
+            maneuver.add(AMoveGroup(group=units, group_tags=squad_tags, target=move_to))    
             bot.register_behavior(maneuver)
 
     return pos_of_main_squad
@@ -359,12 +358,8 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
     
     # If the army is already attacking, decide whether to continue or retreat
     if bot._commenced_attack:
-        if bot.debug:
-            print(f"DEBUG ATTACK_TOGGLES: Currently attacking, evaluating continuation...")
         # Immediately retreat if we enter an early defensive mode
         if is_early_defensive_mode:
-            if bot.debug:
-                print(f"DEBUG ATTACK_TOGGLES: Early defensive mode - RETREATING")
             bot._commenced_attack = False
             nearest_base = bot.townhalls.closest_to(main_army.center)
             if nearest_base:
@@ -372,18 +367,12 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
                                 bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
         # Stay aggressive for minimum duration to prevent oscillation
         elif bot.time < bot._attack_commenced_time + STAY_AGGRESSIVE_FOR:
-            if bot.debug:
-                print(f"DEBUG ATTACK_TOGGLES: In aggressive timeout period - continuing attack")
             control_main_army(bot, main_army, attack_target, bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
         # Decide whether to retreat based on army ratio
         else:
             fight_result = bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=True, good_positioning=True, workers_do_no_damage=True)
-            if bot.debug:
-                print(f"DEBUG ATTACK_TOGGLES: Fight result: {fight_result}, Threat level: {enemy_threat_level}")
             if fight_result in LOSS_MARGINAL_OR_WORSE:
                 # Retreat to the closest base if we're outmatched
-                if bot.debug:
-                    print(f"DEBUG ATTACK_TOGGLES: Fight result poor - RETREATING")
                 bot._commenced_attack = False
                 nearest_base = bot.townhalls.closest_to(main_army.center)
                 if nearest_base:
@@ -391,29 +380,20 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
                                     bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
             # Only override target if threat is very high AND there are enemy units to fight
             elif enemy_threat_level >= 5 and bot.enemy_army:
-                if bot.debug:
-                    print(f"DEBUG ATTACK_TOGGLES: High threat detected with enemy army - REDIRECTING to enemy center")
                 enemy_center, _ = cy_find_units_center_mass(bot.enemy_army, 10.0)
                 control_main_army(bot, main_army, Point2(enemy_center), 
                                 bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
             # Otherwise, stick with current attack target for stability
             else:
-                if bot.debug:
-                    print(f"DEBUG ATTACK_TOGGLES: Continuing attack to target: {attack_target}")
                 control_main_army(bot, main_army, attack_target, 
                                 bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
     else:
         # Check our fighting capability first
         fight_result = bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=True, good_positioning=True, workers_do_no_damage=True)
         
-        if bot.debug:
-            print(f"DEBUG ATTACK_TOGGLES: Not attacking yet, evaluating start conditions...")
-            print(f"DEBUG ATTACK_TOGGLES: Fight result: {fight_result}, Early def mode: {is_early_defensive_mode}, Under attack: {bot._under_attack}")
         
         # Attack if we have a clear advantage (decisive victory or better), regardless of defensive flags
         if fight_result in VICTORY_DECISIVE_OR_BETTER:
-            if bot.debug:
-                print(f"DEBUG ATTACK_TOGGLES: Decisive victory - STARTING ATTACK to {attack_target}")
             control_main_army(bot, main_army, attack_target, 
                             bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
             bot._commenced_attack = True
@@ -421,25 +401,19 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
         # Only consider attacking if build order is complete and not in early defensive mode
         elif not is_early_defensive_mode:
             if (fight_result in TIE_OR_BETTER and not bot._under_attack):
-                if bot.debug:
-                    print(f"DEBUG ATTACK_TOGGLES: Good fight odds & not defending - STARTING ATTACK to {attack_target}")
                 control_main_army(bot, main_army, attack_target, 
                                 bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
                 bot._commenced_attack = True
                 bot._attack_commenced_time = bot.time
             else:
-                if bot.debug:
-                    print(f"DEBUG ATTACK_TOGGLES: Not attacking - poor fight odds or under attack")
+                pass
         # When build order isn't complete or in defensive mode, focus on defending if needed
         elif bot._under_attack and bot.enemy_units:
-            if bot.debug:
-                print(f"DEBUG ATTACK_TOGGLES: Defensive mode but under attack - DEFENDING at enemy center")
             enemy_center, _ = cy_find_units_center_mass(bot.enemy_units, 10.0)
             control_main_army(bot, main_army, Point2(enemy_center), 
                             bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
         else:
-            if bot.debug:
-                print(f"DEBUG ATTACK_TOGGLES: Staying passive - early defensive mode or no threats")
+            pass
 
 
 def attack_target(bot, main_army_position: Point2) -> Point2:
@@ -448,8 +422,6 @@ def attack_target(bot, main_army_position: Point2) -> Point2:
     Uses example's targeting hierarchy with proximity stickiness to prevent bouncing.
     """
     
-    if bot.debug:
-        print(f"DEBUG TARGETING: Army position: {main_army_position}, Current target: {bot.current_attack_target}")
     
     # 1. Calculate structure position once (following example pattern)
     enemy_structure_pos: Point2 = None
@@ -463,8 +435,6 @@ def attack_target(bot, main_army_position: Point2) -> Point2:
     # 2. Proximity stickiness - key anti-bouncing mechanism from example
     if (enemy_structure_pos and 
         cy_distance_to_squared(main_army_position, enemy_structure_pos) < 450.0):
-        if bot.debug:
-            print(f"DEBUG TARGETING: Near structures - sticking to {enemy_structure_pos}")
         bot.current_attack_target = enemy_structure_pos
         return enemy_structure_pos
     
@@ -476,9 +446,6 @@ def attack_target(bot, main_army_position: Point2) -> Point2:
         and not u.is_cloaked
     )
     enemy_supply = sum(bot.calculate_supply_cost(u.type_id) for u in enemy_army)
-    
-    if bot.debug:
-        print(f"DEBUG TARGETING: Enemy army supply: {enemy_supply}")
     
     # Only prioritize army if substantial (following example thresholds)
     if enemy_supply >= 6 and enemy_army:
@@ -495,30 +462,22 @@ def attack_target(bot, main_army_position: Point2) -> Point2:
         
         # Only target army if clustered supply is significant
         if clustered_supply >= 7:
-            if bot.debug:
-                print(f"DEBUG TARGETING: Prioritizing enemy army cluster (supply: {clustered_supply}) at {Point2(enemy_center)}")
             bot.current_attack_target = Point2(enemy_center)
             return bot.current_attack_target
     
     # 4. Structure fallback
     if enemy_structure_pos:
-        if bot.debug:
-            print(f"DEBUG TARGETING: Targeting structures at {enemy_structure_pos}")
         bot.current_attack_target = enemy_structure_pos
         return enemy_structure_pos
     
     # 5. Expansion cycling when no targets (following example)
     if bot.is_visible(bot.current_attack_target) if bot.current_attack_target else True:
         fallback = fallback_target(bot)
-        if bot.debug:
-            print(f"DEBUG TARGETING: No targets - cycling to expansion at {fallback}")
         bot.current_attack_target = fallback
         return fallback
     
     # 6. Keep current target if area not scouted yet
     if bot.current_attack_target:
-        if bot.debug:
-            print(f"DEBUG TARGETING: Keeping current target - area not scouted yet")
         return bot.current_attack_target
     
     # 7. Final fallback
@@ -547,33 +506,5 @@ def fallback_target(bot) -> Point2:
     
     return bot.current_base_target
 
-#TODO check regrouping too aggressive? 
-def regroup_army(bot, main_army: Units) -> None:
-    """Regroups the main army if units are too scattered and the bot is not in a combat state.
-
-    Conditions:
-      - The average distance of units from the center of mass is greater than 10 units.
-      - The bot is not currently under attack and has not commenced an attack.
-    Action:
-      - Command the main army to move to the natural expansion location (bot.natural_expansion).
-    """
-    if not main_army or main_army.amount == 0:
-        return
-
-    # Calculate the center of mass of the main army
-    center, _ = cy_find_units_center_mass(main_army, 10.0)
-    center = Point2(center)
-
-    # Compute the average distance from the center
-    total_distance = 0.0
-    for unit in main_army:
-        total_distance += unit.position.distance_to(center)
-    avg_distance = total_distance / main_army.amount
-
-    # If the army is scattered (avg distance > 15) and not in combat, regroup
-    if avg_distance > 15 and not bot._under_attack and not bot._commenced_attack:
-        # Command the main army to regroup by using control_main_army with the natural expansion as target
-        control_main_army(bot, main_army, bot.natural_expansion.towards(bot.game_info.map_center, 2), bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
-        print("Regrouping army")
 
 

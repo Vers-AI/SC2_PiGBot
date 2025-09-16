@@ -29,12 +29,12 @@ from sc2.data import Race
 from bot.managers.macro import handle_macro
 from bot.managers.reactions import defend_cannon_rush, defend_worker_rush, early_threat_sensor, cheese_reaction, one_base_reaction
 from bot.managers.combat import (
-    attack_target,
     control_main_army,
+    assess_threat,
     threat_detection,
     warp_prism_follower,
     handle_attack_toggles,
-    regroup_army,
+    attack_target,
     gatekeeper_control
 )
 from bot.managers.scouting import control_scout
@@ -105,7 +105,7 @@ class PiG_Bot(AresBot):
         self._cannon_rush_cleanup_timer = None
 
         # Debug flags
-        self.debug = True  # Enable debug output for targeting analysis
+        self.debug = False  # Enable debug output for targeting analysis
         
         # Target persistence for stable attack behavior
         self.current_attack_target = None
