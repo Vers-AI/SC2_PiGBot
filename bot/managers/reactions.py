@@ -532,20 +532,23 @@ def allocate_defensive_forces(bot, threat_info: dict, threat_location: Point2, e
     has_air = any(unit.is_flying for unit in enemy_units)
     has_ground = any(not unit.is_flying for unit in enemy_units)
     
+    # Filter for units that can actually attack (exclude disruptors, etc.)
+    combat_capable = available_units.filter(lambda u: u.can_attack)
+    
     # Filter capable units (exactly like examples)
     if has_air and has_ground:
         # Mixed threat - prioritize units that can attack both, fallback to air-capable
-        capable_units = available_units.filter(lambda u: u.can_attack_both)
+        capable_units = combat_capable.filter(lambda u: u.can_attack_both)
         if not capable_units:
-            capable_units = available_units.filter(lambda u: u.can_attack_air)
+            capable_units = combat_capable.filter(lambda u: u.can_attack_air)
     elif has_air:
-        capable_units = available_units.filter(lambda u: u.can_attack_air)
+        capable_units = combat_capable.filter(lambda u: u.can_attack_air)
     else:
-        capable_units = available_units.filter(lambda u: u.can_attack_ground)
+        capable_units = combat_capable.filter(lambda u: u.can_attack_ground)
     
     if not capable_units:
-        # Fallback to any available units if no capable units found
-        capable_units = available_units
+        # Fallback to any combat capable units if no specific match found
+        capable_units = combat_capable
     
     response_type = threat_info["response_type"]
     threat_value = threat_info.get("threat_value", 0)
@@ -556,27 +559,32 @@ def allocate_defensive_forces(bot, threat_info: dict, threat_location: Point2, e
         required_count = min(threat_info["required_units"], len(closest_units))
         return closest_units[:required_count]
     
-    # Value-based allocation for other response types
+    # Value-based allocation for proportional response
     selected_units = []
     current_value = 0.0
-    target_value = max(threat_value * 1.1, 2.0)  # Slight over-allocation for safety
+    target_value = max(threat_value, 1.0)  # Match threat value exactly
     
-    # Sort by distance with slight preference for higher value units
-    sorted_units = capable_units.sorted(lambda u: 
-        cy_distance_to_squared(u.position, threat_location) + 
-        (UNIT_DATA.get(u.type_id, {}).get('army_value', 1.0) * -0.1)  # Negative for preference
-    )
+    # Sort by distance (closest units respond, regardless of value)
+    sorted_units = capable_units.sorted(lambda u: cy_distance_to_squared(u.position, threat_location))
     
-    # Select units to match threat value
+    # Debug output
+    if bot.time % 5 < 0.5:  # Every 5 seconds
+        print(f"Threat value: {threat_value:.1f}, Available units: {len(capable_units)}, Target value: {target_value:.1f}")
+    
+    # Select units until threat is adequately countered
     for unit in sorted_units:
-        if current_value >= target_value and len(selected_units) >= 1:
-            break
-        if len(selected_units) >= threat_info["required_units"]:
-            break
-            
-        selected_units.append(unit)
         unit_value = UNIT_DATA.get(unit.type_id, {}).get('army_value', 1.0)
+        
+        # Add this unit
+        selected_units.append(unit)
         current_value += unit_value
+        
+        if bot.time % 5 < 0.5:  # Debug
+            print(f"  Selected {unit.type_id.name}: +{unit_value:.1f} value, total: {current_value:.1f}")
+        
+        # Stop when we have enough value OR enough units for safety
+        if current_value >= target_value or len(selected_units) >= 3:
+            break
     
     # Ensure minimum response for non-trivial threats
     if not selected_units and capable_units:
@@ -643,15 +651,17 @@ def threat_detection(bot, main_army: Units) -> None:
                 defensive_units = allocate_defensive_forces(bot, threat_info, threat_position, enemy_units)
                 
                 if defensive_units:
-                    # Assign defensive roles and control them
+                    # Properly assign units to BASE_DEFENDER role (ARES way)
                     for unit in defensive_units:
-                        bot.mediator.assign_role(tag=unit.tag, role=UnitRole.DEFENDING)
+                        bot.mediator.assign_role(tag=unit.tag, role=UnitRole.BASE_DEFENDER)
                     
-                    defensive_squads = bot.mediator.get_squads(role=UnitRole.DEFENDING, squad_radius=6.0)
+                    # Get defensive squads and manage them properly
+                    defensive_squads = bot.mediator.get_squads(role=UnitRole.BASE_DEFENDER, squad_radius=6.0)
                     if defensive_squads:
+                        # Use ARES combat behaviors for defensive squads
                         control_main_army(bot, defensive_units, threat_position, defensive_squads)
                     else:
-                        # Fallback: direct unit commands when squads aren't available
+                        # Direct commands if no squads formed yet
                         for unit in defensive_units:
                             unit.attack(threat_position)
                 

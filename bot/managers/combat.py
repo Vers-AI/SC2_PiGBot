@@ -59,6 +59,10 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
     """
     Controls the main army's movement and engagement logic.
     """
+    # ARES requires get_squads() to be called before get_position_of_main_squad()
+    if not squads:
+        squads = bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0)
+    
     pos_of_main_squad: Point2 = bot.mediator.get_position_of_main_squad(role=UnitRole.ATTACKING)
     grid: np.ndarray = bot.mediator.get_ground_grid
     avoid_grid: np.ndarray = bot.mediator.get_ground_avoidance_grid
@@ -452,10 +456,10 @@ def fallback_target(bot) -> Point2:
 
 def manage_defensive_unit_roles(bot) -> None:
     """
-    Manages units assigned to temporary defensive roles.
-    Returns them to attacking role when threats are cleared.
+    Manages units assigned to BASE_DEFENDER roles.
+    Returns them to ATTACKING when threats are cleared (proper ARES way).
     """
-    defending_units = bot.mediator.get_units_from_role(role=UnitRole.DEFENDING)
+    defending_units = bot.mediator.get_units_from_role(role=UnitRole.BASE_DEFENDER)
     
     if not defending_units:
         return
@@ -485,8 +489,9 @@ def manage_defensive_unit_roles(bot) -> None:
                     active_threats = True
                     break
     
-    # If no active threats, return defensive units to attacking role
+    # If no active threats, return BASE_DEFENDER units to ATTACKING (proper ARES way)
     if not active_threats:
+        # Individual role assignments back to ATTACKING (like examples)
         for unit in defending_units:
             bot.mediator.assign_role(tag=unit.tag, role=UnitRole.ATTACKING)
 
