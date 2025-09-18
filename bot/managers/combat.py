@@ -263,8 +263,7 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
     if bot.debug:
         fight_result = bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=True, good_positioning=True, workers_do_no_damage=True)
         print(f"Can win fight: {fight_result}")
-        print(f"Enemy army: {bot.enemy_army}")
-        print(f"Own army: {bot.own_army}")
+        # Removed detailed army unit printing to reduce console spam
 
         bot.client.debug_text_2d(f"Attack: {bot._commenced_attack} Threat: {enemy_threat_level} Under Attack: {bot._under_attack}", 
                                 Point2((0.1, 0.22)), None, 14)
@@ -331,14 +330,6 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
                 if nearest_base:
                     control_main_army(bot, main_army, nearest_base.position, 
                                     bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
-            # Check if our new proportional response system should handle this instead
-            elif enemy_threat_level >= 8 and bot.enemy_army:
-                # For overwhelming threats, redirect main army but keep ATTACKING role for squad integrity
-                enemy_center, _ = cy_find_units_center_mass(bot.enemy_army, 10.0)
-                control_main_army(bot, main_army, Point2(enemy_center), 
-                                bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
-                bot._commenced_attack = False  # Stop attack mode, but keep role for squads
-            # For moderate threats (5-7), let proportional response system handle it
             # Otherwise, stick with current attack target for stability
             else:
                 control_main_army(bot, main_army, attack_target, 
@@ -384,22 +375,36 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
 def attack_target(bot, main_army_position: Point2) -> Point2:
     """
     Determines where our main attacking units should move toward.
-    Uses example's targeting hierarchy with proximity stickiness to prevent bouncing.
+    Uses example's targeting hierarchy with stable army center mass for proximity checks.
     """
     
+    # Get stable army center mass (following example pattern)
+    attacking_units = bot.mediator.get_units_from_role(role=UnitRole.ATTACKING)
+    if attacking_units:
+        own_center_mass, num_own = cy_find_units_center_mass(attacking_units, 10)
+        own_center_mass = Point2(own_center_mass)
+    else:
+        own_center_mass = main_army_position
     
-    # 1. Calculate structure position once (following example pattern)
+    # 1. Calculate structure position with enhanced stability
     enemy_structure_pos: Point2 = None
     if bot.enemy_structures:
         valid_structures = bot.enemy_structures.filter(lambda s: s.type_id not in COMMON_UNIT_IGNORE_TYPES)
         if not valid_structures:
             valid_structures = bot.enemy_structures
         if valid_structures:
-            enemy_structure_pos = cy_closest_to(bot.mediator.get_enemy_nat, valid_structures).position
+            # Prefer current target if it's still valid and among the closest structures
+            if (bot.current_attack_target and 
+                valid_structures.filter(lambda s: cy_distance_to_squared(s.position, bot.current_attack_target) < 25.0)):
+                # Current target is still among valid structures, keep it for stability
+                enemy_structure_pos = bot.current_attack_target
+            else:
+                # Use standard closest to enemy natural logic
+                enemy_structure_pos = cy_closest_to(bot.mediator.get_enemy_nat, valid_structures).position
     
-    # 2. Proximity stickiness - key anti-bouncing mechanism from example
+    # 2. Proximity stickiness - "idea here is if we are near enemy structures/production, don't get distracted"
     if (enemy_structure_pos and 
-        cy_distance_to_squared(main_army_position, enemy_structure_pos) < 450.0):
+        cy_distance_to_squared(own_center_mass, enemy_structure_pos) < 450.0):
         bot.current_attack_target = enemy_structure_pos
         return enemy_structure_pos
     
