@@ -631,6 +631,10 @@ def threat_detection(bot, main_army: Units) -> None:
                     defensive_squads = bot.mediator.get_squads(role=UnitRole.DEFENDING, squad_radius=6.0)
                     if defensive_squads:
                         control_main_army(bot, defensive_units, threat_position, defensive_squads)
+                    else:
+                        # Fallback: direct unit commands when squads aren't available
+                        for unit in defensive_units:
+                            unit.attack(threat_position)
                 
                 # Only redirect main army for overwhelming threats (preserving critical defense)
                 if (threat_info["threat_level"] >= 8 or 
