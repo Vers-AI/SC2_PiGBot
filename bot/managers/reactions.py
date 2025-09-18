@@ -518,52 +518,71 @@ def _assess_damage_threat(bot, enemy_units: Units) -> float:
     return damage_bonus
 
 
-def allocate_defensive_forces(bot, threat_info: dict, threat_location: Point2) -> Units:
+def allocate_defensive_forces(bot, threat_info: dict, threat_location: Point2, enemy_units: Units) -> Units:
     """
-    Allocates appropriate forces to handle a specific threat.
-    Returns the units that should respond to this threat.
+    Smart unit allocation based on threat value and air/ground requirements.
+    Uses army_value matching and capability filtering like the examples.
     """
     available_units = bot.mediator.get_units_from_role(role=UnitRole.ATTACKING)
     
     if not available_units:
         return Units([], bot)
     
-    response_type = threat_info["response_type"]
-    required_count = threat_info["required_units"]
+    # Dynamic threat composition check (following example patterns)
+    has_air = any(unit.is_flying for unit in enemy_units)
+    has_ground = any(not unit.is_flying for unit in enemy_units)
     
-    # For damage-dealing threats, send closest available units immediately
+    # Filter capable units (exactly like examples)
+    if has_air and has_ground:
+        # Mixed threat - prioritize units that can attack both, fallback to air-capable
+        capable_units = available_units.filter(lambda u: u.can_attack_both)
+        if not capable_units:
+            capable_units = available_units.filter(lambda u: u.can_attack_air)
+    elif has_air:
+        capable_units = available_units.filter(lambda u: u.can_attack_air)
+    else:
+        capable_units = available_units.filter(lambda u: u.can_attack_ground)
+    
+    if not capable_units:
+        # Fallback to any available units if no capable units found
+        capable_units = available_units
+    
+    response_type = threat_info["response_type"]
+    threat_value = threat_info.get("threat_value", 0)
+    
+    # For damage-dealing threats, send closest capable units immediately
     if response_type == "damage_response":
-        # Prioritize any available units - speed is critical
-        closest_units = available_units.sorted(lambda u: cy_distance_to_squared(u.position, threat_location))
+        closest_units = capable_units.sorted(lambda u: cy_distance_to_squared(u.position, threat_location))
+        required_count = min(threat_info["required_units"], len(closest_units))
         return closest_units[:required_count]
     
-    # For harassment, prefer fast units
-    elif response_type == "harassment_response":
-        fast_units = available_units.filter(lambda u: u.type_id in {
-            UnitTypeId.STALKER, UnitTypeId.ADEPT, UnitTypeId.ZEALOT
-        })
-        if fast_units:
-            # Take closest units to threat
-            selected = fast_units.sorted(lambda u: cy_distance_to_squared(u.position, threat_location))
-            return selected[:required_count]
+    # Value-based allocation for other response types
+    selected_units = []
+    current_value = 0.0
+    target_value = max(threat_value * 1.1, 2.0)  # Slight over-allocation for safety
     
-    # For combat threats, take a balanced mix but not the entire army
-    elif response_type == "combat_response":
-        # Don't take more than 60% of army for local defense unless it's overwhelming
-        max_units = min(required_count, int(available_units.amount * 0.6))
-        if threat_info["threat_level"] >= 8:  # Overwhelming threat
-            max_units = available_units.amount
-        
-        # Prefer units closest to threat
-        selected = available_units.sorted(lambda u: cy_distance_to_squared(u.position, threat_location))
-        return selected[:max_units]
+    # Sort by distance with slight preference for higher value units
+    sorted_units = capable_units.sorted(lambda u: 
+        cy_distance_to_squared(u.position, threat_location) + 
+        (UNIT_DATA.get(u.type_id, {}).get('army_value', 1.0) * -0.1)  # Negative for preference
+    )
     
-    # For patrol response, send minimal force
-    elif response_type == "patrol_response":
-        closest_units = available_units.sorted(lambda u: cy_distance_to_squared(u.position, threat_location))
-        return closest_units[:min(required_count, 3)]
+    # Select units to match threat value
+    for unit in sorted_units:
+        if current_value >= target_value and len(selected_units) >= 1:
+            break
+        if len(selected_units) >= threat_info["required_units"]:
+            break
+            
+        selected_units.append(unit)
+        unit_value = UNIT_DATA.get(unit.type_id, {}).get('army_value', 1.0)
+        current_value += unit_value
     
-    return Units([], bot)
+    # Ensure minimum response for non-trivial threats
+    if not selected_units and capable_units:
+        selected_units = [capable_units.closest_to(threat_location)]
+    
+    return Units(selected_units, bot)
 
 
 def threat_detection(bot, main_army: Units) -> None:
@@ -621,7 +640,7 @@ def threat_detection(bot, main_army: Units) -> None:
             # Smart force allocation instead of all-or-nothing response
             if bot._under_attack or threat_info["threat_level"] >= 3:
                 # Allocate appropriate defensive forces first
-                defensive_units = allocate_defensive_forces(bot, threat_info, threat_position)
+                defensive_units = allocate_defensive_forces(bot, threat_info, threat_position, enemy_units)
                 
                 if defensive_units:
                     # Assign defensive roles and control them
