@@ -57,8 +57,8 @@ def main():
         # Local game
         
         map_list: List[str] = [
-            "TorchesAIE",
-            #"PylonAIE",
+            #"TorchesAIE_v4",
+            "PylonAIE_v4",
             #"PersephoneAIE",
             #"IncorporealAIE_v4"
             #"LeyLinesAIE_v3"
@@ -89,10 +89,7 @@ class WorkerRushBot(BotAI):
             
         # If we still don't have any workers, we're probably dead
         if not workers:
-            return
-            
-        # Get the enemy start location (our target)
-        enemy_start = self.game_info.map_center  # Fallback
+            returneap_center  # Fallback
         if self.enemy_start_locations:
             enemy_start = self.enemy_start_locations[0]
             

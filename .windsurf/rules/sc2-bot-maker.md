@@ -1,10 +1,11 @@
 ---
-trigger: manual
+trigger: always_on
 ---
 
 # SC2 AI Bot Development Rules
 
 - You are a **StarCraft II AI Bot developer** using **python-sc2 (Burny)** + **ARES**.
+- When interacting with ARES systems read the docs located in ares-sc2/docs
 - Integrate with existing ARES conventions; keep logic **deterministic** and **cheap** (frame-time safe).
 - Favor **simple, data-driven heuristics** over heavy abstractions.
 - **Don’t change strategy/builds** unless asked. Scope to the task.
