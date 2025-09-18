@@ -105,7 +105,7 @@ class PiG_Bot(AresBot):
         self._cannon_rush_cleanup_timer = None
 
         # Debug flags
-        self.debug = False  # Enable debug output for targeting analysis
+        self.debug = True  # Enable debug output for targeting analysis
         
         # Target persistence for stable attack behavior
         self.current_attack_target = None
@@ -223,14 +223,23 @@ class PiG_Bot(AresBot):
         # Manage defensive unit roles (return them to attacking when threats are cleared)
         manage_defensive_unit_roles(self)
         
-        # Handle attack toggles if main_army exists
+        # Handle attack toggles if main_army exists and can form squads
         if main_army:
-            self.main_army_position = self.mediator.get_position_of_main_squad(role=UnitRole.ATTACKING)
-            handle_attack_toggles(self, main_army, attack_target(self, main_army_position=self.main_army_position))
+            # ARES requirement: Always refresh squads before getting squad position
+            current_squads = self.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0)
+            if current_squads:
+                self.main_army_position = self.mediator.get_position_of_main_squad(role=UnitRole.ATTACKING)
+                handle_attack_toggles(self, main_army, attack_target(self, main_army_position=self.main_army_position))
+            else:
+                # Fallback: use main army center if no squads can be formed
+                self.main_army_position = main_army.center
+                handle_attack_toggles(self, main_army, attack_target(self, main_army_position=self.main_army_position))
 
         # Optionally control main army or warp prism outside macro
         if self._commenced_attack and main_army:
-            control_main_army(self, main_army, attack_target(self, main_army_position=self.main_army_position), squads)
+            # Use fresh squad calculation for control as well
+            fresh_squads = self.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0)
+            control_main_army(self, main_army, attack_target(self, main_army_position=self.main_army_position), fresh_squads)
 
         # Warp Prism following main army
         warp_prism_follower(self, warp_prism, main_army)

@@ -8,7 +8,7 @@ from sc2.position import Point2
 
 
 # Ares imports
-from ares.consts import UnitRole, UnitTreeQueryType
+from ares.consts import UnitRole, WORKER_TYPES, UnitTreeQueryType
 from ares.behaviors.combat.individual import PathUnitToTarget, WorkerKiteBack
 from ares.behaviors.combat import CombatManeuver
 from ares.managers.manager_mediator import ManagerMediator
@@ -567,9 +567,15 @@ def allocate_defensive_forces(bot, threat_info: dict, threat_location: Point2, e
     # Sort by distance (closest units respond, regardless of value)
     sorted_units = capable_units.sorted(lambda u: cy_distance_to_squared(u.position, threat_location))
     
-    # Debug output
+    # Debug output with role tracking
     if bot.time % 5 < 0.5:  # Every 5 seconds
+        attacking_units = bot.mediator.get_units_from_role(role=UnitRole.ATTACKING)
+        defending_units = bot.mediator.get_units_from_role(role=UnitRole.DEFENDING) 
+        base_defender_units = bot.mediator.get_units_from_role(role=UnitRole.BASE_DEFENDER)
+        
         print(f"Threat value: {threat_value:.1f}, Available units: {len(capable_units)}, Target value: {target_value:.1f}")
+        print(f"  Total ATTACKING units: {len(available_units)}, Combat capable: {len(combat_capable)}, Has air: {has_air}, Has ground: {has_ground}")
+        print(f"  ROLE COUNTS - ATTACKING: {len(attacking_units)}, DEFENDING: {len(defending_units)}, BASE_DEFENDER: {len(base_defender_units)}")
     
     # Select units until threat is adequately countered
     for unit in sorted_units:
@@ -615,10 +621,16 @@ def threat_detection(bot, main_army: Units) -> None:
 
         main_army_should_respond = False
         
-        for _, enemy_tags in all_threats.items():
+        if bot.time % 5 < 0.5:  # Debug threat count
+            print(f"PROCESSING {len(all_threats)} threat locations")
+            
+        for base_location, enemy_tags in all_threats.items():
             enemy_units = bot.enemy_units.tags_in(enemy_tags)
             if not enemy_units:
                 continue
+                
+            if bot.time % 5 < 0.5:  # Debug each threat
+                print(f"  Threat at {base_location}: {len(enemy_units)} units")
                 
             threat_position, _ = cy_find_units_center_mass(enemy_units, 10.0)
             threat_position = Point2(threat_position)
@@ -647,12 +659,31 @@ def threat_detection(bot, main_army: Units) -> None:
             
             # Smart force allocation instead of all-or-nothing response
             if bot._under_attack or threat_info["threat_level"] >= 3:
-                # Allocate appropriate defensive forces first
-                defensive_units = allocate_defensive_forces(bot, threat_info, threat_position, enemy_units)
+                # Check if we already have enough defenders before allocating more
+                existing_defenders = bot.mediator.get_units_from_role(role=UnitRole.BASE_DEFENDER)
+                
+                # Calculate defender value needed (flexible, threat-based cap)
+                existing_defender_value = sum(UNIT_DATA.get(u.type_id, {}).get('army_value', 1.0) for u in existing_defenders)
+                total_threat_value = threat_info.get("threat_value", 0)
+                max_defender_value = max(total_threat_value * 1.5, 10.0)  # 150% of threat value, min 10
+                
+                defender_cap_reached = existing_defender_value >= max_defender_value
+                
+                if not defender_cap_reached:
+                    # Allocate appropriate defensive forces first
+                    defensive_units = allocate_defensive_forces(bot, threat_info, threat_position, enemy_units)
+                else:
+                    defensive_units = Units([], bot)  # Don't allocate more, have enough value
                 
                 if defensive_units:
+                    # Debug: Check how many units we're about to assign
+                    if bot.time % 5 < 0.5:
+                        print(f"  ASSIGNING {len(defensive_units)} units to BASE_DEFENDER: {[u.type_id.name for u in defensive_units]}")
+                    
                     # Properly assign units to BASE_DEFENDER role (ARES way)
                     for unit in defensive_units:
+                        if bot.time % 5 < 0.5:  # Debug each assignment
+                            print(f"    ROLE ASSIGNMENT: {unit.type_id.name} tag:{unit.tag} -> BASE_DEFENDER")
                         bot.mediator.assign_role(tag=unit.tag, role=UnitRole.BASE_DEFENDER)
                     
                     # Get defensive squads and manage them properly
@@ -665,13 +696,8 @@ def threat_detection(bot, main_army: Units) -> None:
                         for unit in defensive_units:
                             unit.attack(threat_position)
                 
-                # Only redirect main army for overwhelming threats (preserving critical defense)
-                if (threat_info["threat_level"] >= 8 or 
-                    (threat_info["response_type"] == "combat_response" and threat_info["unit_count"] > 8) or
-                    current_threat_level >= high_threshold * 2):  # Very high threat by original standards
-                    main_army_should_respond = True
-                    control_main_army(bot, main_army, threat_position, 
-                                    bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
+                # Note: Overwhelming threat handling is now managed by handle_attack_toggles
+                # using proper ARES role switching instead of duplicate logic
         
         # Store whether main army responded for other systems to check
         bot._main_army_defending = main_army_should_respond

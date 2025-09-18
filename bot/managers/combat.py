@@ -271,10 +271,25 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
         bot.client.debug_text_2d(f"EarlyDefMode: {is_early_defensive_mode} Cheese: {bot._used_cheese_response} OneBase: {bot._used_one_base_response}", 
                                 Point2((0.1, 0.24)), None, 14)
         
+        # Role and squad debug info
+        attacking_units = bot.mediator.get_units_from_role(role=UnitRole.ATTACKING)
+        defending_units = bot.mediator.get_units_from_role(role=UnitRole.DEFENDING) 
+        base_defender_units = bot.mediator.get_units_from_role(role=UnitRole.BASE_DEFENDER)
+        
+        # Squad counts
+        attacking_squads = bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0)
+        defending_squads = bot.mediator.get_squads(role=UnitRole.DEFENDING, squad_radius=9.0)
+        base_defender_squads = bot.mediator.get_squads(role=UnitRole.BASE_DEFENDER, squad_radius=6.0)
+        
+        bot.client.debug_text_2d(f"ROLES: ATK:{len(attacking_units)} DEF:{len(defending_units)} BASE:{len(base_defender_units)}", 
+                                Point2((0.1, 0.26)), None, 14)
+        bot.client.debug_text_2d(f"SQUADS: ATK:{len(attacking_squads)} DEF:{len(defending_squads)} BASE:{len(base_defender_squads)}", 
+                                Point2((0.1, 0.28)), None, 14)
+        
         # Visual debug markers for targeting
         if hasattr(bot, 'current_attack_target') and bot.current_attack_target:
             bot.client.debug_text_2d(f"Current Target: {bot.current_attack_target}", 
-                                    Point2((0.1, 0.26)), None, 14)
+                                    Point2((0.1, 0.30)), None, 14)
             target_3d = Point3((bot.current_attack_target.x, bot.current_attack_target.y, 
                                bot.get_terrain_z_height(bot.current_attack_target)))
             bot.client.debug_sphere_out(target_3d, 2, Point3((255, 0, 0)))
@@ -282,7 +297,7 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
         if main_army:
             army_center = main_army.center
             bot.client.debug_text_2d(f"Army Center: {army_center}", 
-                                    Point2((0.1, 0.28)), None, 14)
+                                    Point2((0.1, 0.32)), None, 14)
             army_center_3d = Point3((army_center.x, army_center.y, 
                                    bot.get_terrain_z_height(army_center)))
             bot.client.debug_sphere_out(army_center_3d, 3, Point3((0, 255, 0)))
@@ -316,11 +331,14 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
                 if nearest_base:
                     control_main_army(bot, main_army, nearest_base.position, 
                                     bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
-            # Only override target if threat is very high AND there are enemy units to fight  
-            elif enemy_threat_level >= 5 and bot.enemy_army:
+            # Check if our new proportional response system should handle this instead
+            elif enemy_threat_level >= 8 and bot.enemy_army:
+                # For overwhelming threats, redirect main army but keep ATTACKING role for squad integrity
                 enemy_center, _ = cy_find_units_center_mass(bot.enemy_army, 10.0)
                 control_main_army(bot, main_army, Point2(enemy_center), 
                                 bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
+                bot._commenced_attack = False  # Stop attack mode, but keep role for squads
+            # For moderate threats (5-7), let proportional response system handle it
             # Otherwise, stick with current attack target for stability
             else:
                 control_main_army(bot, main_army, attack_target, 
@@ -485,7 +503,7 @@ def manage_defensive_unit_roles(bot) -> None:
                 threat_info = assess_threat(bot, enemy_units, Units([], bot), return_details=True)
                 # Type assertion since we know return_details=True returns dict
                 assert isinstance(threat_info, dict), "assess_threat with return_details=True should return dict"
-                if threat_info["threat_level"] >= 2:  # Still has meaningful threat
+                if threat_info["threat_level"] >= 1:  # Even minor threats keep some defenders
                     active_threats = True
                     break
     
