@@ -105,7 +105,7 @@ class PiG_Bot(AresBot):
         self._cannon_rush_cleanup_timer = None
 
         # Debug flags
-        self.debug = True  # Enable debug output for targeting analysis
+        self.debug = False  # Enable debug output for targeting analysis
         
         # Target persistence for stable attack behavior
         self.current_attack_target = None

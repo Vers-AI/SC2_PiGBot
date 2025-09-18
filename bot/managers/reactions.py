@@ -567,15 +567,7 @@ def allocate_defensive_forces(bot, threat_info: dict, threat_location: Point2, e
     # Sort by distance (closest units respond, regardless of value)
     sorted_units = capable_units.sorted(lambda u: cy_distance_to_squared(u.position, threat_location))
     
-    # Debug output with role tracking
-    if bot.time % 5 < 0.5:  # Every 5 seconds
-        attacking_units = bot.mediator.get_units_from_role(role=UnitRole.ATTACKING)
-        defending_units = bot.mediator.get_units_from_role(role=UnitRole.DEFENDING) 
-        base_defender_units = bot.mediator.get_units_from_role(role=UnitRole.BASE_DEFENDER)
-        
-        print(f"Threat value: {threat_value:.1f}, Available units: {len(capable_units)}, Target value: {target_value:.1f}")
-        print(f"  Total ATTACKING units: {len(available_units)}, Combat capable: {len(combat_capable)}, Has air: {has_air}, Has ground: {has_ground}")
-        print(f"  ROLE COUNTS - ATTACKING: {len(attacking_units)}, DEFENDING: {len(defending_units)}, BASE_DEFENDER: {len(base_defender_units)}")
+    # Unit allocation logic
     
     # Select units until threat is adequately countered
     for unit in sorted_units:
@@ -585,8 +577,7 @@ def allocate_defensive_forces(bot, threat_info: dict, threat_location: Point2, e
         selected_units.append(unit)
         current_value += unit_value
         
-        if bot.time % 5 < 0.5:  # Debug
-            print(f"  Selected {unit.type_id.name}: +{unit_value:.1f} value, total: {current_value:.1f}")
+        # Track current allocation value
         
         # Stop when we have enough value OR enough units for safety
         if current_value >= target_value or len(selected_units) >= 3:
@@ -621,16 +612,10 @@ def threat_detection(bot, main_army: Units) -> None:
 
         main_army_should_respond = False
         
-        if bot.time % 5 < 0.5:  # Debug threat count
-            print(f"PROCESSING {len(all_threats)} threat locations")
-            
         for base_location, enemy_tags in all_threats.items():
             enemy_units = bot.enemy_units.tags_in(enemy_tags)
             if not enemy_units:
                 continue
-                
-            if bot.time % 5 < 0.5:  # Debug each threat
-                print(f"  Threat at {base_location}: {len(enemy_units)} units")
                 
             threat_position, _ = cy_find_units_center_mass(enemy_units, 10.0)
             threat_position = Point2(threat_position)
@@ -676,14 +661,8 @@ def threat_detection(bot, main_army: Units) -> None:
                     defensive_units = Units([], bot)  # Don't allocate more, have enough value
                 
                 if defensive_units:
-                    # Debug: Check how many units we're about to assign
-                    if bot.time % 5 < 0.5:
-                        print(f"  ASSIGNING {len(defensive_units)} units to BASE_DEFENDER: {[u.type_id.name for u in defensive_units]}")
-                    
                     # Properly assign units to BASE_DEFENDER role (ARES way)
                     for unit in defensive_units:
-                        if bot.time % 5 < 0.5:  # Debug each assignment
-                            print(f"    ROLE ASSIGNMENT: {unit.type_id.name} tag:{unit.tag} -> BASE_DEFENDER")
                         bot.mediator.assign_role(tag=unit.tag, role=UnitRole.BASE_DEFENDER)
                     
                     # Get defensive squads and manage them properly
