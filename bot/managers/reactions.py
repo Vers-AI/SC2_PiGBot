@@ -665,15 +665,9 @@ def threat_detection(bot, main_army: Units) -> None:
                     for unit in defensive_units:
                         bot.mediator.assign_role(tag=unit.tag, role=UnitRole.BASE_DEFENDER)
                     
-                    # Get defensive squads and manage them properly
-                    defensive_squads = bot.mediator.get_squads(role=UnitRole.BASE_DEFENDER, squad_radius=6.0)
-                    if defensive_squads:
-                        # Use ARES combat behaviors for defensive squads
-                        control_main_army(bot, defensive_units, threat_position, defensive_squads)
-                    else:
-                        # Direct commands if no squads formed yet
-                        for unit in defensive_units:
-                            unit.attack(threat_position)
+                    # Use dedicated BASE_DEFENDER control function
+                    from bot.managers.combat import control_base_defenders
+                    control_base_defenders(bot, defensive_units, threat_position)
                 
                 # Note: Overwhelming threat handling is now managed by handle_attack_toggles
                 # using proper ARES role switching instead of duplicate logic
