@@ -58,9 +58,9 @@ def main():
         
         map_list: List[str] = [
             #"TorchesAIE_v4",
-            "PylonAIE_v4",
+            #"PylonAIE_v4",
             #"PersephoneAIE",
-            #"IncorporealAIE_v4"
+            "IncorporealAIE_v4"
             #"LeyLinesAIE_v3"
 
         ]

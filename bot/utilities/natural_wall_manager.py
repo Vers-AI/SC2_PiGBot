@@ -12,7 +12,7 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 from sc2.position import Point2
-from sc2.race import Race
+from sc2.data import Race
 from scipy.spatial.distance import cdist
 from scipy.ndimage import binary_dilation
 from sklearn.decomposition import PCA
@@ -83,6 +83,8 @@ class NaturalWallManager:
                 logger.warning(f"Failed to generate wall for {map_name} vs {opponent_race}")
                 return False
                 
+            logger.info(f"Generated wall positions: {wall_positions}")
+                
             # Update custom YAML file
             self.update_custom_yaml(map_name, opponent_race, wall_positions)
             self.generated_maps.add(cache_key)
@@ -92,6 +94,8 @@ class NaturalWallManager:
             
         except Exception as e:
             logger.error(f"Error generating wall placement for {map_name}: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             return False
         
     def map_has_wall_data(self, map_name: str, race: str) -> bool:
@@ -143,10 +147,18 @@ class NaturalWallManager:
             # Ensure directory exists
             file_path.parent.mkdir(parents=True, exist_ok=True)
             
+            logger.info(f"Saving YAML data to {file_path}")
+            logger.info(f"Data structure: {type(data)}, keys: {list(data.keys()) if data else 'None'}")
+            
             with open(file_path, 'w') as f:
                 yaml.safe_dump(data, f, default_flow_style=False, sort_keys=False)
+                
+            logger.info(f"Successfully saved YAML file")
+            
         except Exception as e:
             logger.error(f"Failed to save YAML to {file_path}: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             raise
     
     async def generate_wall_placement(self, opponent_race: str) -> Optional[WallPositions]:
@@ -167,7 +179,8 @@ class NaturalWallManager:
             path = self.bot.mediator.find_raw_path(
                 start=enemy_start,
                 target=natural_pos,
-                grid=map_data.get_pyastar_grid()
+                grid=map_data.get_pyastar_grid(),
+                sensitivity=1  # Default sensitivity for pathfinding (must be integer)
             )
             
             if not path or len(path) < 3:
@@ -200,6 +213,8 @@ class NaturalWallManager:
             
         except Exception as e:
             logger.error(f"Error in generate_wall_placement: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             return None
     
     def find_choke_along_path(self, path: List[Point2], map_data) -> Optional[ChokeData]:
@@ -219,10 +234,22 @@ class NaturalWallManager:
             # Get clean pathing grid
             pathing_grid = map_data.get_pyastar_grid()
             
+            # Validate pathing grid
+            if pathing_grid is None:
+                logger.error("Pathing grid is None")
+                return None
+            if not hasattr(pathing_grid, 'shape') or len(pathing_grid.shape) != 2:
+                logger.error(f"Invalid pathing grid shape: {pathing_grid}")
+                return None
+                
+            logger.info(f"Pathing grid shape: {pathing_grid.shape}, dtype: {pathing_grid.dtype}")
+            
             # Extract window around the path midpoint
             window_size = 25  # 25x25 tile window
             path_center = path[len(path) // 2]
-            window_bounds = self.extract_analysis_window(path_center, window_size, pathing_grid.shape)
+            # Ensure grid shape is properly accessed
+            grid_shape = (int(pathing_grid.shape[0]), int(pathing_grid.shape[1]))
+            window_bounds = self.extract_analysis_window(path_center, window_size, grid_shape)
             
             if window_bounds is None:
                 logger.warning("Could not extract analysis window")
@@ -279,10 +306,10 @@ class NaturalWallManager:
         """Extract walkable pixel coordinates from window"""
         walkable_pixels = []
         
-        for x in range(bounds['x_min'], bounds['x_max']):
-            for y in range(bounds['y_min'], bounds['y_max']):
+        for x in range(int(bounds['x_min']), int(bounds['x_max'])):
+            for y in range(int(bounds['y_min']), int(bounds['y_max'])):
                 # SC2 coordinates are (x,y), grids are [x,y] - following the memory about coordinate order
-                if pathing_grid[x, y] > 0:  # Walkable tile
+                if x < pathing_grid.shape[0] and y < pathing_grid.shape[1] and pathing_grid[x, y] > 0:  # Walkable tile
                     walkable_pixels.append((float(x), float(y)))
                     
         return walkable_pixels
@@ -307,10 +334,11 @@ class NaturalWallManager:
                 tangent_x /= tangent_length
                 tangent_y /= tangent_length
             
-            tangent = Point2(tangent_x, tangent_y)
+            # Point2 constructor expects a single tuple argument
+            tangent = Point2((tangent_x, tangent_y))
             
             # Calculate normal (perpendicular) - rotate 90 degrees
-            normal = Point2(-tangent.y, tangent.x)
+            normal = Point2((-tangent.y, tangent.x))
             
             return tangent, normal
             
@@ -337,7 +365,7 @@ class NaturalWallManager:
                 offset = (i - num_slices / 2) * (slice_range / num_slices)
                 slice_center_x = center_point.x + tangent.x * offset
                 slice_center_y = center_point.y + tangent.y * offset
-                slice_center = Point2(slice_center_x, slice_center_y)
+                slice_center = Point2((slice_center_x, slice_center_y))
                 
                 # Measure width at this slice
                 width = self.measure_width_at_slice(pixel_array, slice_center, normal)
@@ -398,6 +426,13 @@ class NaturalWallManager:
             # Get placement grid from bot
             placement_grid = self.bot.game_info.placement_grid
             
+            # Validate placement grid
+            if not hasattr(placement_grid, 'data_numpy'):
+                logger.error("Placement grid missing data_numpy attribute")
+                return None
+                
+            grid_data = placement_grid.data_numpy
+            
             # Search radius for nearby buildable tiles
             search_radius = 5
             best_pos = None
@@ -412,12 +447,12 @@ class NaturalWallManager:
                     test_y = y_center + dy
                     
                     # Check bounds
-                    if (0 <= test_x < placement_grid.width and 
-                        0 <= test_y < placement_grid.height):
+                    if (0 <= test_x < grid_data.shape[1] and 
+                        0 <= test_y < grid_data.shape[0]):
                         
-                        # Check if buildable (placement_grid uses [y][x] indexing)
-                        if placement_grid[test_y][test_x]:
-                            test_pos = Point2(float(test_x), float(test_y))
+                        # Check if buildable (grid_data uses [y][x] indexing)
+                        if grid_data[test_y][test_x]:
+                            test_pos = Point2((float(test_x), float(test_y)))
                             distance = ideal_pos.distance_to(test_pos)
                             
                             if distance < min_distance:
@@ -426,7 +461,7 @@ class NaturalWallManager:
             
             if best_pos is not None:
                 # Convert to world coordinates (3x3 building centers)
-                world_pos = Point2(float(best_pos.x + 1.5), float(best_pos.y + 1.5))
+                world_pos = Point2((float(best_pos.x + 1.5), float(best_pos.y + 1.5)))
                 return world_pos
             else:
                 logger.warning(f"Could not find buildable tile near {ideal_pos}")
@@ -483,26 +518,27 @@ class NaturalWallManager:
                 # Snap to nearest buildable tile using SC2MapAnalysis
                 snapped_pos = self.snap_to_buildable_tile(building_pos, map_data)
                 if snapped_pos is not None:
-                    three_by_three_positions.append([snapped_pos.x, snapped_pos.y])
+                    # Convert to regular Python float for YAML compatibility
+                    three_by_three_positions.append([float(snapped_pos.x), float(snapped_pos.y)])
                 else:
                     # Fallback to unsnapped position if snapping fails
-                    three_by_three_positions.append([building_pos.x, building_pos.y])
+                    three_by_three_positions.append([float(building_pos.x), float(building_pos.y)])
             
             # Calculate pylon positions (behind the wall, toward natural)
             pylon_behind_offset = choke_data.normal * -4.0  # 4 tiles toward natural
             first_pylon_pos = defensive_center + pylon_behind_offset
             
             # Additional pylons if needed (spread slightly)
-            pylon_positions = [[first_pylon_pos.x, first_pylon_pos.y]]
+            pylon_positions = [[float(first_pylon_pos.x), float(first_pylon_pos.y)]]
             if len(buildings) >= 3:
                 # Add second pylon for coverage of wider walls
                 second_pylon_pos = first_pylon_pos + choke_data.tangent * 2.0
-                pylon_positions.append([second_pylon_pos.x, second_pylon_pos.y])
+                pylon_positions.append([float(second_pylon_pos.x), float(second_pylon_pos.y)])
             
             # Static defence position (behind seam, toward natural)
             static_defence_offset = choke_data.normal * -3.0
             static_defence_pos = defensive_center + static_defence_offset
-            static_defence_positions = [[static_defence_pos.x, static_defence_pos.y]]
+            static_defence_positions = [[float(static_defence_pos.x), float(static_defence_pos.y)]]
             
             # Gatekeeper position: 1-tile gap between first two buildings
             if len(three_by_three_positions) >= 2:
@@ -511,10 +547,10 @@ class NaturalWallManager:
                 building2 = three_by_three_positions[1]
                 gap_x = (building1[0] + building2[0]) / 2
                 gap_y = (building1[1] + building2[1]) / 2
-                gatekeeper_positions = [[gap_x, gap_y]]
+                gatekeeper_positions = [[float(gap_x), float(gap_y)]]
             else:
                 # Single building case: place in front of building
-                gatekeeper_positions = [[defensive_center.x, defensive_center.y - 2]]
+                gatekeeper_positions = [[float(defensive_center.x), float(defensive_center.y - 2)]]
             
             return WallPositions(
                 first_pylon=pylon_positions[:1],  # First pylon only
@@ -551,7 +587,7 @@ class NaturalWallManager:
             gap_carved = False
             if wall_positions.gate_keeper:
                 gap_pos = wall_positions.gate_keeper[0]
-                gap_x, gap_y = int(gap_pos[0]), int(gap_pos[1])
+                gap_x, gap_y = int(float(gap_pos[0])), int(float(gap_pos[1]))
                 if 0 <= gap_x < pathing_grid.shape[0] and 0 <= gap_y < pathing_grid.shape[1]:
                     pathing_grid[gap_x, gap_y] = 1  # Make walkable
                     gap_carved = True
@@ -584,10 +620,10 @@ class NaturalWallManager:
     def block_building_footprint(self, grid: np.ndarray, world_pos: List[float], size: int):
         """Block building footprint on grid"""
         try:
-            center_x, center_y = world_pos[0], world_pos[1]
+            center_x, center_y = float(world_pos[0]), float(world_pos[1])
             
             # Calculate footprint bounds  
-            half_size = size / 2
+            half_size = size / 2.0
             min_x = int(center_x - half_size)
             max_x = int(center_x + half_size)
             min_y = int(center_y - half_size)
@@ -596,7 +632,8 @@ class NaturalWallManager:
             # Block tiles in footprint
             for x in range(max(0, min_x), min(grid.shape[0], max_x + 1)):
                 for y in range(max(0, min_y), min(grid.shape[1], max_y + 1)):
-                    grid[x, y] = 0  # Make unwalkable
+                    if x < grid.shape[0] and y < grid.shape[1]:
+                        grid[x, y] = 0  # Make unwalkable
                     
         except Exception as e:
             logger.error(f"Error blocking building footprint: {e}")
