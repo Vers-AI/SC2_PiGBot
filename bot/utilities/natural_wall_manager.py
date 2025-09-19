@@ -123,12 +123,56 @@ class NaturalWallManager:
         return False
         
     def check_map_exists(self, yaml_data: dict, map_name: str, race: str) -> bool:
-        """Check if specific map+race exists in YAML data"""
+        """Check if specific map+race exists in YAML data with REAL (non-dummy) data"""
         try:
             protoss_data = yaml_data.get("Protoss", {})
-            map_data = protoss_data.get(map_name, {})
-            wall_type = f"Vs{race}NatWall"
-            return wall_type in map_data
+            
+            # Try multiple map name variations (exact, cleaned, etc.)
+            map_variations = [
+                map_name,  # Exact match
+                map_name.replace(" ", "").replace("_", ""),  # Cleaned
+                map_name.replace("_", ""),  # Just underscores removed
+                map_name.replace(" ", "")   # Just spaces removed
+            ]
+            
+            for map_variant in map_variations:
+                map_data = protoss_data.get(map_variant, {})
+                wall_type = f"Vs{race}NatWall"
+                
+                if wall_type in map_data:
+                    # Check if this has real data (not dummy coordinates)
+                    if self.has_real_wall_data(map_data[wall_type]):
+                        logger.debug(f"Found REAL wall data for {map_variant} vs {race}")
+                        return True
+                    else:
+                        logger.debug(f"Found DUMMY wall data for {map_variant} vs {race} - will regenerate")
+                        
+            return False
+        except:
+            return False
+            
+    def has_real_wall_data(self, wall_data: dict) -> bool:
+        """Check if wall data contains real coordinates vs dummy/placeholder data"""
+        try:
+            # Look for spawn position data
+            for spawn_key in ["UpperSpawn", "LowerSpawn"]:
+                if spawn_key in wall_data:
+                    spawn_data = wall_data[spawn_key]
+                    
+                    # Check if ThreeByThrees has data
+                    if "ThreeByThrees" in spawn_data:
+                        buildings = spawn_data["ThreeByThrees"]
+                        if isinstance(buildings, list) and len(buildings) > 0:
+                            # Check if coordinates look reasonable (not obviously dummy)
+                            first_building = buildings[0]
+                            if isinstance(first_building, list) and len(first_building) >= 2:
+                                x, y = first_building[0], first_building[1]
+                                # Real coordinates should be reasonable map values
+                                # Dummy data often has round numbers or obvious patterns
+                                if 10 < x < 300 and 10 < y < 300:  # Reasonable map bounds
+                                    return True
+                                    
+            return False  # No valid building positions found
         except:
             return False
             
