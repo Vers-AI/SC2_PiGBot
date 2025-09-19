@@ -1,17 +1,16 @@
 Protoss:
-  # Placeholder entry - will be overwritten by wall generator
-  "Incorporeal AIE":
+  Incorporeal:
     VsZergNatWall:
       AvailableVsRaces: ["Zerg", "Random"]
       UpperSpawn:
-        FirstPylon: [[0.0, 0.0]]
-        Pylons: [[0.0, 0.0]]
-        ThreeByThrees: [[0.0, 0.0]]
-        StaticDefences: [[0.0, 0.0]]
-        GateKeeper: [[0.0, 0.0]]
+        FirstPylon: [[ 63., 125. ]]
+        Pylons: [[ 65., 125. ]]
+        ThreeByThrees: [[ 60.5, 130.5 ], [ 64.5, 130.5 ], [ 65.5, 125.5 ]]
+        StaticDefences: [[ 63.0, 126.0 ]]
+        GateKeeper: [[ 62.5, 130.5 ]]
       LowerSpawn:
-        FirstPylon: [[0.0, 0.0]]
-        Pylons: [[0.0, 0.0]]
-        ThreeByThrees: [[0.0, 0.0]]
-        StaticDefences: [[0.0, 0.0]]
-        GateKeeper: [[0.0, 0.0]]
+        FirstPylon: [[ 92., 27. ]]
+        Pylons: [[ 94., 27. ]]
+        ThreeByThrees: [[ 89.5, 32.5 ], [ 93.5, 32.5 ], [ 96.5, 32.5 ]]
+        StaticDefences: [[ 92.0, 28.0 ]]
+        GateKeeper: [[ 91.5, 32.5 ]]

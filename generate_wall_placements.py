@@ -61,7 +61,7 @@ class WallGeneratorBot(AresBot):
             
             if wall_positions:
                 logger.info(f"✅ Generated wall positions successfully!")
-                self.save_wall_to_yaml(map_name, opponent_race, wall_positions)
+                await self.save_wall_to_yaml(map_name, opponent_race, wall_positions)
                 logger.info(f"💾 Saved wall placement to building_placements.yml")
             else:
                 logger.error(f"❌ Failed to generate wall positions")
@@ -94,8 +94,41 @@ class WallGeneratorBot(AresBot):
             return "UpperSpawn"
         else:
             return "LowerSpawn"
+            
+    async def generate_opposite_spawn_walls(self, opponent_race: str):
+        """Generate wall positions for the enemy natural using the same algorithm"""
+        try:
+            # Get both natural positions
+            our_nat = self.mediator.get_own_nat
+            enemy_nat = self.mediator.get_enemy_nat
+            
+            logger.info(f"📍 Our natural: {our_nat}, Enemy natural: {enemy_nat}")
+            
+            # For enemy natural walls, the "enemy" start is actually OUR start
+            # (since we're defending the enemy natural from our attacks)
+            our_start = self.start_location
+            
+            # Use the parameterized wall generation method
+            enemy_positions = await self.wall_manager.generate_wall_placement(
+                opponent_race=opponent_race,
+                target_natural=enemy_nat,
+                enemy_start=our_start
+            )
+            
+            if enemy_positions:
+                logger.info(f"✅ Generated wall positions for enemy natural at {enemy_nat}")
+            else:
+                logger.error(f"❌ Failed to generate wall positions for enemy natural")
+                
+            return enemy_positions
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to generate opposite spawn walls: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            return None
     
-    def save_wall_to_yaml(self, map_name: str, race: str, wall_positions):
+    async def save_wall_to_yaml(self, map_name: str, race: str, wall_positions):
         """Save wall data to building_placements.yml in ARES format"""
         yaml_path = Path("building_placements.yml")
         
@@ -117,24 +150,38 @@ class WallGeneratorBot(AresBot):
         # Use the exact map name from game metadata (what ARES will look for)
         clean_map_name = map_name
         
-        # Determine spawn position
-        spawn_position = self.determine_spawn_position()
+        # Determine current spawn position
+        current_spawn = self.determine_spawn_position()
         
         # Remove existing entry for this map if it exists (to overwrite)
         if clean_map_name in data["Protoss"]:
             logger.info(f"🔄 Overwriting existing data for {clean_map_name}")
             del data["Protoss"][clean_map_name]
         
-        # Build wall data in exact ARES format matching the example
+        # Generate wall data for both spawn positions
+        logger.info(f"🔄 Generating wall data for opposite spawn position...")
+        
+        # Get the opposite spawn wall positions
+        opposite_spawn = "LowerSpawn" if current_spawn == "UpperSpawn" else "UpperSpawn"
+        opposite_positions = await self.generate_opposite_spawn_walls(race)
+        
+        # Build wall data with BOTH spawns
         wall_data = {
             "VsZergNatWall": {
                 "AvailableVsRaces": ["Zerg", "Random"],
-                spawn_position: {
+                current_spawn: {
                     "FirstPylon": wall_positions.first_pylon,
                     "Pylons": wall_positions.pylons, 
                     "ThreeByThrees": wall_positions.three_by_threes,
                     "StaticDefences": wall_positions.static_defences,
                     "GateKeeper": wall_positions.gate_keeper
+                },
+                opposite_spawn: {
+                    "FirstPylon": opposite_positions.first_pylon if opposite_positions else [[0.0, 0.0]],
+                    "Pylons": opposite_positions.pylons if opposite_positions else [[0.0, 0.0]], 
+                    "ThreeByThrees": opposite_positions.three_by_threes if opposite_positions else [[0.0, 0.0]],
+                    "StaticDefences": opposite_positions.static_defences if opposite_positions else [[0.0, 0.0]],
+                    "GateKeeper": opposite_positions.gate_keeper if opposite_positions else [[0.0, 0.0]]
                 }
             }
         }
@@ -142,13 +189,43 @@ class WallGeneratorBot(AresBot):
         # Add to data structure
         data["Protoss"][clean_map_name] = wall_data
         
-        # Save back to file with proper formatting
+        # Save back to file with proper formatting (match sample format)
         try:
             with open(yaml_path, 'w') as f:
-                yaml.safe_dump(data, f, default_flow_style=False, sort_keys=False, width=1000)
+                # Use custom YAML writer to match exact format
+                self.write_custom_yaml(f, data)
             logger.info(f"💾 Successfully updated {yaml_path} with {clean_map_name} wall data")
         except Exception as e:
             logger.error(f"❌ Error saving YAML: {e}")
+            
+    def write_custom_yaml(self, f, data):
+        """Write YAML in exact format matching the example"""
+        f.write("Protoss:\n")
+        
+        for map_name, map_data in data["Protoss"].items():
+            f.write(f"  {map_name}:\n")
+            
+            for wall_type, wall_data in map_data.items():
+                f.write(f"    {wall_type}:\n")
+                
+                # Write AvailableVsRaces
+                races = wall_data["AvailableVsRaces"]
+                races_str = ", ".join(f'"{race}"' for race in races)
+                f.write(f"      AvailableVsRaces: [{races_str}]\n")
+                
+                # Write spawn data
+                for spawn_name in ["UpperSpawn", "LowerSpawn"]:
+                    if spawn_name in wall_data:
+                        spawn_data = wall_data[spawn_name]
+                        f.write(f"      {spawn_name}:\n")
+                        
+                        # Write each placement type in exact format
+                        for placement_type in ["FirstPylon", "Pylons", "ThreeByThrees", "StaticDefences", "GateKeeper"]:
+                            if placement_type in spawn_data:
+                                coords = spawn_data[placement_type]
+                                # Convert to exact format: [ [ x, y ], [ x, y ] ]
+                                coords_str = ", ".join(f"[ {coord[0]}, {coord[1]} ]" for coord in coords)
+                                f.write(f"        {placement_type}: [{coords_str}]\n")
 
 def main():
     """Run the wall generator bot"""

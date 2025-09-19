@@ -161,23 +161,29 @@ class NaturalWallManager:
             logger.error(f"Full traceback: {traceback.format_exc()}")
             raise
     
-    async def generate_wall_placement(self, opponent_race: str) -> Optional[WallPositions]:
+    async def generate_wall_placement(self, opponent_race: str, 
+                                     target_natural: Optional[Point2] = None, 
+                                     enemy_start: Optional[Point2] = None) -> Optional[WallPositions]:
         """
         Generate wall placement using choke detection algorithm + SC2MapAnalysis.
         
-        This is the main algorithm implementation that will be expanded.
+        Args:
+            opponent_race: Race to defend against
+            target_natural: Natural expansion to defend (defaults to our natural)
+            enemy_start: Enemy starting position (defaults to detected enemy start)
         """
         try:
             # Get SC2MapAnalysis access
             map_data = self.bot.mediator.get_map_data_object
             
             # 1. Find the actual enemy approach path
-            enemy_start = self.bot.enemy_start_locations[0]
-            natural_pos = self.bot.mediator.get_own_nat
+            # Use provided positions or default to current spawn setup
+            enemy_start_pos = enemy_start or self.bot.enemy_start_locations[0]
+            natural_pos = target_natural or self.bot.mediator.get_own_nat
             
             # Use ARES pathfinding to get the real path enemies will take
             path = self.bot.mediator.find_raw_path(
-                start=enemy_start,
+                start=enemy_start_pos,
                 target=natural_pos,
                 grid=map_data.get_pyastar_grid(),
                 sensitivity=1  # Default sensitivity for pathfinding (must be integer)
@@ -187,11 +193,71 @@ class NaturalWallManager:
                 logger.warning("Could not find valid path from enemy to natural")
                 return None
                 
-            # 2. Detect the narrowest choke along this path
-            choke_data = self.find_choke_along_path(path, map_data)
-            if choke_data is None:
-                logger.warning("Could not detect choke along enemy path")
-                return None
+            # DEBUG: Log path details
+            logger.info(f"🛣️ Path from {enemy_start_pos} to {natural_pos}:")
+            logger.info(f"   Path length: {len(path)} points")
+            logger.info(f"   First few points: {path[:3]}")
+            logger.info(f"   Last few points: {path[-3:]}")
+                
+            # 2. Use ARES built-in choke detection instead of custom algorithm
+            logger.info(f"🔍 Using ARES get_map_choke_points...")
+            
+            # Get all chokes on the map from ARES
+            try:
+                choke_points = self.bot.mediator.get_map_choke_points
+                logger.info(f"📍 ARES found {len(choke_points)} choke points on map")
+                
+                # Find choke closest to natural in direction of enemy spawn
+                closest_choke = None
+                min_distance = float('inf')
+                
+                # Calculate direction from natural toward enemy spawn
+                enemy_direction = enemy_start_pos - natural_pos
+                enemy_direction = enemy_direction / enemy_direction.length  # Normalize
+                
+                logger.info(f"🧭 Enemy direction from natural: {enemy_direction}")
+                
+                for choke in choke_points:
+                    # Vector from natural to this choke
+                    choke_direction = choke - natural_pos
+                    
+                    # Only consider chokes that are somewhat in the direction of the enemy
+                    if choke_direction.length > 0:
+                        choke_direction_normalized = choke_direction / choke_direction.length
+                        # Dot product: 1 = same direction, -1 = opposite, 0 = perpendicular
+                        alignment = (enemy_direction.x * choke_direction_normalized.x + 
+                                   enemy_direction.y * choke_direction_normalized.y)
+                        
+                        distance = natural_pos.distance_to(choke)
+                        
+                        # Only consider chokes that are roughly toward enemy (alignment > 0.3)
+                        # and prioritize closer ones
+                        if alignment > 0.3 and distance < min_distance:
+                            min_distance = distance
+                            closest_choke = choke
+                            logger.info(f"   → Better choke: {choke} (distance {distance:.1f}, alignment {alignment:.2f})")
+                        
+                if closest_choke is None:
+                    logger.error("❌ No chokes found by ARES")
+                    return None
+                    
+                logger.info(f"🎯 Selected closest choke: {closest_choke} (distance: {min_distance:.1f})")
+                
+                # Create simplified choke data for our algorithm
+                from types import SimpleNamespace
+                choke_data = SimpleNamespace()
+                choke_data.center = closest_choke
+                choke_data.width = 8.0  # Assume standard choke width
+                choke_data.tangent = Point2((1, 0))  # Horizontal tangent (will be refined)
+                choke_data.normal = Point2((0, 1))   # Vertical normal (will be refined)
+                
+            except Exception as e:
+                logger.error(f"❌ Error using ARES choke detection: {e}")
+                # Fallback to old method
+                choke_data = self.find_choke_along_path(path, map_data)
+                if choke_data is None:
+                    logger.warning("Could not detect choke along enemy path")
+                    return None
                 
             # 3. Determine building layout based on choke width and race
             buildings = self.determine_building_layout(choke_data.width, opponent_race)
@@ -202,6 +268,13 @@ class NaturalWallManager:
             if wall_positions is None:
                 logger.warning("Could not calculate valid wall positions")
                 return None
+                
+            # DEBUG: Log final wall positions
+            logger.info(f"🏗️ Final wall positions:")
+            logger.info(f"   First pylon: {wall_positions.first_pylon}")
+            logger.info(f"   Pylons: {wall_positions.pylons}")
+            logger.info(f"   Buildings: {wall_positions.three_by_threes}")
+            logger.info(f"   Gate keeper: {wall_positions.gate_keeper}")
                 
             # 5. Validate wall connectivity (will implement later)
             if not await self.validate_wall_connectivity(wall_positions, opponent_race):
@@ -502,8 +575,8 @@ class NaturalWallManager:
         try:
             center = choke_data.center
             
-            # Defensive positioning: bias toward natural (opposite to normal direction)
-            defensive_offset = choke_data.normal * -2.0  # Move 2 tiles toward natural
+            # Defensive positioning: move 1 tile back from choke toward natural
+            defensive_offset = choke_data.normal * -1.0  # Reduced from -2.0 to -1.0
             defensive_center = center + defensive_offset
             
             # Calculate building positions along tangent line

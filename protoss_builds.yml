@@ -39,14 +39,14 @@ Builds:
         # After 0 supply turn AutoSupply on
         AutoSupplyAtSupply: 33
         OpeningBuildOrder:
-            - 14 PYLON @ NatWall
-            - 16 GATEWAY @ NatWall
+            - 14 PYLON @ nat_wall
+            - 16 GATEWAY @ nat_wall
             - 16 CHRONO @ NEXUS
             - 16 WORKER_SCOUT:
                 [enemy_spawn, enemy_nat, map_center, fourth,third, enemy_nat,spawn,nat,]
             - 16 GAS
             - 20 EXPAND
-            - 20 CORE @ NatWall
+            - 20 CORE @ nat_wall
             - 21 PYLON
             - 21 GAS
             - 22 WARPGATERESEARCH
@@ -56,10 +56,11 @@ Builds:
             - 26 ROBOTICSFACILITY
             - 27 STALKER
             - 27 CHRONO @ NEXUS #Chrono Gateway if PVP instead of NEXUS
-            - 28 GATEWAY *2 @ NatWall
+            - 28 GATEWAY @ nat_wall
+            - 28 GATEWAY 
             - 30 STALKER
             - 33 CHRONO @ NEXUS
-            - 34 PYLON @ NatWall
+            - 34 PYLON @ nat_wall
             - 34 OBSERVER
             - 35 GAS x2
             - 40 IMMORTAL
@@ -99,14 +100,14 @@ Builds:
         # After 0 supply turn AutoSupply on
         AutoSupplyAtSupply: 33
         OpeningBuildOrder:
-            - 14 PYLON @ NatWall
-            - 16 GATEWAY @ NatWall
+            - 14 PYLON @ nat_wall
+            - 16 GATEWAY @ nat_wall
             - 16 CHRONO @ NEXUS
             - 16 WORKER_SCOUT:
                 [enemy_spawn, enemy_nat, map_center, fourth,third, enemy_nat]
             - 16 GAS
             - 20 EXPAND
-            - 20 CORE @ NatWall
+            - 20 CORE @ nat_wall
             - 21 PYLON
             - 21 GAS
             - 22 WARPGATERESEARCH
@@ -116,10 +117,11 @@ Builds:
             - 26 ROBOTICSFACILITY
             - 27 STALKER
             - 27 CHRONO @ NEXUS 
-            - 28 GATEWAY *2 @ NatWall
+            - 27 GATEWAY @ nat_wall
+            - 28 GATEWAY 
             - 30 STALKER
             - 33 CHRONO @ NEXUS
-            - 34 PYLON @ NatWall
+            - 34 PYLON @ nat_wall
             - 34 OBSERVER
             - 35 GAS x2
             - 36 IMMORTAL
