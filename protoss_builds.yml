@@ -39,14 +39,14 @@ Builds:
         # After 0 supply turn AutoSupply on
         AutoSupplyAtSupply: 33
         OpeningBuildOrder:
-            - 14 PYLON @ NAT
-            - 16 GATEWAY @ NAT
+            - 14 PYLON @ NatWall
+            - 16 GATEWAY @ NatWall
             - 16 CHRONO @ NEXUS
             - 16 WORKER_SCOUT:
                 [enemy_spawn, enemy_nat, map_center, fourth,third, enemy_nat,spawn,nat,]
             - 16 GAS
             - 20 EXPAND
-            - 20 CORE @ NAT
+            - 20 CORE @ NatWall
             - 21 PYLON
             - 21 GAS
             - 22 WARPGATERESEARCH
@@ -56,10 +56,10 @@ Builds:
             - 26 ROBOTICSFACILITY
             - 27 STALKER
             - 27 CHRONO @ NEXUS #Chrono Gateway if PVP instead of NEXUS
-            - 28 GATEWAY *2 @ NAT
+            - 28 GATEWAY *2 @ NatWall
             - 30 STALKER
             - 33 CHRONO @ NEXUS
-            - 34 PYLON @ NAT
+            - 34 PYLON @ NatWall
             - 34 OBSERVER
             - 35 GAS x2
             - 40 IMMORTAL
@@ -99,14 +99,14 @@ Builds:
         # After 0 supply turn AutoSupply on
         AutoSupplyAtSupply: 33
         OpeningBuildOrder:
-            - 14 PYLON @ NAT
-            - 16 GATEWAY @ NAT
+            - 14 PYLON @ NatWall
+            - 16 GATEWAY @ NatWall
             - 16 CHRONO @ NEXUS
             - 16 WORKER_SCOUT:
                 [enemy_spawn, enemy_nat, map_center, fourth,third, enemy_nat]
             - 16 GAS
             - 20 EXPAND
-            - 20 CORE @ NAT
+            - 20 CORE @ NatWall
             - 21 PYLON
             - 21 GAS
             - 22 WARPGATERESEARCH
@@ -116,10 +116,10 @@ Builds:
             - 26 ROBOTICSFACILITY
             - 27 STALKER
             - 27 CHRONO @ NEXUS 
-            - 28 GATEWAY *2 @ NAT
+            - 28 GATEWAY *2 @ NatWall
             - 30 STALKER
             - 33 CHRONO @ NEXUS
-            - 34 PYLON @ NAT
+            - 34 PYLON @ NatWall
             - 34 OBSERVER
             - 35 GAS x2
             - 36 IMMORTAL
