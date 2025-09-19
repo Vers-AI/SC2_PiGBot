@@ -1,0 +1,26 @@
+Protoss:
+  TestMap2025:
+    VsZergNatWall:
+      AvailableVsRaces:
+      - Zerg
+      - Random
+      LowerSpawn:
+        FirstPylon:
+        - - 75.0
+          - 75.0
+        Pylons:
+        - - 75.0
+          - 72.0
+        ThreeByThrees:
+        - - 80.5
+          - 77.5
+        - - 77.5
+          - 74.5
+        - - 74.5
+          - 71.5
+        StaticDefences:
+        - - 75.0
+          - 78.0
+        GateKeeper:
+        - - 79.0
+          - 76.0

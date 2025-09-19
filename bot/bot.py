@@ -49,6 +49,7 @@ from bot.managers.reactions import (
 from bot.utilities.use_disruptor_nova import UseDisruptorNova
 from map_analyzer import MapData
 from bot.utilities.nova_manager import NovaManager
+from bot.utilities.natural_wall_manager import NaturalWallManager
 
 
 
@@ -110,6 +111,9 @@ class PiG_Bot(AresBot):
         # Target persistence for stable attack behavior
         self.current_attack_target = None
         self.target_lock_distance = 25.0  # Don't switch targets unless new one is 25+ units closer
+        
+        # Natural wall management system
+        self.wall_manager = None  # Will be initialized in on_start
 
 
 
@@ -129,6 +133,13 @@ class PiG_Bot(AresBot):
         
         self.use_disruptor_nova = UseDisruptorNova(mediator=self.mediator, bot=self, debug_output=debug_disruptor_nova)
         self.nova_manager = NovaManager(bot=self, mediator=self.mediator, debug_output=debug_disruptor_nova)  # Initialize the NovaManager
+
+        # Initialize natural wall management system
+        self.wall_manager = NaturalWallManager(self)
+        
+        # Generate wall placements for this map if needed
+        opponent_race = await self.wall_manager.get_opponent_race_string()
+        await self.wall_manager.ensure_map_wall_exists(opponent_race)
 
         self.current_base_target = self.enemy_start_locations[0]
 
