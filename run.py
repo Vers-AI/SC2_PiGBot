@@ -20,7 +20,6 @@ from sc2.units import Units
 import yaml
 
 from bot import PiG_Bot
-from generate_wall_placements import WallGeneratorBot
 from ladder import run_ladder_game
 
 # change if non default setup / linux
@@ -55,6 +54,8 @@ def main():
     # Choose bot based on mode
     if wall_generation_mode:
         print("🏗️  Running in Wall Generation Mode!")
+        # Import WallGeneratorBot only when needed (avoids import errors on ladder)
+        from generate_wall_placements import WallGeneratorBot
         bot_instance = WallGeneratorBot()
         bot_name = "WallGenerator"
     else:
