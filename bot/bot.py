@@ -30,7 +30,6 @@ from bot.managers.macro import handle_macro
 from bot.managers.reactions import defend_cannon_rush, defend_worker_rush, early_threat_sensor, cheese_reaction, one_base_reaction, threat_detection
 from bot.managers.combat import (
     control_main_army,
-    assess_threat,
     warp_prism_follower,
     handle_attack_toggles,
     attack_target,
@@ -49,6 +48,8 @@ from bot.managers.reactions import (
 from bot.utilities.use_disruptor_nova import UseDisruptorNova
 from map_analyzer import MapData
 from bot.utilities.nova_manager import NovaManager
+# # Wall manager removed - use generate_wall_placements.py to create wall data
+# from bot.utilities.natural_wall_manager import NaturalWallManager  # Temporarily disabled
 
 
 
@@ -110,6 +111,9 @@ class PiG_Bot(AresBot):
         # Target persistence for stable attack behavior
         self.current_attack_target = None
         self.target_lock_distance = 25.0  # Don't switch targets unless new one is 25+ units closer
+        
+        # Natural wall management system
+        self.wall_manager = None  # Will be initialized in on_start
 
 
 
@@ -130,6 +134,12 @@ class PiG_Bot(AresBot):
         self.use_disruptor_nova = UseDisruptorNova(mediator=self.mediator, bot=self, debug_output=debug_disruptor_nova)
         self.nova_manager = NovaManager(bot=self, mediator=self.mediator, debug_output=debug_disruptor_nova)  # Initialize the NovaManager
 
+        # Wall management moved to separate generate_wall_placements.py tool
+        # Run: python generate_wall_placements.py to create wall data
+        # self.wall_manager = NaturalWallManager(self)
+        # opponent_race = await self.wall_manager.get_opponent_race_string()
+        # await self.wall_manager.ensure_map_wall_exists(opponent_race)
+
         self.current_base_target = self.enemy_start_locations[0]
 
         # Sort expansions by proximity to the enemy's start
@@ -142,7 +152,8 @@ class PiG_Bot(AresBot):
 
         # Reserve expansions and set flags
         self.natural_expansion: Point2 = self.mediator.get_own_nat
-        
+        print("Natural Expansion:", self.natural_expansion)
+        print("Enemy Start:", self.mediator.get_enemy_nat)
 
         self.expansions_generator = cycle(self.expansion_locations_list)
         self.freeflow = self.minerals > 800 and self.vespene < 200

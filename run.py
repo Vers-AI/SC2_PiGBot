@@ -19,7 +19,8 @@ from sc2.units import Units
 
 import yaml
 
-from bot.bot import PiG_Bot
+from bot import PiG_Bot
+from generate_wall_placements import WallGeneratorBot
 from ladder import run_ladder_game
 
 # change if non default setup / linux
@@ -37,7 +38,9 @@ def main():
 
     __user_config_location__: str = path.abspath(".")
     user_config_path: str = path.join(__user_config_location__, CONFIG_FILE)
-    # attempt to get race and bot name from config file if they exist
+    
+    # Load config and check for wall generation mode
+    wall_generation_mode = False
     if path.isfile(user_config_path):
         with open(user_config_path) as config_file:
             config: dict = yaml.safe_load(config_file)
@@ -45,8 +48,20 @@ def main():
                 bot_name = config[MY_BOT_NAME]
             if MY_BOT_RACE in config:
                 race = Race[config[MY_BOT_RACE].title()]
+            # Check for wall generation mode
+            if "WallGenerationMode" in config:
+                wall_generation_mode = config["WallGenerationMode"]
 
-    bot1 = Bot(race, PiG_Bot(), bot_name)
+    # Choose bot based on mode
+    if wall_generation_mode:
+        print("🏗️  Running in Wall Generation Mode!")
+        bot_instance = WallGeneratorBot()
+        bot_name = "WallGenerator"
+    else:
+        print("🤖 Running normal PiG_Bot")
+        bot_instance = PiG_Bot()
+        
+    bot1 = Bot(race, bot_instance, bot_name)
 
     if "--LadderServer" in sys.argv:
         # Ladder game started by LadderManager
@@ -58,8 +73,8 @@ def main():
         
         map_list: List[str] = [
             #"TorchesAIE_v4",
-            "PylonAIE_v4",
-            #"PersephoneAIE",
+            #"PylonAIE_v4",
+            "PersephoneAIE_v4",
             #"IncorporealAIE_v4"
             #"LeyLinesAIE_v3"
 

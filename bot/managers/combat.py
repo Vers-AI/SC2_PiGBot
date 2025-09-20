@@ -9,10 +9,7 @@ from ares.consts import LOSS_MARGINAL_OR_WORSE, TIE_OR_BETTER, UnitTreeQueryType
 
 from ares.behaviors.combat import CombatManeuver
 from ares.behaviors.combat.individual import (
-    KeepUnitSafe, PathUnitToTarget, StutterUnitBack, AMove
-)
-from ares.behaviors.combat.group import (
-    AMoveGroup, PathGroupToTarget
+    KeepUnitSafe, PathUnitToTarget, StutterUnitBack, AMove, ShootTargetInRange
 )
 from ares.managers.squad_manager import UnitSquad
 
@@ -24,9 +21,7 @@ from bot.utilities.nova_manager import NovaManager
 from bot.managers.reactions import assess_threat, allocate_defensive_forces
 
 from cython_extensions import (
-   
-    cy_find_units_center_mass, cy_pick_enemy_target, cy_closest_to, cy_distance_to, cy_center, cy_distance_to_squared
-    
+    cy_center, cy_pick_enemy_target, cy_closest_to, cy_distance_to, cy_distance_to_squared, cy_attack_ready, cy_in_attack_range, cy_find_units_center_mass
 )
 
 
@@ -57,7 +52,7 @@ COMMON_UNIT_IGNORE_TYPES: set[UnitTypeId] = {
 
 def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSquad]) -> Point2:
     """
-    Controls the main army's movement and engagement logic.
+    Controls the main army's movement and engagement logic using individual unit behaviors.
     """
     # ARES requires get_squads() to be called before get_position_of_main_squad()
     if not squads:
@@ -73,16 +68,13 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
         )
 
     for squad in squads:
-        maneuver = CombatManeuver()
         squad_position: Point2 = squad.squad_position
         units: list[Unit] = squad.squad_units
-        squad_tags = squad.tags
 
         # Main squad coordination: main squad goes to target, others converge on main squad
         move_to: Point2 = target if squad.main_squad else pos_of_main_squad
 
-        # Find nearby enemy units 
-        
+        # Find nearby enemy units
         all_close = bot.mediator.get_units_in_range(
             start_points=[squad_position],
             distances=9,
@@ -91,46 +83,77 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
         )[0].filter(lambda u: not u.is_memory and not u.is_structure and u.type_id not in COMMON_UNIT_IGNORE_TYPES)
         
         if all_close:
-            # Terrain height awareness - avoid engaging down ramps when defending
-
-            if (not bot._commenced_attack and len(bot.townhalls) <= 1 and bot.time < 600.0 and
-                bot.get_terrain_z_height(all_close.center) < bot.get_terrain_z_height(bot.start_location) and
-                any(bot.get_terrain_z_height(u.position) < bot.get_terrain_z_height(bot.start_location) 
-                    for u in units)):
-                # Don't engage - move back to higher ground
-                for unit in units:
-                    if bot.get_terrain_z_height(unit.position) < bot.get_terrain_z_height(bot.start_location):
-                        unit.move(bot.start_location)
-                return pos_of_main_squad
-
             # Separate melee, ranged and spell casters
             melee = [u for u in units if u.ground_range <= 3 and (u.energy == 0 and u.can_attack)]
             ranged = [u for u in units if u.ground_range > 3 and (u.energy == 0 and u.can_attack)]
             spellcasters = [u for u in units if u.energy > 0 or not u.can_attack]
+            
             # Simple picking logic
             enemy_target = cy_pick_enemy_target(all_close)
-            # Ranged micro example
+            
+            # ARES safety awareness - avoid unsafe positions when defending (ranged only)
+            ranged_on_unsafe_ground = []
+            if not bot._commenced_attack and len(bot.townhalls) <= 1 and bot.time < 600.0:
+                for r_unit in ranged:
+                    if not bot.mediator.is_position_safe(grid=grid, position=r_unit.position):
+                        ranged_on_unsafe_ground.append(r_unit)
+                        # Find safer position instead of hardcoded start_location
+                        safe_spot = bot.mediator.find_closest_safe_spot(
+                            from_pos=r_unit.position, 
+                            grid=grid,
+                            radius=8
+                        )
+                        r_unit.move(safe_spot)
+                        
+            # Simple priority targets
+            priority_targets = [u for u in all_close if u.type_id in {
+                UnitTypeId.SIEGETANK, UnitTypeId.SIEGETANKSIEGED, UnitTypeId.COLOSSUS
+            }]
+            
+            # Ranged micro - superior logic with priority targeting
             for r_unit in ranged:
+                if r_unit in ranged_on_unsafe_ground:
+                    continue  # Skip units retreating to safer ground
+                    
                 ranged_maneuver = CombatManeuver()
                 closest_enemy = cy_closest_to(r_unit.position, all_close)
+                
                 if not r_unit.weapon_ready:
                     ranged_maneuver.add(KeepUnitSafe(r_unit, avoid_grid))
                     ranged_maneuver.add(StutterUnitBack(r_unit, target=closest_enemy, grid=grid))
                 else:
-                    ranged_maneuver.add(AMove(r_unit, target=closest_enemy.position))
+                    # Targeting hierarchy: Priority -> Any -> Move
+                    if in_attack_range_priority := cy_in_attack_range(r_unit, priority_targets):
+                        ranged_maneuver.add(ShootTargetInRange(unit=r_unit, targets=in_attack_range_priority))
+                    elif in_attack_range_any := cy_in_attack_range(r_unit, all_close):
+                        ranged_maneuver.add(ShootTargetInRange(unit=r_unit, targets=in_attack_range_any))
+                    else:
+                        # Move towards enemies if nothing in range
+                        ranged_maneuver.add(AMove(r_unit, target=closest_enemy.position))
                 bot.register_behavior(ranged_maneuver)
 
-            # Melee engages directly
-            if melee:
+            # Melee engages directly - simplified approach
+            for m_unit in melee:
                 melee_maneuver = CombatManeuver()
-                melee_maneuver.add(AMoveGroup(group=melee, group_tags={u.tag for u in melee}, target=enemy_target.position))
+                
+                # Simple priority hierarchy for melee: Priority -> Any -> Move to target
+                if in_attack_range_priority := cy_in_attack_range(m_unit, priority_targets):
+                    melee_maneuver.add(ShootTargetInRange(unit=m_unit, targets=in_attack_range_priority))
+                elif in_attack_range_any := cy_in_attack_range(m_unit, all_close):
+                    melee_maneuver.add(ShootTargetInRange(unit=m_unit, targets=in_attack_range_any))
+                else:
+                    # Move towards priority target or general target
+                    if priority_targets:
+                        closest_priority = cy_closest_to(m_unit.position, priority_targets)
+                        melee_maneuver.add(AMove(m_unit, target=closest_priority.position))
+                    else:
+                        melee_maneuver.add(AMove(m_unit, target=enemy_target.position))
                 bot.register_behavior(melee_maneuver)
                 
+            # Spellcasters - your original extensible design
             if spellcasters:
-                disruptors= [spellcaster for spellcaster in spellcasters if spellcaster.type_id == UnitTypeId.DISRUPTOR]
+                disruptors = [spellcaster for spellcaster in spellcasters if spellcaster.type_id == UnitTypeId.DISRUPTOR]
                 for disruptor in disruptors:
-                    # Execute the Nova ability if it's available, using the Nova manager for coordination
-                    
                     if AbilityId.EFFECT_PURIFICATIONNOVA in disruptor.abilities:
                         try:
                             nova_manager = bot.nova_manager if hasattr(bot, 'nova_manager') else None
@@ -139,24 +162,54 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                             print(f"DEBUG ERROR in disruptor handling: {e}")
                     else:
                         bot.register_behavior(KeepUnitSafe(disruptor, avoid_grid))
+                        
                     # Update Nova Manager with current units
                     if hasattr(bot, 'nova_manager'):
                         try:
-                            # Get all visible enemy units within a reasonable search range
-                            enemy_units = all_close
-                            friendly_units = units
-                            
-                            # Update the Nova Manager with current units
-                            bot.nova_manager.update_units(enemy_units, friendly_units)
-                            # Run the update method to handle active Novas
-                            bot.nova_manager.update(enemy_units, friendly_units)
+                            bot.nova_manager.update_units(all_close, units)
+                            bot.nova_manager.update(all_close, units)
                         except Exception as e:
                             print(f"DEBUG ERROR updating NovaManager: {e}")
                         
         else:
-            # No enemies nearby - use continuous cohesion approach
-            maneuver.add(AMoveGroup(group=units, group_tags=squad_tags, target=move_to))    
-            bot.register_behavior(maneuver)
+            # Check for broader enemy presence (including all unit types)
+            close_by = bot.mediator.get_units_in_range(
+                start_points=[squad_position],
+                distances=9,
+                query_tree=UnitTreeQueryType.AllEnemy,
+                return_as_dict=False,
+            )[0].filter(lambda u: not u.is_memory and not u.is_structure)
+            
+            # Check for nearby enemy structures
+            nearby_structures = bot.enemy_structures.closer_than(12.0, squad_position)
+            
+            # Movement logic: PathUnitToTarget only when truly safe
+            for unit in units:
+                unit_grid = bot.mediator.get_air_grid if unit.is_flying else grid
+                if unit.type_id == UnitTypeId.COLOSSUS:
+                    unit_grid = bot.mediator.get_climber_grid
+                    
+                no_enemy_maneuver = CombatManeuver()
+                
+                # Use PathUnitToTarget only when no enemies or structures nearby (map crossing)
+                if not close_by and not nearby_structures:
+                    # Safe map crossing - use efficient pathing
+                    if cy_distance_to_squared(unit.position, move_to) > 49.0:  # 7^2
+                        no_enemy_maneuver.add(PathUnitToTarget(
+                            unit=unit, grid=unit_grid, target=move_to, success_at_distance=6.5
+                        ))
+                elif nearby_structures:
+                    # Structures nearby - attack them with AMove for base clearing
+                    closest_structure = cy_closest_to(unit.position, nearby_structures)
+                    no_enemy_maneuver.add(AMove(unit=unit, target=closest_structure.position))
+                else:
+                    # Default movement when enemies around but no structures
+                    no_enemy_maneuver.add(AMove(unit=unit, target=move_to))
+                    
+                # Fallback for units without orders
+                if not unit.orders:
+                    no_enemy_maneuver.add(AMove(unit=unit, target=move_to))
+                bot.register_behavior(no_enemy_maneuver)
 
     return pos_of_main_squad
 
@@ -305,7 +358,7 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
     if not hasattr(bot, '_attack_commenced_time'):
         bot._attack_commenced_time = 0.0
     
-    # Constants for hysteresis (following example pattern)
+    # Constants for hysteresis
     STAY_AGGRESSIVE_FOR = 20.0
     
     # If the army is already attacking, decide whether to continue or retreat
@@ -375,10 +428,10 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
 def attack_target(bot, main_army_position: Point2) -> Point2:
     """
     Determines where our main attacking units should move toward.
-    Uses example's targeting hierarchy with stable army center mass for proximity checks.
+    Uses targeting hierarchy with stable army center mass for proximity checks.
     """
     
-    # Get stable army center mass (following example pattern)
+    # Get stable army center mass
     attacking_units = bot.mediator.get_units_from_role(role=UnitRole.ATTACKING)
     if attacking_units:
         own_center_mass, num_own = cy_find_units_center_mass(attacking_units, 10)
@@ -408,6 +461,7 @@ def attack_target(bot, main_army_position: Point2) -> Point2:
         bot.current_attack_target = enemy_structure_pos
         return enemy_structure_pos
     
+    # 3. Army targeting with supply thresholds
     enemy_army = bot.enemy_units.filter(lambda u: 
         u.type_id not in COMMON_UNIT_IGNORE_TYPES 
         and not u.is_structure 
@@ -416,6 +470,7 @@ def attack_target(bot, main_army_position: Point2) -> Point2:
     )
     enemy_supply = sum(bot.calculate_supply_cost(u.type_id) for u in enemy_army)
     
+    # Only prioritize army if substantial
     if enemy_supply >= 6 and enemy_army:
         enemy_center, _ = cy_find_units_center_mass(enemy_army, 10.0)
         
@@ -437,7 +492,7 @@ def attack_target(bot, main_army_position: Point2) -> Point2:
         bot.current_attack_target = enemy_structure_pos
         return enemy_structure_pos
     
-    # 5. Expansion cycling when no targets (following example)
+    # 5. Expansion cycling when no targets
     if bot.is_visible(bot.current_attack_target) if bot.current_attack_target else True:
         fallback = fallback_target(bot)
         bot.current_attack_target = fallback
@@ -456,7 +511,7 @@ def attack_target(bot, main_army_position: Point2) -> Point2:
 def fallback_target(bot) -> Point2:
     """
     Provides a fallback target for the main army when no clear target is available.
-    Cycles through expansion locations with mineral field validation (borrowed from example).
+    Cycles through expansion locations with mineral field validation.
     """
     # Cycle through expansion locations with better validation
     if bot.is_visible(bot.current_base_target):
@@ -472,6 +527,89 @@ def fallback_target(bot) -> Point2:
             bot.current_base_target = next(bot.expansions_generator)
     
     return bot.current_base_target
+
+
+def control_base_defenders(bot, defender_units: Units, threat_position: Point2) -> None:
+    """
+    Controls BASE_DEFENDER units using individual behaviors with squad formation.
+    Uses smaller squad radius (6.0) for close base defense coordination.
+    """
+    defensive_squads = bot.mediator.get_squads(role=UnitRole.BASE_DEFENDER, squad_radius=6.0)
+    
+    if not defensive_squads:
+        return
+        
+    grid: np.ndarray = bot.mediator.get_ground_grid
+    avoid_grid: np.ndarray = bot.mediator.get_ground_avoidance_grid
+    
+    for squad in defensive_squads:
+        squad_position: Point2 = squad.squad_position
+        units: list[Unit] = squad.squad_units
+        
+        # Find nearby enemy units around this defensive squad
+        all_close = bot.mediator.get_units_in_range(
+            start_points=[squad_position],
+            distances=8,  # Smaller range for defensive engagement
+            query_tree=UnitTreeQueryType.AllEnemy,
+            return_as_dict=False,
+        )[0].filter(lambda u: not u.is_memory and not u.is_structure and u.type_id not in COMMON_UNIT_IGNORE_TYPES)
+        
+        # Priority targets for defenders (same as attacking squads)
+        priority_targets = [u for u in all_close if u.type_id in {
+            UnitTypeId.SIEGETANK, UnitTypeId.SIEGETANKSIEGED, UnitTypeId.COLOSSUS
+        }]
+        
+        # Process each defender individually with improved logic
+        for unit in units:
+            unit_grid = bot.mediator.get_air_grid if unit.is_flying else grid
+            
+            defending_maneuver = CombatManeuver()
+            defending_maneuver.add(KeepUnitSafe(unit=unit, grid=avoid_grid))
+            
+            # Handle zealots simply
+            if unit.type_id == UnitTypeId.ZEALOT:
+                defending_maneuver.add(AMove(unit=unit, target=threat_position))
+                bot.register_behavior(defending_maneuver)
+                continue
+            
+            # Separate ranged from melee for better micro
+            if unit.ground_range > 3:
+                # Ranged defender micro (like main army)
+                closest_enemy = cy_closest_to(unit.position, all_close) if all_close else None
+                
+                if closest_enemy and not unit.weapon_ready:
+                    defending_maneuver.add(StutterUnitBack(unit, target=closest_enemy, grid=unit_grid))
+                else:
+                    # Simplified targeting hierarchy: Priority -> Any -> Move
+                    if in_attack_range_priority := cy_in_attack_range(unit, priority_targets):
+                        defending_maneuver.add(ShootTargetInRange(unit=unit, targets=in_attack_range_priority))
+                    elif in_attack_range_any := cy_in_attack_range(unit, all_close):
+                        defending_maneuver.add(ShootTargetInRange(unit=unit, targets=in_attack_range_any))
+                    else:
+                        # Move towards threats or position
+                        if priority_targets:
+                            closest_priority = cy_closest_to(unit.position, priority_targets)
+                            defending_maneuver.add(AMove(unit=unit, target=closest_priority.position))
+                        elif all_close:
+                            closest_threat = cy_closest_to(unit.position, all_close)
+                            defending_maneuver.add(AMove(unit=unit, target=closest_threat.position))
+                        else:
+                            defending_maneuver.add(AMove(unit=unit, target=threat_position))
+            else:
+                # Melee defender micro (like main army)
+                if in_attack_range_priority := cy_in_attack_range(unit, priority_targets):
+                    defending_maneuver.add(ShootTargetInRange(unit=unit, targets=in_attack_range_priority))
+                elif in_attack_range_any := cy_in_attack_range(unit, all_close):
+                    defending_maneuver.add(ShootTargetInRange(unit=unit, targets=in_attack_range_any))
+                else:
+                    # Move towards priority target or threat position
+                    if priority_targets:
+                        closest_priority = cy_closest_to(unit.position, priority_targets)
+                        defending_maneuver.add(AMove(unit=unit, target=closest_priority.position))
+                    else:
+                        defending_maneuver.add(AMove(unit=unit, target=threat_position))
+            
+            bot.register_behavior(defending_maneuver)
 
 
 def manage_defensive_unit_roles(bot) -> None:
@@ -511,7 +649,7 @@ def manage_defensive_unit_roles(bot) -> None:
     
     # If no active threats, return BASE_DEFENDER units to ATTACKING (proper ARES way)
     if not active_threats:
-        # Individual role assignments back to ATTACKING (like examples)
+        # Individual role assignments back to ATTACKING
         for unit in defending_units:
             bot.mediator.assign_role(tag=unit.tag, role=UnitRole.ATTACKING)
 

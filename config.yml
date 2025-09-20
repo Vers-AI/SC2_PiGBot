@@ -9,6 +9,9 @@ MyBotRace: Protoss
 # see tutorial on readme before setting to True
 AutoUploadToAiarena: True
 ########################
+# Wall Generation Mode - when True, runs WallGeneratorBot instead of Main Bot
+WallGenerationMode: False
+########################
 
 UseData: True
 Debug: False
@@ -28,3 +31,4 @@ DebugOptions:
     DebugSpawn: True
     ShowPathingCost: False
     ResourceDebug: False
+    ShowBuildingFormation: False
