@@ -4,18 +4,21 @@ Key Decisions: Uses SC2MapAnalysis for spatial operations, integrates with ARES 
 Limitations: Currently only supports Protoss natural walls, requires on_start initialization
 """
 
-import yaml
 import os
 import logging
 import numpy as np
+import yaml
 from pathlib import Path
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
-from sc2.position import Point2
-from sc2.data import Race
+from typing import List, Optional, Tuple, Dict
+import traceback
 from scipy.spatial.distance import cdist
 from scipy.ndimage import binary_dilation
 from sklearn.decomposition import PCA
+
+# SC2 imports
+from sc2.position import Point2
+from sc2.data import Race
 
 logger = logging.getLogger(__name__)
 
@@ -243,13 +246,18 @@ class NaturalWallManager:
                     
                 logger.info(f"🎯 Selected closest choke: {closest_choke} (distance: {min_distance:.1f})")
                 
-                # Create simplified choke data for our algorithm
+                # Calculate ACTUAL choke width from available choke points
+                choke_width = self.calculate_choke_width(choke_points, closest_choke, natural_pos)
+                
+                # Create choke data with calculated width
                 from types import SimpleNamespace
                 choke_data = SimpleNamespace()
                 choke_data.center = closest_choke
-                choke_data.width = 8.0  # Assume standard choke width
-                choke_data.tangent = Point2((1, 0))  # Horizontal tangent (will be refined)
-                choke_data.normal = Point2((0, 1))   # Vertical normal (will be refined)
+                choke_data.width = choke_width
+                choke_data.tangent = Point2((1, 0))  # Will be refined based on choke geometry
+                choke_data.normal = Point2((0, 1))   # Will be refined based on choke geometry
+                
+                logger.info(f"📐 Calculated choke width: {choke_width:.1f} tiles")
                 
             except Exception as e:
                 logger.error(f"❌ Error using ARES choke detection: {e}")
@@ -260,10 +268,18 @@ class NaturalWallManager:
                     return None
                 
             # 3. Determine building layout based on choke width and race
-            buildings = self.determine_building_layout(choke_data.width, opponent_race)
+            choke_width = choke_data.width
+            building_width = 3.0  # Each building is 3 tiles wide
+            gatekeeper_gap = 1.0  # 1 tile for gatekeeper
+            
+            # Calculate needed buildings: (choke_width - gatekeeper_gap) / building_width
+            needed_buildings = max(2, int((choke_width - gatekeeper_gap) / building_width))
+            logger.info(f"📏 Choke width: {choke_width}, calculated needed buildings: {needed_buildings}")
+            
+            buildings = self.determine_building_layout(choke_width, opponent_race, needed_buildings)
             
             # 4. Calculate actual wall positions using SC2MapAnalysis
-            wall_positions = await self.calculate_wall_positions(choke_data, buildings, map_data)
+            wall_positions = await self.calculate_wall_positions(choke_data, buildings, map_data, natural_pos, choke_points, closest_choke)
             
             if wall_positions is None:
                 logger.warning("Could not calculate valid wall positions")
@@ -544,7 +560,249 @@ class NaturalWallManager:
             logger.error(f"Error snapping to buildable tile: {e}")
             return None
     
-    def determine_building_layout(self, choke_width: float, opponent_race: str) -> List[str]:
+    def calculate_choke_width(self, choke_points: List[Point2], selected_choke: Point2, natural_pos: Point2) -> float:
+        """
+        Calculate the actual width of the choke by analyzing nearby choke points.
+        
+        This finds choke points that form the edges of the same choke opening.
+        """
+        try:
+            # Find other choke points that are close to the selected choke (part of same opening)
+            choke_cluster = [selected_choke]
+            search_radius = 8.0  # Look for choke points within 8 tiles
+            
+            for point in choke_points:
+                distance = selected_choke.distance_to(point)
+                if 1.0 < distance <= search_radius:  # Close but not the same point
+                    choke_cluster.append(point)
+            
+            if len(choke_cluster) < 2:
+                logger.warning(f"Only found {len(choke_cluster)} choke points, using default width")
+                return 6.0  # Default fallback width
+            
+            # Calculate the spread of choke points (approximate choke width)
+            min_x = min(p.x for p in choke_cluster)
+            max_x = max(p.x for p in choke_cluster)
+            min_y = min(p.y for p in choke_cluster)
+            max_y = max(p.y for p in choke_cluster)
+            
+            # Use the larger dimension as choke width
+            width_x = max_x - min_x
+            width_y = max_y - min_y
+            choke_width = max(width_x, width_y)
+            
+            # Clamp to reasonable range
+            choke_width = max(4.0, min(choke_width, 15.0))
+            
+            logger.info(f"📐 Choke analysis: {len(choke_cluster)} points, X spread: {width_x:.1f}, Y spread: {width_y:.1f}")
+            logger.info(f"📐 Final choke width: {choke_width:.1f} tiles")
+            
+            return choke_width
+            
+        except Exception as e:
+            logger.error(f"Error calculating choke width: {e}")
+            return 6.0  # Safe fallback
+    
+    def calculate_choke_depth(self, choke_points: List[Point2], selected_choke: Point2, normal_direction: Point2) -> float:
+        """
+        Calculate the depth (vertical spread) of the choke opening.
+        
+        This projects choke points onto the normal direction to find how 'thick' the choke is.
+        """
+        try:
+            # Find choke points that are part of the same opening
+            choke_cluster = [selected_choke]
+            search_radius = 8.0
+            
+            for point in choke_points:
+                distance = selected_choke.distance_to(point)
+                if 1.0 < distance <= search_radius:
+                    choke_cluster.append(point)
+            
+            if len(choke_cluster) < 2:
+                return 3.0  # Default shallow depth
+            
+            # Project all choke points onto the normal direction to find depth spread
+            projections = []
+            for point in choke_cluster:
+                # Vector from selected choke to this point
+                offset = point - selected_choke
+                # Project onto normal direction (dot product)
+                projection = offset.x * normal_direction.x + offset.y * normal_direction.y
+                projections.append(projection)
+            
+            # Calculate the spread of projections (this is the choke depth)
+            min_proj = min(projections)
+            max_proj = max(projections)
+            depth = max_proj - min_proj
+            
+            # Clamp to reasonable range
+            depth = max(1.0, min(depth, 6.0))
+            
+            logger.info(f"📐 Choke depth analysis: {len(choke_cluster)} points, projection spread: {depth:.1f}")
+            
+            return depth
+            
+        except Exception as e:
+            logger.error(f"Error calculating choke depth: {e}")
+            return 3.0  # Safe fallback
+
+    def try_place_building_at_position(self, pos: Point2, building_type: str, existing_positions: List[List[float]], round_coord_func) -> bool:
+        """
+        Try to place a building at the given position.
+        Returns True if successful, False if position is invalid.
+        """
+        try:
+            # Check if position is buildable
+            if not self.bot.mediator.can_place_structure(position=pos, structure_type=self.get_unit_type(building_type)):
+                return False
+            
+            # Check for overlaps with existing buildings
+            for existing_pos in existing_positions:
+                existing_point = Point2((existing_pos[0], existing_pos[1]))
+                distance = pos.distance_to(existing_point)
+                if distance < 3.0:  # 3x3 buildings need at least 3 tile separation
+                    return False
+            
+            # Position is valid - add it to the list with proper snapping
+            existing_positions.append([round_coord_func(pos.x), round_coord_func(pos.y)])
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error checking building position {pos}: {e}")
+            return False
+
+    def get_unit_type(self, building_type: str):
+        """Convert building type string to UnitTypeId"""
+        from sc2.ids.unit_typeid import UnitTypeId
+        
+        building_map = {
+            "GATEWAY": UnitTypeId.GATEWAY,
+            "CYBERNETICSCORE": UnitTypeId.CYBERNETICSCORE,
+            "FORGE": UnitTypeId.FORGE,
+            "ROBOTICSFACILITY": UnitTypeId.ROBOTICSFACILITY,
+            "PYLON": UnitTypeId.PYLON
+        }
+        return building_map.get(building_type, UnitTypeId.GATEWAY)
+
+    def find_non_overlapping_position(self, ideal_pos: Point2, building_type: str, 
+                                     existing_positions: List[List[float]], search_radius: int = 3) -> Optional[Point2]:
+        """
+        Find a valid building position that doesn't overlap with existing buildings.
+        
+        Args:
+            ideal_pos: Preferred position for the building
+            building_type: Type of building (e.g., "GATEWAY", "CYBERNETICSCORE")
+            existing_positions: List of already placed building positions [[x, y], ...]
+            search_radius: How far to search for a valid position
+            
+        Returns:
+            Valid Point2 position or None if no valid position found
+        """
+        try:
+            # Map building types to UnitTypeId
+            from sc2.ids.unit_typeid import UnitTypeId
+            
+            building_map = {
+                "GATEWAY": UnitTypeId.GATEWAY,
+                "CYBERNETICSCORE": UnitTypeId.CYBERNETICSCORE,
+                "FORGE": UnitTypeId.FORGE,
+                "ROBOTICSFACILITY": UnitTypeId.ROBOTICSFACILITY,
+                "PYLON": UnitTypeId.PYLON
+            }
+            
+            unit_type = building_map.get(building_type, UnitTypeId.GATEWAY)
+            building_size = 3.0  # Most buildings are 3x3
+            min_distance = building_size  # Buildings can be adjacent (touching edge-to-edge)
+            
+            # Search in expanding circle around ideal position
+            for radius in range(search_radius + 1):
+                for dx in range(-radius, radius + 1):
+                    for dy in range(-radius, radius + 1):
+                        # Only check positions on the current radius circle
+                        if abs(dx) != radius and abs(dy) != radius and radius > 0:
+                            continue
+                            
+                        test_pos = Point2((ideal_pos.x + dx, ideal_pos.y + dy))
+                        
+                        # Check if position is placeable
+                        if not self.bot.mediator.can_place_structure(
+                            position=test_pos,
+                            structure_type=unit_type
+                        ):
+                            continue
+                            
+                        # Check for overlaps with existing buildings
+                        overlap_found = False
+                        for existing_pos in existing_positions:
+                            existing_point = Point2((existing_pos[0], existing_pos[1]))
+                            distance = test_pos.distance_to(existing_point)
+                            
+                            if distance < min_distance:
+                                overlap_found = True
+                                break
+                                
+                        if not overlap_found:
+                            return test_pos
+                            
+            logger.warning(f"No non-overlapping position found for {building_type} near {ideal_pos}")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error finding non-overlapping building position: {e}")
+            return None
+
+    def find_valid_building_position(self, ideal_pos: Point2, building_type: str, search_radius: int = 5) -> Optional[Point2]:
+        """
+        Find a valid building position near the ideal location using ARES placement validation.
+        
+        Args:
+            ideal_pos: Preferred position for the building
+            building_type: Type of building (e.g., "GATEWAY", "CYBERNETICSCORE")
+            search_radius: How far to search for a valid position
+            
+        Returns:
+            Valid Point2 position or None if no valid position found
+        """
+        try:
+            # Map building types to UnitTypeId (need to import this)
+            from sc2.ids.unit_typeid import UnitTypeId
+            
+            building_map = {
+                "GATEWAY": UnitTypeId.GATEWAY,
+                "CYBERNETICSCORE": UnitTypeId.CYBERNETICSCORE,
+                "FORGE": UnitTypeId.FORGE,
+                "ROBOTICSFACILITY": UnitTypeId.ROBOTICSFACILITY,
+                "PYLON": UnitTypeId.PYLON
+            }
+            
+            unit_type = building_map.get(building_type, UnitTypeId.GATEWAY)
+            
+            # Search in expanding circle around ideal position
+            for radius in range(search_radius + 1):
+                for dx in range(-radius, radius + 1):
+                    for dy in range(-radius, radius + 1):
+                        # Only check positions on the current radius circle
+                        if abs(dx) != radius and abs(dy) != radius and radius > 0:
+                            continue
+                            
+                        test_pos = Point2((ideal_pos.x + dx, ideal_pos.y + dy))
+                        
+                        # Use ARES placement validation
+                        if self.bot.mediator.can_place_structure(
+                            position=test_pos,
+                            structure_type=unit_type
+                        ):
+                            return test_pos
+                            
+            logger.warning(f"No valid position found for {building_type} near {ideal_pos}")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error finding valid building position: {e}")
+            return None
+    
+    def determine_building_layout(self, choke_width: float, opponent_race: str, needed_buildings: Optional[int] = None) -> List[str]:
         """
         Determine building types based on choke width and opponent race.
         
@@ -565,7 +823,7 @@ class NaturalWallManager:
             # Normal choke (8-11 tiles): Standard Gate-Core-Gate pattern
             return ["GATEWAY", "CYBERNETICSCORE", "GATEWAY"]
     
-    async def calculate_wall_positions(self, choke_data: ChokeData, buildings: List[str], map_data) -> Optional[WallPositions]:
+    async def calculate_wall_positions(self, choke_data: ChokeData, buildings: List[str], map_data, natural_pos: Point2, choke_points: Optional[List[Point2]] = None, selected_choke: Optional[Point2] = None) -> Optional[WallPositions]:
         """
         Calculate actual wall positions using SC2MapAnalysis spatial tools.
         
@@ -575,62 +833,233 @@ class NaturalWallManager:
         try:
             center = choke_data.center
             
-            # Defensive positioning: move 1 tile back from choke toward natural
-            defensive_offset = choke_data.normal * -1.0  # Reduced from -2.0 to -1.0
-            defensive_center = center + defensive_offset
+            # Helper function to round coordinates based on building type
+            def round_coord_for_building(val: float, building_type: str) -> float:
+                """Round coordinate based on SC2 building snap rules"""
+                if building_type == "PYLON":  # 2x2 buildings snap to .0
+                    return float(round(val))
+                else:  # 3x3, 5x5, and GATEKEEPER all snap to .5
+                    return float(round(val - 0.5) + 0.5)
             
-            # Calculate building positions along tangent line
-            three_by_three_positions = []
-            building_spacing = 3.5  # Slightly wider spacing to ensure proper gaps
+            def round_coord(val: float) -> float:
+                """Default rounding for 3x3 buildings (.5 snap)"""
+                return float(round(val - 0.5) + 0.5)
             
-            for i, building in enumerate(buildings):
-                # Center buildings around defensive position
-                offset = (i - (len(buildings) - 1) / 2) * building_spacing
-                building_pos = defensive_center + choke_data.tangent * offset
+            # Position buildings TO COVER THE CHOKE OPENING, not just near it
+            # Buildings must span across the actual choke passage
+            natural_to_choke = center - natural_pos
+            
+            if natural_to_choke.length > 0:
+                natural_to_choke_normalized = natural_to_choke / natural_to_choke.length
                 
-                # Snap to nearest buildable tile using SC2MapAnalysis
-                snapped_pos = self.snap_to_buildable_tile(building_pos, map_data)
-                if snapped_pos is not None:
-                    # Convert to regular Python float for YAML compatibility
-                    three_by_three_positions.append([float(snapped_pos.x), float(snapped_pos.y)])
+                # Position wall AT the choke to actually block it, but slightly toward natural for defense
+                wall_distance_from_natural = natural_to_choke.length * 0.85  # 85% of way - closer to choke
+                defensive_center = natural_pos + natural_to_choke_normalized * wall_distance_from_natural
+                
+                logger.info(f"🛡️ Choke-blocking positioning:")
+                logger.info(f"   Natural pos: {natural_pos}")
+                logger.info(f"   Choke center: {center}")  
+                logger.info(f"   Natural→Choke direction: {natural_to_choke_normalized}")
+                logger.info(f"   Wall distance from natural: {wall_distance_from_natural} (85% to choke)")
+                logger.info(f"   Wall center (closer to choke): {defensive_center}")
+            else:
+                defensive_center = center
+                logger.warning("⚠️ Could not determine natural-to-choke direction, using choke center")
+            
+            # Calculate building positions to SPAN ACROSS the choke opening
+            # Buildings must be positioned along the choke tangent to block the passage
+            choke_width = choke_data.width
+            building_width = 3.0  # Each building covers 3 tiles
+            
+            logger.info(f"📐 Choke geometry: width={choke_width}, tangent={choke_data.tangent}")
+            
+            # Position buildings to span the full choke width, leaving 1-tile gatekeeper gap
+            three_by_three_positions = []
+            gatekeeper_gap_pos = None
+            
+            if len(buildings) == 2:
+                # 2 buildings: space them exactly 3.0 tiles apart (edge-to-edge touching)
+                building_spacing = 3.0  # 3x3 buildings touching edge-to-edge
+                building_positions = [
+                    defensive_center - choke_data.tangent * building_spacing,  # Left building
+                    defensive_center + choke_data.tangent * building_spacing   # Right building  
+                ]
+                gatekeeper_gap_pos = defensive_center  # Gap at center
+                
+            elif len(buildings) == 3:
+                # 3 buildings: use 2D positioning to fill choke shape, not just span width
+                min_spacing = 3.0  # Minimum for touching buildings
+                max_spacing = 4.0  # Maximum to prevent huge gaps
+                
+                # Calculate ideal spacing but clamp it
+                coverage_width = max(6.0, choke_width - 1.0)  # Ensure minimum coverage
+                ideal_spacing = coverage_width / 2
+                building_spacing = max(min_spacing, min(ideal_spacing, max_spacing))
+                
+                # Base positions along tangent (horizontal spread)
+                base_positions = [
+                    defensive_center - choke_data.tangent * building_spacing,      # Left
+                    defensive_center,                                              # Center
+                    defensive_center + choke_data.tangent * building_spacing       # Right
+                ]
+                
+                # Calculate vertical offsets based on actual choke geometry
+                if choke_points and selected_choke:
+                    vertical_depth = self.calculate_choke_depth(choke_points, selected_choke, choke_data.normal)
                 else:
-                    # Fallback to unsnapped position if snapping fails
-                    three_by_three_positions.append([float(building_pos.x), float(building_pos.y)])
+                    vertical_depth = 3.0  # Default depth if choke data not available
+                
+                # Distribute buildings across the vertical depth to fill gaps
+                if vertical_depth > 2.0:  # Only offset if choke has significant depth
+                    max_offset = min(vertical_depth / 2, 2.0)  # Cap at 2 tiles max
+                    vertical_offsets = [
+                        -max_offset * 0.5,  # Left building: toward enemy side
+                        0.0,                # Center building: stays on line
+                        max_offset * 0.5    # Right building: toward natural side
+                    ]
+                    logger.info(f"📐 Choke depth: {vertical_depth:.1f}, using offsets: {vertical_offsets}")
+                else:
+                    # Shallow choke - keep buildings aligned
+                    vertical_offsets = [0.0, 0.0, 0.0]
+                    logger.info(f"📐 Shallow choke (depth: {vertical_depth:.1f}), no vertical offsets needed")
+                
+                building_positions = []
+                for i, (base_pos, offset) in enumerate(zip(base_positions, vertical_offsets)):
+                    # Apply vertical offset along the normal direction
+                    final_pos = base_pos + choke_data.normal * offset
+                    building_positions.append(final_pos)
+                    logger.info(f"🏗️ Building {i+1}: base {base_pos} + vertical offset {offset} = {final_pos}")
+                
+                logger.info(f"📏 Choke width: {choke_width}, coverage needed: {coverage_width}")
+                logger.info(f"📏 Spacing: ideal={ideal_spacing:.1f}, clamped={building_spacing:.1f}")
+                logger.info(f"🔀 Using 2D formation to fill vertical gaps")
+                
+                # Place gatekeeper in the 1-tile gap (between left and center buildings)
+                gatekeeper_gap_pos = defensive_center - choke_data.tangent * (building_spacing / 2)
+                
+            else:
+                # Fallback: distribute evenly across choke
+                if len(buildings) > 0:
+                    total_span = min(choke_width * 0.8, len(buildings) * building_width)  # Don't exceed choke
+                    spacing = total_span / len(buildings) if len(buildings) > 1 else 0
+                    building_positions = []
+                    for i in range(len(buildings)):
+                        offset = (i - (len(buildings) - 1) / 2) * spacing
+                        building_positions.append(defensive_center + choke_data.tangent * offset)
+                    gatekeeper_gap_pos = defensive_center
+                else:
+                    building_positions = []
+                    
+            logger.info(f"🏗️ Building span calculation: {len(buildings)} buildings across {choke_width} width")
+            
+            # Validate and place each building with fallback search
+            for i, (building, ideal_pos) in enumerate(zip(buildings, building_positions)):
+                building_placed = False
+                
+                # Try the ideal position first
+                building_round_func = lambda x: round_coord_for_building(x, building)
+                if self.try_place_building_at_position(ideal_pos, building, three_by_three_positions, building_round_func):
+                    building_placed = True
+                    logger.info(f"✅ {building} placed at ideal position {ideal_pos}")
+                else:
+                    # Search nearby for a valid position
+                    logger.info(f"🔍 Ideal position {ideal_pos} not buildable, searching nearby...")
+                    
+                    # Try positions in expanding circle around ideal position
+                    for search_radius in [1, 2, 3]:
+                        found_position = False
+                        for dx in range(-search_radius, search_radius + 1):
+                            for dy in range(-search_radius, search_radius + 1):
+                                if dx == 0 and dy == 0:  # Skip center (already tried)
+                                    continue
+                                    
+                                candidate_pos = Point2((ideal_pos.x + dx, ideal_pos.y + dy))
+                                
+                                if self.try_place_building_at_position(candidate_pos, building, three_by_three_positions, building_round_func):
+                                    building_placed = True
+                                    found_position = True
+                                    logger.info(f"✅ {building} placed at fallback position {candidate_pos} (offset: {dx}, {dy})")
+                                    break
+                            if found_position:
+                                break
+                        if found_position:
+                            break
+                
+                if not building_placed:
+                    logger.warning(f"❌ Could not find buildable position for {building} near {ideal_pos}")
+            
+            # Initialize position arrays
+            first_pylon_positions = []
+            pylon_positions = []
+            static_defence_positions = []
             
             # Calculate pylon positions (behind the wall, toward natural)
-            pylon_behind_offset = choke_data.normal * -4.0  # 4 tiles toward natural
-            first_pylon_pos = defensive_center + pylon_behind_offset
+            # IMPORTANT: Avoid the natural expansion's 5x5 footprint
+            if natural_to_choke.length > 0:
+                # Recalculate direction for clarity (same as above)
+                natural_to_choke_direction = natural_to_choke / natural_to_choke.length
+                toward_natural = natural_to_choke_direction * -1.0  # Flip to go toward natural
+                
+                # Try different distances to avoid natural's 5x5 area
+                for pylon_distance in [4.0, 5.0, 6.0, 7.0]:  # Try increasing distances
+                    candidate_pylon_pos = defensive_center + toward_natural * pylon_distance
+                    
+                    # Check if pylon would conflict with natural's 5x5 footprint
+                    distance_to_natural = candidate_pylon_pos.distance_to(natural_pos)
+                    natural_radius = 3.0  # 5x5 building has ~2.5 radius, use 3.0 for safety
+                    
+                    if distance_to_natural > natural_radius:
+                        valid_first_pylon = candidate_pylon_pos
+                        first_pylon_positions.append([round_coord_for_building(valid_first_pylon.x, "PYLON"), round_coord_for_building(valid_first_pylon.y, "PYLON")])
+                        logger.info(f"✅ First pylon positioned at safe distance {pylon_distance} from natural")
+                        
+                        # Add to regular pylon array as well (first pylon can serve as additional power)
+                        pylon_positions = [[round_coord_for_building(valid_first_pylon.x, "PYLON"), round_coord_for_building(valid_first_pylon.y, "PYLON")]]
+                        
+                        break
+                    else:
+                        # If all distances conflict, try perpendicular placement
+                        perpendicular = Point2((-natural_to_choke_direction.y, natural_to_choke_direction.x))
+                        first_pylon_pos = defensive_center + perpendicular * 4.0
+                        logger.warning(f"⚠️ Pylon placed perpendicular to avoid natural: {first_pylon_pos}")
+            else:
+                # Fallback: use normal vector
+                pylon_behind_offset = choke_data.normal * -4.0  
+                first_pylon_pos = defensive_center + pylon_behind_offset
             
-            # Additional pylons if needed (spread slightly)
-            pylon_positions = [[float(first_pylon_pos.x), float(first_pylon_pos.y)]]
-            if len(buildings) >= 3:
-                # Add second pylon for coverage of wider walls
-                second_pylon_pos = first_pylon_pos + choke_data.tangent * 2.0
-                pylon_positions.append([float(second_pylon_pos.x), float(second_pylon_pos.y)])
+            # Validate that we have some buildings placed
+            if not three_by_three_positions:
+                logger.error("❌ No valid building positions found - cannot create wall")
+                return None
             
             # Static defence position (behind seam, toward natural)
             static_defence_offset = choke_data.normal * -3.0
             static_defence_pos = defensive_center + static_defence_offset
-            static_defence_positions = [[float(static_defence_pos.x), float(static_defence_pos.y)]]
+            static_defence_positions = [[round_coord(static_defence_pos.x), round_coord(static_defence_pos.y)]]
             
-            # Gatekeeper position: 1-tile gap between first two buildings
-            if len(three_by_three_positions) >= 2:
-                # Gap between first two buildings (typically Gateway and Core)
-                building1 = three_by_three_positions[0]
-                building2 = three_by_three_positions[1]
-                gap_x = (building1[0] + building2[0]) / 2
-                gap_y = (building1[1] + building2[1]) / 2
-                gatekeeper_positions = [[float(gap_x), float(gap_y)]]
+            # Calculate gatekeeper position (probe gap)
+            if gatekeeper_gap_pos:
+                logger.info(f"🚪 Gatekeeper positioned at intentional gap: {gatekeeper_gap_pos}")
+                gate_keeper_positions = [[round_coord_for_building(gatekeeper_gap_pos.x, "GATEKEEPER"), round_coord_for_building(gatekeeper_gap_pos.y, "GATEKEEPER")]]
+                logger.info(f"🚪 Gatekeeper positioned at intentional gap: {gatekeeper_gap_pos}")
             else:
-                # Single building case: place in front of building
-                gatekeeper_positions = [[float(defensive_center.x), float(defensive_center.y - 2)]]
+                # Fallback: place between first two buildings if available
+                if len(three_by_three_positions) >= 2:
+                    building1 = three_by_three_positions[0]
+                    building2 = three_by_three_positions[1]
+                    gap_x = (building1[0] + building2[0]) / 2
+                    gap_y = (building1[1] + building2[1]) / 2
+                    gate_keeper_positions = [[round_coord(gap_x), round_coord(gap_y)]]
+                else:
+                    # Single building case: place in front of building
+                    gate_keeper_positions = [[round_coord(defensive_center.x), round_coord(defensive_center.y - 2)]]
             
             return WallPositions(
                 first_pylon=pylon_positions[:1],  # First pylon only
                 pylons=pylon_positions[1:] if len(pylon_positions) > 1 else pylon_positions[:1],
                 three_by_threes=three_by_three_positions,
                 static_defences=static_defence_positions,
-                gate_keeper=gatekeeper_positions
+                gate_keeper=gate_keeper_positions
             )
             
         except Exception as e:
