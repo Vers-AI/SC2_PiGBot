@@ -1,5 +1,5 @@
 Protoss:
-  Incorporeal AIE:
+  Incorporeal:
     VsZergNatWall:
       AvailableVsRaces: ["Zerg", "Random"]
       UpperSpawn:
@@ -14,7 +14,7 @@ Protoss:
         ThreeByThrees: [[ 89.5, 34.5 ], [ 93.5, 36.5 ], [ 96.5, 34.5 ]]
         StaticDefences: [[ 90.0, 32.0 ]]
         GateKeeper: [[ 91.5, 35.5 ]]
-  Persephone AIE:
+  Persephone:
     VsZergNatWall:
       AvailableVsRaces: ["Zerg", "Random"]
       UpperSpawn:
@@ -29,7 +29,7 @@ Protoss:
         ThreeByThrees: [[ 74.5, 35.5 ], [ 73.5, 39.5 ], [ 70.5, 41.5 ]]
         StaticDefences: [[ 72.0, 35.0 ]]
         GateKeeper: [[ 74.5, 37.5 ]]
-  Pylon AIE:
+  Pylon:
     VsZergNatWall:
       AvailableVsRaces: ["Zerg", "Random"]
       UpperSpawn:
@@ -44,7 +44,7 @@ Protoss:
         ThreeByThrees: [[ 144.5, 83.5 ], [ 140.5, 82.5 ], [ 138.5, 79.5 ]]
         StaticDefences: [[ 145.0, 81.0 ]]
         GateKeeper: [[ 142.5, 83.5 ]]
-  Torches AIE:
+  Torches:
     VsZergNatWall:
       AvailableVsRaces: ["Zerg", "Random"]
       UpperSpawn:
@@ -59,7 +59,7 @@ Protoss:
         ThreeByThrees: [[ 91.5, 59.5 ], [ 89.5, 55.5 ], [ 86.5, 55.5 ]]
         StaticDefences: [[ 94.0, 59.0 ]]
         GateKeeper: [[ 90.5, 57.5 ]]
-  LeyLines AIE:
+  LeyLines:
     VsZergNatWall:
       AvailableVsRaces: ["Zerg", "Random"]
       UpperSpawn:

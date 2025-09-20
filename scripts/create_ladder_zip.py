@@ -29,6 +29,7 @@ ZIP_FILES: List[str] = [
     "protoss_builds.yaml",
     "zerg_builds.yml",
     "zerg_builds.yaml",
+    "building_placements.yml",
 ]
 if platform.system() == "Windows":
     EXCLUDE: list[str] = [
