@@ -291,12 +291,9 @@ class PiG_Bot(AresBot):
                         self.mediator.clear_role(tag=tag)
                         self.mediator.assign_role(tag=tag, role=UnitRole.GATE_KEEPER)
 
-                elif not self._commenced_attack:
-                    gatekeeper_control(self, gatekeeper)
                 else:
-                    for zealot in gatekeeper:
-                        self.mediator.clear_role(tag=zealot.tag)
-                        self.mediator.assign_role(tag=zealot.tag, role=UnitRole.ATTACKING)
+                    # Keep gatekeeper active throughout early game regardless of attack status
+                    gatekeeper_control(self, gatekeeper)
                     
                     
     
