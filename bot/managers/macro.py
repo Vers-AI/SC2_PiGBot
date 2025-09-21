@@ -17,7 +17,6 @@ from ares.behaviors.macro import (
     ExpansionController,
     GasBuildingController,
     UpgradeController,
-    TechUp
 )
 from ares.dicts.unit_data import UNIT_DATA
 from ares.consts import LOSS_MARGINAL_OR_BETTER
@@ -233,7 +232,8 @@ async def handle_macro(
     or transitions to late game. Call this in your bot's on_step.
     """
     # If our build is done and we haven't detected cheese, do standard macro
-    spawn_location = bot.natural_expansion
+    # spawn_location = bot.natural_expansion
+    spawn_location = bot.start_location #need change this to confirm if there is a pylon in the spawn location
     production_location = bot.start_location
 
     if not bot._used_cheese_response:
