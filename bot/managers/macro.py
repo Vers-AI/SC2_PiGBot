@@ -3,6 +3,8 @@
 from sc2.data import Race
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.ability_id import AbilityId
+from sc2.ids.upgrade_id import UpgradeId
+
 from sc2.position import Point2
 from sc2.units import Units
 
@@ -14,6 +16,8 @@ from ares.behaviors.macro import (
     BuildWorkers,
     ExpansionController,
     GasBuildingController,
+    UpgradeController,
+    TechUp
 )
 from ares.dicts.unit_data import UNIT_DATA
 from ares.consts import LOSS_MARGINAL_OR_BETTER
@@ -36,12 +40,34 @@ STANDARD_ARMY_1 = {
     UnitTypeId.ZEALOT: {"proportion": 0.35, "priority": 0},
 }
 
+PVP_ARMY_0 = {
+    UnitTypeId.DISRUPTOR: {"proportion": 0.2, "priority": 1},
+    UnitTypeId.COLOSSUS: {"proportion": 0.15, "priority": 3},
+    UnitTypeId.HIGHTEMPLAR: {"proportion": 0.35, "priority": 0},
+    UnitTypeId.IMMORTAL: {"proportion": 0.3, "priority": 2},
+}
+
+PVP_ARMY_1 = {
+    UnitTypeId.DISRUPTOR: {"proportion": 0.25, "priority": 0},
+    UnitTypeId.COLOSSUS: {"proportion": 0.15, "priority": 2},
+    UnitTypeId.IMMORTAL: {"proportion": 0.6, "priority": 1},
+}
+
 CHEESE_DEFENSE_ARMY = {
     UnitTypeId.ZEALOT: {"proportion": 0.5, "priority": 0},
     UnitTypeId.STALKER: {"proportion": 0.4, "priority": 1},
     UnitTypeId.ADEPT: {"proportion": 0.1, "priority": 2},
 }
 
+#Upgrades
+desired_upgrades: list[UpgradeId] = [
+    UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1,
+    UpgradeId.PROTOSSGROUNDARMORSLEVEL1,
+    UpgradeId.PROTOSSGROUNDWEAPONSLEVEL2,
+    UpgradeId.PROTOSSGROUNDARMORSLEVEL2,
+    UpgradeId.PROTOSSGROUNDWEAPONSLEVEL3,
+    UpgradeId.PROTOSSGROUNDARMORSLEVEL3,
+]
 
 def calculate_optimal_worker_count(bot) -> int:
     """
@@ -151,14 +177,27 @@ def expansion_checker(bot, main_army) -> int:
 
 def select_army_composition(bot, main_army: Units) -> dict:
     """
-    Determines which army composition to use based on the current army state.
-    Switches from STANDARD_ARMY_0 to STANDARD_ARMY_1 when Archons reach a threshold percentage.
+    Determines which army composition to use based on the current army state and enemy race.
+    For PVP: Uses PVP_ARMY_0/1 compositions
+    For other matchups: Uses STANDARD_ARMY_0/1 compositions
+    Switches between versions when Archons reach a threshold percentage.
     
     Returns:
         dict: The selected army composition dictionary
     """
-    # Default to STANDARD_ARMY_0
-    selected_composition = STANDARD_ARMY_0
+    # Select composition set based on enemy race
+    if bot.enemy_race == Race.Protoss:
+        # PVP compositions
+        selected_composition = PVP_ARMY_0
+        army_1 = PVP_ARMY_1
+        threshold = 0.20  # Higher threshold for PVP (20%)
+        comp_name = "PVP"
+    else:
+        # Standard compositions for PVZ and PVT
+        selected_composition = STANDARD_ARMY_0
+        army_1 = STANDARD_ARMY_1
+        threshold = 0.15  # Standard threshold (15%)
+        comp_name = "STANDARD"
     
     # Only evaluate composition switch if we have a main army
     if main_army and len(main_army) > 0:
@@ -170,14 +209,13 @@ def select_army_composition(bot, main_army: Units) -> dict:
         
         # Debug info
         if bot.debug:
-            print(f"Archon percentage: {archon_percentage:.2f} ({archon_count}/{len(main_army)})")
+            print(f"{comp_name} Archon percentage: {archon_percentage:.2f} ({archon_count}/{len(main_army)})")
         
-        # If Archons are at least 15% of our army, switch to STANDARD_ARMY_1
-        # This threshold matches the High Templar proportion in STANDARD_ARMY_0
-        if archon_percentage >= 0.15:
-            selected_composition = STANDARD_ARMY_1
+        # Switch to version 1 when Archons reach threshold
+        if archon_percentage >= threshold:
+            selected_composition = army_1
             if bot.debug:
-                print("Switching to STANDARD_ARMY_1 due to high Archon count")
+                print(f"Switching to {comp_name}_ARMY_1 due to high Archon count")
     
     return selected_composition
 
@@ -230,10 +268,13 @@ async def handle_macro(
         if warp_prism:
             prism_position = warp_prism[0].position
             macro_plan.add(
-                SpawnController(army_composition, spawn_target=prism_position, freeflow_mode=False)
+                SpawnController(army_composition, spawn_target=prism_position, freeflow_mode=freeflow)
             )
         else:
-            macro_plan.add(SpawnController(army_composition, spawn_target=spawn_location, freeflow_mode=False))
+            macro_plan.add(SpawnController(army_composition, spawn_target=spawn_location, freeflow_mode=freeflow))
+
+        bot.register_behavior(UpgradeController(desired_upgrades, base_location=production_location))
+        bot.register_behavior(TechUp(UnitTypeId.HIGHTEMPLAR, base_location=production_location))
 
         bot.register_behavior(macro_plan)
 
@@ -258,7 +299,7 @@ async def handle_macro(
             cheese_defense_plan: MacroPlan = MacroPlan()
             cheese_defense_plan.add(AutoSupply(base_location=production_location))
             cheese_defense_plan.add(
-                SpawnController(CHEESE_DEFENSE_ARMY, spawn_target=spawn_location, freeflow_mode=freeflow)
+                SpawnController(CHEESE_DEFENSE_ARMY, spawn_target=spawn_location, freeflow_mode=True)
             )
             cheese_defense_plan.add(
                 ProductionController(CHEESE_DEFENSE_ARMY, base_location=production_location, should_repower_structures=True)

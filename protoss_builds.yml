@@ -12,7 +12,7 @@ BuildChoices:
     Protoss:
         BotName: ProtossRace
         Cycle:
-            - B2GM_Starting_Build
+            - B2GM_PVP-2_Gate_Expand
     Terran:
         BotName: TerranRace
         Cycle:
@@ -154,6 +154,71 @@ Builds:
             - 64 IMMORTAL
             - 66 HIGHTEMPLAR *4 @ NAT
             - 66 ZEALOT *2 @ NAT
+    B2GM_PVP-2_Gate_Expand:
+        # Build constant worker production till this supply
+        ConstantWorkerProductionTill: 44
+        # After 0 supply turn AutoSupply on
+        AutoSupplyAtSupply: 21
+        OpeningBuildOrder:
+            - 14 PYLON @ ramp
+            - 16 GATEWAY 
+            - 16 CHRONO @ NEXUS
+            - 16 WORKER_SCOUT:
+                [enemy_spawn, enemy_nat, map_center, fourth,third, enemy_nat]
+            - 17 GAS
+            - 18 GAS
+            - 19 GATEWAY @ ramp
+            - 20 CORE @ ramp
+            - 21 PYLON @ NAT
+            - 22 WARPGATERESEARCH
+            - 22 STALKER x2
+            - 22 CHRONO @ NEXUS 
+            - 27 EXPAND
+            - 27 SENTRY x2
+            - 32 ROBOTICSFACILITY
+            - 33 SHIELDBATTERY @ NAT
+            - 35 STALKER x2
+            - 40 OBSERVER
+            - 49 STALKER
+            - 51 STALKER
+            - 52 ROBOTICSBAY
+            - 52 TWILIGHTCOUNCIL #temporary until produciton controller is fixed
+            - 54 STALKER x2
+            - 55 GAS
+            - 55 GAS
+            - 54 STALKER
+            - 54 STALKER
+            - 56 ROBOTICSFACILITY
+            - 56 TEMPLARARCHIVE #temporary until production controller is fixed
+            - 56 EXTENDEDTHERMALLANCE
+            
+            
+    
+    
+    B2GM_PVP_4-Gate_ALL-IN:
+        # Build constant worker production till this supply
+        ConstantWorkerProductionTill: 44
+        # After 0 supply turn AutoSupply on
+        AutoSupplyAtSupply: 33
+        OpeningBuildOrder:
+            - 14 PYLON @ ramp
+            - 14 CHRONO @ NEXUS
+            - 16 GATEWAY
+            - 16 WORKER_SCOUT:
+                [enemy_spawn, enemy_nat, map_center, fourth,third, enemy_nat]
+            - 16 GAS
+            - 18 GAS
+            - 19 GATEWAY @ ramp
+            - 20 CORE @ ramp
+            - 21 PYLON
+            - 22 WARPGATERESEARCH
+            - 22 CHRONO @ NEXUS 
+            - 23 Pylon @nat_wall
+            - 24 STALKER x2
+            - 26 CHRONO @ GATEWAY
+            - 26 CHRONO @ GATEWAY
+            - 27 GATEWAY @ nat_wall 
+            
 
     One_Base_Reaction_Build:
         # One base reaction Build order

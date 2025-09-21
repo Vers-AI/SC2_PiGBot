@@ -471,25 +471,4 @@ class PiG_Bot(AresBot):
         return True
 
 
-    @property
-    def Standard_Army(self) -> dict:
-        """
-        Composition for general, non-cheese play.
-        """
-        return {
-            UnitTypeId.IMMORTAL: {"proportion": 0.2, "priority": 2},
-            UnitTypeId.COLOSSUS: {"proportion": 0.1, "priority": 3},
-            UnitTypeId.HIGHTEMPLAR: {"proportion": 0.45, "priority": 1},
-            UnitTypeId.ZEALOT: {"proportion": 0.25, "priority": 0},
-        }
-
-    @property
-    def cheese_defense_army(self) -> dict:
-        """
-        Composition specifically for defending early aggression or cheese.
-        """
-        return {
-            UnitTypeId.ZEALOT: {"proportion": 0.5, "priority": 0},
-            UnitTypeId.STALKER: {"proportion": 0.4, "priority": 1},
-            UnitTypeId.ADEPT: {"proportion": 0.1, "priority": 2},
-        }
+   
