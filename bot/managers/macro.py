@@ -238,32 +238,27 @@ async def handle_macro(
 
     if not bot._used_cheese_response:
         macro_plan: MacroPlan = MacroPlan()
-        macro_plan.add(AutoSupply(base_location=production_location))
         
         # Select army composition based on current army state
         army_composition = select_army_composition(bot, main_army)
-        
-        # Use the selected army composition for production
-        macro_plan.add(ProductionController(army_composition, base_location=production_location, should_repower_structures=True))
         
         # Calculate optimal worker count based on available resources
         # Dynamic worker limit: 66 in mid game, 80 in late game
         worker_limit = 80 if bot.game_state >= 2 else 66
         optimal_worker_count = min(calculate_optimal_worker_count(bot), worker_limit)
-        bot.register_behavior(BuildWorkers(to_count=optimal_worker_count))
-        
-        bot.register_behavior(
-                GasBuildingController(to_count=len(bot.townhalls)*2, max_pending=2)
-            )
         
         # Use the expansion_checker to determine the expansion count
         expansion_count = expansion_checker(bot, main_army)
         
-        # Register the expansion controller with the current expansion_count
-        bot.register_behavior(
-            ExpansionController(to_count=expansion_count, max_pending=1)
-        )
-                
+        # Macro Plan
+        macro_plan.add(BuildWorkers(to_count=optimal_worker_count))
+        macro_plan.add(AutoSupply(base_location=production_location))
+        macro_plan.add(GasBuildingController(to_count=len(bot.townhalls)*2, max_pending=2))
+        macro_plan.add(ExpansionController(to_count=expansion_count, max_pending=1))
+        
+        macro_plan.add(ProductionController(army_composition, base_location=production_location, should_repower_structures=True))
+        macro_plan.add(UpgradeController(desired_upgrades, base_location=production_location))
+        
         # Spawn units near Warp Prism if available, else at base
         if warp_prism:
             prism_position = warp_prism[0].position
@@ -273,9 +268,7 @@ async def handle_macro(
         else:
             macro_plan.add(SpawnController(army_composition, spawn_target=spawn_location, freeflow_mode=freeflow))
 
-        bot.register_behavior(UpgradeController(desired_upgrades, base_location=production_location))
-        bot.register_behavior(TechUp(UnitTypeId.HIGHTEMPLAR, base_location=production_location))
-
+        # Register the complete macro_plan once
         bot.register_behavior(macro_plan)
 
     # If we detected cheese
