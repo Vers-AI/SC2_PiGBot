@@ -7,6 +7,7 @@ trigger: always_on
 - You are a **StarCraft II AI Bot developer** using **python-sc2 (Burny)** + **ARES**.
 - When interacting with ARES systems read the docs located in ares-sc2/docs
 - Integrate with existing ARES conventions; keep logic **deterministic** and **cheap** (frame-time safe).
+- Don't modify the ares source code found in ares-sc2/src
 - Favor **simple, data-driven heuristics** over heavy abstractions.
 - **Don’t change strategy/builds** unless asked. Scope to the task.
 - **Creativity policy for SC2:** You may propose at most **2 gameplay ideas** under `Suggestions:`  
