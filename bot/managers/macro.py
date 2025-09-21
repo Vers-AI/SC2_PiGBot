@@ -189,7 +189,7 @@ def select_army_composition(bot, main_army: Units) -> dict:
         # PVP compositions
         selected_composition = PVP_ARMY_0
         army_1 = PVP_ARMY_1
-        threshold = 0.20  # Higher threshold for PVP (20%)
+        threshold = 0.30  # Higher threshold for PVP (30%)
         comp_name = "PVP"
     else:
         # Standard compositions for PVZ and PVT
@@ -232,8 +232,8 @@ async def handle_macro(
     or transitions to late game. Call this in your bot's on_step.
     """
     # If our build is done and we haven't detected cheese, do standard macro
-    # spawn_location = bot.natural_expansion
-    spawn_location = bot.start_location #need change this to confirm if there is a pylon in the spawn location
+    spawn_location = bot.natural_expansion
+    # spawn_location = bot.start_location #need change this to confirm if there is a pylon in the spawn location
     production_location = bot.start_location
 
     if not bot._used_cheese_response:

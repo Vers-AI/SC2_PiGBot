@@ -174,21 +174,23 @@ Builds:
             - 22 STALKER x2
             - 22 CHRONO @ NEXUS 
             - 26 EXPAND
-            - 26 SENTRY x2
+            # - 26 SENTRY x2
+            - 26 STALKER #temporary till sentry behavior made
             - 32 ROBOTICSFACILITY
-            - 33 SHIELDBATTERY @ NAT
+            - 33 SHIELDBATTERY @ nat_wall
             - 35 STALKER x2
-            - 40 OBSERVER
-            - 52 ROBOTICSBAY
-            - 52 TWILIGHTCOUNCIL #temporary until produciton controller is fixed
-            - 54 STALKER x2
-            - 55 GAS
-            - 55 GAS
-            - 54 STALKER
-            - 54 STALKER
-            - 56 ROBOTICSFACILITY
-            - 56 TEMPLARARCHIVE #temporary until production controller is fixed
-            - 56 EXTENDEDTHERMALLANCE
+            - 36 OBSERVER
+            - 42 ROBOTICSBAY
+            - 44 TWILIGHTCOUNCIL #temporary until produciton controller is fixed
+            - 44 STALKER x2
+            - 46 GAS
+            - 46 GAS
+            - 48 STALKER x2
+            - 50 ROBOTICSFACILITY
+            - 50 TEMPLARARCHIVE #temporary until production controller is fixed
+            - 50 EXTENDEDTHERMALLANCE
+            - 50 GATEWAY
+            - 50 GATEWAY
             
             
     
