@@ -74,3 +74,20 @@ Protoss:
         ThreeByThrees: [[ 50.5, 66.5 ], [ 49.5, 70.5 ], [ 48.5, 73.5 ]]
         StaticDefences: [[ 48.0, 66.0 ]]
         GateKeeper: [[ 50.5, 68.5 ]]
+  Ultralove:
+    VsZergNatWall:
+      AvailableVsRaces: ["Protoss", "Zerg", "Terran", "Random"]
+      UpperSpawn:
+        FirstPylon: [[ 110.0, 138.0 ]]
+        Pylons: [[ 113.0, 135.0 ]]
+        ThreeByThrees: [ [ 111.5, 132.5 ], [ 110.5, 135.5 ], [ 106.5, 137.5 ]]
+        StaticDefences: [[ 113.0, 137.0 ]]
+        GateKeeper: [[ 108.5, 136.5 ]]
+      LowerSpawn:
+        FirstPylon: [[ 73.0, 46.0 ]]
+        Pylons: [[ 71.0, 48.0 ]]
+        ThreeByThrees: [[ 72.5, 51.5 ], [ 73.5, 48.5 ], [ 77.5, 46.5 ]]
+        StaticDefences: [[ 71.0, 46.0 ]]
+        GateKeeper: [[ 75.5, 47.5 ]]
+
+    

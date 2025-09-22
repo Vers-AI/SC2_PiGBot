@@ -73,11 +73,12 @@ def main():
         # Local game
         
         map_list: List[str] = [
-            "TorchesAIE_v4",
-            "PylonAIE_v4",
-            "PersephoneAIE_v4",
-            "IncorporealAIE_v4",
-            "LeyLinesAIE_v3"
+            #"TorchesAIE_v4",
+            #"PylonAIE_v4",
+            #"PersephoneAIE_v4",
+            #"IncorporealAIE_v4",
+            #"LeyLinesAIE_v3",
+            "UltraloveAIE_v2"
 
         ]
 
@@ -86,7 +87,7 @@ def main():
             maps.get(random.choice(map_list)),
             [
                 bot1,
-                Computer(Race.Protoss, Difficulty.VeryHard, ai_build=AIBuild.Macro),
+                Computer(Race.Zerg, Difficulty.VeryHard, ai_build=AIBuild.Rush),
             ],
             realtime=False,
         )
