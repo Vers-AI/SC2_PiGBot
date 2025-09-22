@@ -214,7 +214,7 @@ def gatekeeper_control(bot, gatekeeper: Units) -> None:
     gate_keep_pos = bot.gatekeeping_pos
     any_close = bot.mediator.get_units_in_range(
         start_points=[gate_keep_pos],
-        distances=6,
+        distances=4,
         query_tree=UnitTreeQueryType.EnemyGround,
         return_as_dict=False,
     )[0]
