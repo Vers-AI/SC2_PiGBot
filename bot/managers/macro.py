@@ -158,18 +158,20 @@ def expansion_checker(bot, main_army) -> int:
     current_unspent = bot.minerals
     spending_efficiency = mineral_collection_rate / (current_unspent + 1) if mineral_collection_rate > 0 else 0
     
+    
+    
     # Debug information
     available_patches = bot.mediator.get_num_available_mineral_patches
     mineral_assignments = bot.mediator.get_mineral_patch_to_list_of_workers
     oversaturated_patches = sum(1 for workers in mineral_assignments.values() if len(workers) >= 3)
     
-    print(f"Game state: {bot.game_state}")
-    print(f"Worker saturation: {worker_saturation:.2f} ({current_workers}/{optimal_workers})")
-    print(f"Available mineral patches: {available_patches}")
-    print(f"Oversaturated patches: {oversaturated_patches}")
-    print(f"Mineral collection rate: {mineral_collection_rate}")
-    print(f"Spending efficiency: {spending_efficiency:.2f}")
-    print(f"Idle production time: {idle_production_time:.1f}s")
+    #print(f"Game state: {bot.game_state}")
+    #print(f"Worker saturation: {worker_saturation:.2f} ({current_workers}/{optimal_workers})")
+    #print(f"Available mineral patches: {available_patches}")
+    #print(f"Oversaturated patches: {oversaturated_patches}")
+    #print(f"Mineral collection rate: {mineral_collection_rate}")
+    #print(f"Spending efficiency: {spending_efficiency:.2f}")
+    #print(f"Idle production time: {idle_production_time:.1f}s")
     
     
     # Safety check - only expand if safe
