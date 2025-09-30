@@ -8,7 +8,7 @@ BuildChoices:
     test_123:
         BotName: Test
         Cycle:
-            - B2GM_Starting_Build_PVZ
+            - B2GM_Standard_Build
     Protoss:
         BotName: ProtossRace
         Cycle:
@@ -16,24 +16,24 @@ BuildChoices:
     Terran:
         BotName: TerranRace
         Cycle:
-            - B2GM_Starting_Build
+            - B2GM_Standard_Build
     Zerg:
         BotName: ZergRace
         Cycle:
-            - B2GM_Starting_Build_PVZ
+            - B2GM_Standard_Build
     Random:
         BotName: RandomRace
         Cycle:
-            - B2GM_Starting_Build
+            - B2GM_Standard_Build
 
     # Can also use specific opponent ids (overrides race options above)
     a_bot_opponent_id_from_aiarena:
         BotName: test
         Cycle:
-            - B2GM_Starting_Build
+            - B2GM_Standard_Build
 
 Builds:
-    B2GM_Starting_Build:
+    B2GM_Standard_Build:
         # Build constant worker production till this supply
         ConstantWorkerProductionTill: 44
         # After 0 supply turn AutoSupply on
@@ -67,32 +67,7 @@ Builds:
             - 40 CHRONO @  ROBOTICSFACILITY
             - 48 STALKER *3 @ NAT
             - 50 ROBOTICSBAY
-            - 50 ROBOTICSFACILITY
-            - 52 IMMORTAL
-            - 54 EXPAND
-            - 55 COLOSSUS x2
-            - 55 CHRONO @ ROBOTICSFACILITY x2
-            - 56 EXTENDEDTHERMALLANCE
-            - 56 TWILIGHTCOUNCIL
-            - 56 FORGE
-            - 57 CHRONO @ ROBOTICSBAY
-            - 58 GAS x2
-            - 58 PROTOSSGROUNDARMORSLEVEL1
-            - 58 CHARGE
-            - 59 CHRONO @ FORGE
-            - 59 DISRUPTOR
-            - 59 CHRONO @ TWILIGHTCOUNCIL 
-            - 62 GATEWAY 
-            - 62 GATEWAY
-            - 62 GATEWAY
-            - 62 GATEWAY
-            - 62 GATEWAY
-            - 62 TEMPLARARCHIVE
-            - 63 CHRONO @ FORGE
-            - 64 WARPPRISM
-            - 64 DISRUPTOR
-            - 66 HIGHTEMPLAR *4 @ NAT
-            - 66 ZEALOT *2 @ NAT
+            - 50 ROBOTICSFACILITY # Transition to fluid macro after this (~5 minute mark)
 
     B2GM_Starting_Build_PVZ:
         # Build constant worker production till this supply

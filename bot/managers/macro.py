@@ -135,15 +135,7 @@ CHEESE_DEFENSE_ARMY = {
     UnitTypeId.ADEPT: {"proportion": 0.1, "priority": 2},
 }
 
-#Upgrades
-desired_upgrades: list[UpgradeId] = [
-    UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1,
-    UpgradeId.PROTOSSGROUNDARMORSLEVEL1,
-    UpgradeId.PROTOSSGROUNDWEAPONSLEVEL2,
-    UpgradeId.PROTOSSGROUNDARMORSLEVEL2,
-    UpgradeId.PROTOSSGROUNDWEAPONSLEVEL3,
-    UpgradeId.PROTOSSGROUNDARMORSLEVEL3,
-]
+# No static upgrade list - use get_desired_upgrades() instead
 
 def calculate_optimal_worker_count(bot) -> int:
     """
@@ -312,6 +304,53 @@ def expansion_checker(bot, main_army) -> int:
     return expansion_count
 
 
+def get_desired_upgrades(bot) -> list[UpgradeId]:
+    """
+    Dynamic upgrade list based on game state and structures.
+    UpgradeController with auto_tech_up will build required structures automatically.
+    
+    Following example bot pattern: add upgrades conditionally to control timing.
+    """
+    upgrades: list[UpgradeId] = []
+    
+    # Early: ExtendedThermalLance (when RoboticsBay ready and we have/want Colossi)
+    if (bot.structures(UnitTypeId.ROBOTICSBAY) 
+        and (bot.units(UnitTypeId.COLOSSUS) or bot.already_pending(UnitTypeId.COLOSSUS))):
+        upgrades.append(UpgradeId.EXTENDEDTHERMALLANCE)
+    
+    # Early-Mid: Charge (when we have Twilight or 2+ bases, ~54+ supply)
+    if bot.structures(UnitTypeId.TWILIGHTCOUNCIL) or (len(bot.townhalls) >= 2 and bot.supply_used >= 54):
+        upgrades.append(UpgradeId.CHARGE)
+    
+    # Gate early upgrades if economy not ready (similar to example bot pattern)
+    if (len([th for th in bot.townhalls if th.is_ready]) < 2
+        or bot.supply_workers < 44
+        or len(bot.gas_buildings) < 4
+        or bot.supply_army < 15):
+        return upgrades
+    
+    # Mid-game: Ground upgrades (when we have Forge or 2+ bases, ~56+ supply)
+    if bot.structures(UnitTypeId.FORGE) or (len(bot.townhalls) >= 2 and bot.supply_used >= 56):
+        upgrades.extend([
+            UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1,
+            UpgradeId.PROTOSSGROUNDARMORSLEVEL1,
+            UpgradeId.PROTOSSGROUNDWEAPONSLEVEL2,
+            UpgradeId.PROTOSSGROUNDARMORSLEVEL2,
+            UpgradeId.PROTOSSGROUNDWEAPONSLEVEL3,
+            UpgradeId.PROTOSSGROUNDARMORSLEVEL3,
+        ])
+    
+    return upgrades
+
+
+def require_warp_prism(bot) -> bool:
+    """Check if WarpPrism should be built (similar timing to build runner: ~64 supply)."""
+    return (bot.structures(UnitTypeId.ROBOTICSFACILITY).ready
+            and bot.supply_used >= 60  # Slightly earlier than build (64) for flexibility
+            and not bot.units(UnitTypeId.WARPPRISM)
+            and not bot.already_pending(UnitTypeId.WARPPRISM))
+
+
 def select_army_composition(bot, main_army: Units) -> dict:
     """
     Determines which army composition to use based on the current army state and enemy race.
@@ -387,6 +426,13 @@ async def handle_macro(
         expansion_count = 3  # Conservative expansion during cheese
         print("Cheese reaction - using defense composition")
     
+    # Build warp prism at appropriate timing (replaces build runner step at 64 supply)
+    if require_warp_prism(bot):
+        for facility in bot.structures(UnitTypeId.ROBOTICSFACILITY).ready.idle:
+            if bot.can_afford(UnitTypeId.WARPPRISM):
+                facility.train(UnitTypeId.WARPPRISM)
+                break
+    
     # Build unified macro plan (same structure for both paths)
     macro_plan: MacroPlan = MacroPlan()
     macro_plan.add(BuildWorkers(to_count=optimal_worker_count))
@@ -400,8 +446,9 @@ async def handle_macro(
     macro_plan.add(ProductionController(army_composition, base_location=production_location, should_repower_structures=True))
     
     # Only do upgrades in standard macro (not during cheese)
+    # UpgradeController auto_tech_up will build tech structures (TwilightCouncil, Forge, etc) automatically
     if not bot._used_cheese_response:
-        macro_plan.add(UpgradeController(desired_upgrades, base_location=production_location))
+        macro_plan.add(UpgradeController(get_desired_upgrades(bot), base_location=production_location))
     
     # Spawn units - warp prism takes priority if available
     spawn_target = warp_prism[0].position if warp_prism else spawn_location
