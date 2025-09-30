@@ -12,7 +12,7 @@ BuildChoices:
     Protoss:
         BotName: ProtossRace
         Cycle:
-            - B2GM_PVP-2_Gate_Expand
+            - B2GM_PVP_2-Gate_Expand
     Terran:
         BotName: TerranRace
         Cycle:
@@ -20,11 +20,11 @@ BuildChoices:
     Zerg:
         BotName: ZergRace
         Cycle:
-            - B2GM_Standard_Build
+            - B2GM_PVZ_Standard_Build
     Random:
         BotName: RandomRace
         Cycle:
-            - B2GM_Standard_Build
+            - B2GM_PVZ_Standard_Build
 
     # Can also use specific opponent ids (overrides race options above)
     a_bot_opponent_id_from_aiarena:
@@ -67,9 +67,8 @@ Builds:
             - 40 CHRONO @  ROBOTICSFACILITY
             - 48 STALKER *3 @ NAT
             - 50 ROBOTICSBAY
-            - 50 ROBOTICSFACILITY # Transition to fluid macro after this (~5 minute mark)
-
-    B2GM_Starting_Build_PVZ:
+            - 50 ROBOTICSFACILITY
+    B2GM_PVZ_Standard_Build:
         # Build constant worker production till this supply
         ConstantWorkerProductionTill: 44
         # After 0 supply turn AutoSupply on
@@ -103,33 +102,9 @@ Builds:
             - 36 CHRONO @  ROBOTICSFACILITY
             - 48 STALKER *3 @ NAT
             - 50 ROBOTICSBAY
-            - 50 ROBOTICSFACILITY
-            - 52 IMMORTAL x2
-            - 54 EXPAND
-            - 55 COLOSSUS x2
-            - 55 CHRONO @ ROBOTICSFACILITY x2
-            - 56 EXTENDEDTHERMALLANCE
-            - 56 TWILIGHTCOUNCIL
-            - 56 FORGE
-            - 57 CHRONO @ ROBOTICSBAY
-            - 58 GAS x2
-            - 58 PROTOSSGROUNDARMORSLEVEL1
-            - 58 CHARGE
-            - 59 CHRONO @ FORGE
-            - 59 DISRUPTOR x2
-            - 59 CHRONO @ TWILIGHTCOUNCIL 
-            - 62 GATEWAY 
-            - 62 GATEWAY
-            - 62 GATEWAY
-            - 62 GATEWAY
-            - 62 GATEWAY
-            - 62 TEMPLARARCHIVE
-            - 63 CHRONO @ FORGE
-            - 64 WARPPRISM
-            - 64 IMMORTAL
-            - 66 HIGHTEMPLAR *4 @ NAT
-            - 66 ZEALOT *2 @ NAT
-    B2GM_PVP-2_Gate_Expand:
+            - 50 ROBOTICSFACILITY 
+            
+    B2GM_PVP_2-Gate_Expand:
         # Build constant worker production till this supply
         ConstantWorkerProductionTill: 44
         # After 0 supply turn AutoSupply on
@@ -156,7 +131,7 @@ Builds:
             - 35 STALKER x2
             - 36 OBSERVER
             - 42 ROBOTICSBAY
-            - 44 TWILIGHTCOUNCIL #temporary until produciton controller is fixed
+            - 44 TWILIGHTCOUNCIL 
             - 44 STALKER x2
             - 46 GAS
             - 46 GAS
