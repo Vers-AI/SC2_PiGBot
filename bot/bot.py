@@ -26,7 +26,7 @@ from sc2.data import Race
 
 
 # Modular imports for separated concerns
-from bot.managers.macro import handle_macro, get_optimal_gas_workers
+from bot.managers.macro import handle_macro, get_optimal_gas_workers, get_freeflow_mode
 from bot.managers.reactions import defend_cannon_rush, defend_worker_rush, early_threat_sensor, cheese_reaction, one_base_reaction, threat_detection
 from bot.managers.combat import (
     control_main_army,
@@ -159,7 +159,6 @@ class PiG_Bot(AresBot):
         print("Enemy Start:", self.mediator.get_enemy_nat)
 
         self.expansions_generator = cycle(self.expansion_locations_list)
-        self.freeflow = self.minerals > 800 and self.vespene < 200
 
         if self.enemy_race == Race.Zerg:
             if self.mediator.get_pvz_nat_gatekeeping_pos is not None:
@@ -236,7 +235,7 @@ class PiG_Bot(AresBot):
                 main_army=main_army,
                 warp_prism=warp_prism,
                 scout_units=scout_units,
-                freeflow=self.freeflow,
+                freeflow=get_freeflow_mode(self),  # Dynamic calculation
             )
 
         # Manage defensive unit roles (return them to attacking when threats are cleared)
@@ -275,9 +274,10 @@ class PiG_Bot(AresBot):
             for templar in self.units(UnitTypeId.HIGHTEMPLAR).ready:
                 templar(AbilityId.MORPH_ARCHON)
 
-        # Fail-safe if build order still not done but we have too many minerals
+        # Fail-safe: Force complete build if banking too many minerals
         if self.minerals > 2800 and not self.build_order_runner.build_completed:
             self.build_order_runner.set_build_completed()
+            print(f"Build order force-completed at {self.time:.1f}s due to high minerals")
         
         # Update game state based on game time
         current_time = self.time
