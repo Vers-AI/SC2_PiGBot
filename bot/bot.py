@@ -26,7 +26,7 @@ from sc2.data import Race
 
 
 # Modular imports for separated concerns
-from bot.managers.macro import handle_macro
+from bot.managers.macro import handle_macro, get_optimal_gas_workers
 from bot.managers.reactions import defend_cannon_rush, defend_worker_rush, early_threat_sensor, cheese_reaction, one_base_reaction, threat_detection
 from bot.managers.combat import (
     control_main_army,
@@ -114,6 +114,9 @@ class PiG_Bot(AresBot):
         
         # Natural wall management system
         self.wall_manager = None  # Will be initialized in on_start
+        
+        # Gas worker management
+        self._gas_worker_toggle = True  # Toggle for gas mining on/off
 
 
 
@@ -181,7 +184,12 @@ class PiG_Bot(AresBot):
         and reaction modules to handle behavior.
         """
         await super(PiG_Bot, self).on_step(iteration)
-        self.register_behavior(Mining(keep_safe=self._not_worker_rush)) #ares Mining 
+        
+        # Dynamic gas worker management (logic in macro.py)
+        self.register_behavior(Mining(
+            workers_per_gas=get_optimal_gas_workers(self),
+            keep_safe=self._not_worker_rush
+        )) 
 
         self.enemy_army = self.mediator.get_cached_enemy_army
 

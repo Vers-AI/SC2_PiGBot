@@ -18,11 +18,54 @@ from ares.behaviors.macro import (
     GasBuildingController,
     UpgradeController,
 )
+from ares.consts import UnitRole
 from ares.dicts.unit_data import UNIT_DATA
 from ares.consts import LOSS_MARGINAL_OR_BETTER
 
 from bot.managers.scouting import control_scout
 from bot.managers.combat import COMMON_UNIT_IGNORE_TYPES
+
+
+def get_optimal_gas_workers(bot) -> int:
+    """
+    Dynamically adjust gas workers based on economy state.
+    Prevents gas flooding and mineral starvation.
+    
+    Args:
+        bot: The bot instance
+        
+    Returns:
+        int: Number of workers per gas (0-3)
+    """
+    # Get current gatherers (workers actually mining)
+    gatherers = bot.mediator.get_units_from_role(role=UnitRole.GATHERING)
+    
+    # Critical mineral starvation - stop gas completely
+    if (bot.minerals < 100 
+        and bot.vespene > 300 
+        and bot.supply_used < 84):
+        return 0
+    
+    # Early game with few workers - stop gas temporarily
+    if ((bot._used_cheese_response and len(gatherers) < 21)
+        or len(gatherers) < 12):
+        return 0
+    
+    # Vespene flooding - toggle off gas mining
+    if bot._gas_worker_toggle and bot.vespene > 1500 and bot.minerals < 100:
+        bot._gas_worker_toggle = False
+        return 0
+    
+    # Vespene starved - toggle gas mining back on
+    if bot.vespene < 400 or bot.minerals > 1200:
+        bot._gas_worker_toggle = True
+    
+    # Low gas - max workers
+    if bot.vespene < 100:
+        return 3
+    
+    # Normal operation - follow toggle state
+    return 3 if bot._gas_worker_toggle else 0
 
 # Army composition constants 
 STANDARD_ARMY_0 = {
