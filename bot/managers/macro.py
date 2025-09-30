@@ -17,6 +17,7 @@ from ares.behaviors.macro import (
     ExpansionController,
     GasBuildingController,
     UpgradeController,
+    BuildStructure,
 )
 from ares.consts import UnitRole
 from ares.dicts.unit_data import UNIT_DATA
@@ -24,6 +25,39 @@ from ares.consts import LOSS_MARGINAL_OR_BETTER
 
 from bot.managers.scouting import control_scout
 from bot.managers.combat import COMMON_UNIT_IGNORE_TYPES
+
+
+def get_freeflow_mode(bot) -> bool:
+    """
+    Dynamic freeflow calculation based on current economy state.
+    Freeflow mode ignores army composition proportions and spends resources freely.
+    
+    Args:
+        bot: The bot instance
+        
+    Returns:
+        bool: True if should use freeflow mode
+    """
+    # Both resources high - spend freely
+    if bot.minerals > 500 and bot.vespene > 500:
+        return True
+    
+    # High minerals, low gas (your original logic)
+    if bot.minerals > 800 and bot.vespene < 200:
+        return True
+    
+    # One base with decent bank - apply pressure
+    if len(bot.townhalls) == 1 and bot.minerals >= 280 and bot.vespene >= 105:
+        return True
+    
+    # PvP special case - one base with immortal production
+    if (bot.enemy_race == Race.Protoss 
+        and len(bot.townhalls) <= 1 
+        and bot.unit_pending(UnitTypeId.IMMORTAL)):
+        return True
+    
+    # Normal proportional production
+    return False
 
 
 def get_optimal_gas_workers(bot) -> int:
@@ -227,7 +261,7 @@ def expansion_checker(bot, main_army) -> int:
     ) in LOSS_MARGINAL_OR_BETTER
     
     if not army_safe:
-        print("Not expanding - army not safe")
+        #print("Not expanding - army not safe")
         return expansion_count
     
     # Resource starvation detection
