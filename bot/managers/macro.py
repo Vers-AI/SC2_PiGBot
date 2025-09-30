@@ -98,78 +98,137 @@ def calculate_optimal_worker_count(bot) -> int:
     return worker_count
 
 
+def is_base_depleted(bot) -> bool:
+    """Accurate base depletion using ARES data + python-sc2 mineral contents"""
+    
+    # Method 1: Check mineral contents directly (python-sc2)
+    depleted_bases = 0
+    for townhall in bot.townhalls:
+        nearby_minerals = bot.mineral_field.closer_than(10, townhall)
+        if nearby_minerals:
+            depleted_patches = len([m for m in nearby_minerals if m.mineral_contents < 300])
+            if depleted_patches / len(nearby_minerals) > 0.5:  # >50% depleted
+                depleted_bases += 1
+    
+    # Method 2: Use ARES worker assignment data
+    mineral_assignments = bot.mediator.get_mineral_patch_to_list_of_workers
+    available_patches = bot.mediator.get_num_available_mineral_patches
+    
+    # Count oversaturated patches (3+ workers per patch)
+    oversaturated_count = sum(1 for workers in mineral_assignments.values() 
+                             if len(workers) >= 3)
+    
+    # Active mining workers (total - gas workers)
+    gas_workers = len(bot.mediator.get_worker_to_vespene_dict)
+    mining_workers = bot.workers.amount - gas_workers
+    
+    return (
+        depleted_bases > 0                          # Some bases have depleted patches
+        or available_patches < 4                    # Very few available patches  
+        or (mining_workers > 0 and available_patches == 0)  # Workers but no patches
+        or oversaturated_count > 2                  # Too many oversaturated patches
+    )
+
+
 def expansion_checker(bot, main_army) -> int:
     """
     Evaluates multiple factors to determine when to expand:
-    1. Game state (early, mid, late)
-    2. Mineral collection rate
-    3. Army value comparison between player and enemy
-    4. Current base count and worker saturation
+    1. Resource starvation (production idle due to lack of income)
+    2. Base depletion (worker saturation with declining income)
+    3. Army safety for expansion
+    4. Spending efficiency using python-sc2 score metrics
     
     Returns the recommended expansion count.
     """
     # Get current state
     current_bases = len(bot.townhalls)
     current_workers = bot.workers.amount
-    optimal_workers = current_bases * 22  # 16 for minerals + 6 for gas
+    optimal_workers = calculate_optimal_worker_count(bot)  # Use dynamic calculation
     worker_saturation = current_workers / optimal_workers if optimal_workers > 0 else 0
     
-    # Get collection rates
+    # Get python-sc2 score metrics
     mineral_collection_rate = bot.state.score.collection_rate_minerals
-    vespene_collection_rate = bot.state.score.collection_rate_vespene
-    
-    
-    # Set collection rate threshold based on game state
-    if bot.game_state == 0:  # early game
-        collection_threshold = 300
-    elif bot.game_state == 1:  # mid game
-        collection_threshold = 600
-    else:  # late game
-        collection_threshold = 1000
+    idle_production_time = bot.state.score.idle_production_time
+    idle_worker_time = bot.state.score.idle_worker_time
     
     # Default to current number of bases
     expansion_count = current_bases
     
+    # Calculate spending efficiency (SQ-style)
+    current_unspent = bot.minerals
+    spending_efficiency = mineral_collection_rate / (current_unspent + 1) if mineral_collection_rate > 0 else 0
+    
     # Debug information
-    # print(f"Game state: {bot.game_state}")
-    # print(f"Worker saturation: {worker_saturation:.2f} ({current_workers}/{optimal_workers})")
-    # print(f"Mineral collection rate: {mineral_collection_rate}")
-    # print(f"Own army value: {own_army_value}")
-    # print(f"Enemy army value: {enemy_army_value}")
+    available_patches = bot.mediator.get_num_available_mineral_patches
+    mineral_assignments = bot.mediator.get_mineral_patch_to_list_of_workers
+    oversaturated_patches = sum(1 for workers in mineral_assignments.values() if len(workers) >= 3)
     
-    # Step 1: Check if collection rate is below threshold
-    if mineral_collection_rate < collection_threshold:
-        # Step 2: Check if we have saturation 
-        if worker_saturation > 0.8:
-            # Step 3: Check army values
-            if bot.mediator.can_win_fight(
-                own_units=bot.own_army,
-                enemy_units=bot.enemy_army,
-                timing_adjust=True,
-                good_positioning=False,
-                workers_do_no_damage=True,
-            ) in LOSS_MARGINAL_OR_BETTER:
-                # Safe to expand
-                expansion_count = current_bases + 1
-                # print(f"Expanding based on army advantage: {expansion_count}")
-    else:
-        # If we have good income, check if we can expand based on worker saturation
-        if worker_saturation > 0.8:
-            expansion_count = current_bases + 1
-            # print(f"Expanding based on high income and saturation: {expansion_count}")
+    print(f"Game state: {bot.game_state}")
+    print(f"Worker saturation: {worker_saturation:.2f} ({current_workers}/{optimal_workers})")
+    print(f"Available mineral patches: {available_patches}")
+    print(f"Oversaturated patches: {oversaturated_patches}")
+    print(f"Mineral collection rate: {mineral_collection_rate}")
+    print(f"Spending efficiency: {spending_efficiency:.2f}")
+    print(f"Idle production time: {idle_production_time:.1f}s")
     
-    # Timing-based fallback expansions
-    if bot.time > 5 * 60 and current_bases < 2:
+    
+    # Safety check - only expand if safe
+    army_safe = bot.mediator.can_win_fight(
+        own_units=bot.own_army,
+        enemy_units=bot.enemy_army,
+        timing_adjust=True,
+        good_positioning=False,
+        workers_do_no_damage=True,
+    ) in LOSS_MARGINAL_OR_BETTER
+    
+    if not army_safe:
+        print("Not expanding - army not safe")
+        return expansion_count
+    
+    # Resource starvation detection
+    resource_starved = (
+        idle_production_time > 30.0  # Production buildings idle for 30+ seconds
+        and current_unspent < 500    # Low mineral bank
+        and mineral_collection_rate > 0  # But we do have some income
+    )
+    
+    # Base depletion detection using ARES data + mineral contents
+    bases_depleting = is_base_depleted(bot)
+    
+    # Spending efficiency thresholds (dynamic by game state)
+    if bot.game_state == 0:      # Early: should spend quickly
+        efficiency_threshold = 1.5
+    elif bot.game_state == 1:    # Mid: more complex economy
+        efficiency_threshold = 1.0  
+    else:                        # Late: can bank for big investments
+        efficiency_threshold = 0.5
+    
+    # Low spending efficiency = banking too much relative to income
+    inefficient_spending = spending_efficiency < efficiency_threshold
+    
+    # Expansion decision
+    if resource_starved:
+        expansion_count = current_bases + 1
+        print(f"Expanding due to resource starvation: {expansion_count}")
+    elif bases_depleting:
+        expansion_count = current_bases + 1
+        print(f"Expanding due to base depletion: {expansion_count}")
+    elif inefficient_spending and worker_saturation > 0.7:
+        expansion_count = current_bases + 1
+        print(f"Expanding due to inefficient spending with high saturation: {expansion_count}")
+    
+    # bot.state-based fallback expansions (minimal safety net)
+    if bot.game_state >= 1 and current_bases < 2:  # Mid game, force 2nd base
         expansion_count = max(expansion_count, 2)
-        # print(f"Fallback expansion to 2 bases at 5 min: {expansion_count}")
-    elif bot.time > 8 * 60 and current_bases < 3:
+        print(f"Fallback expansion to 2 bases in mid game: {expansion_count}")
+    elif bot.game_state >= 2 and current_bases < 3:  # Late game, force 3rd base
         expansion_count = max(expansion_count, 3)
-        # print(f"Fallback expansion to 3 bases at 8 min: {expansion_count}")
+        print(f"Fallback expansion to 3 bases in late game: {expansion_count}")
     
     # Safety check - don't expand too early with little army
-    if current_bases == 1 and len(main_army) < 5 and bot.game_state == 0:  # early game
+    if current_bases == 1 and len(main_army) < 5 and bot.game_state == 0:
         expansion_count = 1
-        # print("Limiting expansion count due to safety concerns")
+        print("Limiting expansion count due to early game safety concerns")
     
     return expansion_count
 
