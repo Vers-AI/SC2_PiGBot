@@ -211,26 +211,26 @@ def expansion_checker(bot, main_army) -> int:
     # Expansion decision
     if resource_starved:
         expansion_count = current_bases + 1
-        print(f"Expanding due to resource starvation: {expansion_count}")
+        #print(f"Expanding due to resource starvation: {expansion_count}")
     elif bases_depleting:
         expansion_count = current_bases + 1
-        print(f"Expanding due to base depletion: {expansion_count}")
+        #print(f"Expanding due to base depletion: {expansion_count}")
     elif inefficient_spending and worker_saturation > 0.7:
         expansion_count = current_bases + 1
-        print(f"Expanding due to inefficient spending with high saturation: {expansion_count}")
+        #print(f"Expanding due to inefficient spending with high saturation: {expansion_count}")
     
     # bot.state-based fallback expansions (minimal safety net)
     if bot.game_state >= 1 and current_bases < 2:  # Mid game, force 2nd base
         expansion_count = max(expansion_count, 2)
-        print(f"Fallback expansion to 2 bases in mid game: {expansion_count}")
+        #print(f"Fallback expansion to 2 bases in mid game: {expansion_count}")
     elif bot.game_state >= 2 and current_bases < 3:  # Late game, force 3rd base
         expansion_count = max(expansion_count, 3)
-        print(f"Fallback expansion to 3 bases in late game: {expansion_count}")
+        #print(f"Fallback expansion to 3 bases in late game: {expansion_count}")
     
     # Safety check - don't expand too early with little army
     if current_bases == 1 and len(main_army) < 5 and bot.game_state == 0:
         expansion_count = 1
-        print("Limiting expansion count due to early game safety concerns")
+        #print("Limiting expansion count due to early game safety concerns")
     
     return expansion_count
 
@@ -292,79 +292,53 @@ async def handle_macro(
     Main macro logic: builds units, keeps supply up, reacts to cheese, 
     or transitions to late game. Call this in your bot's on_step.
     """
-    # If our build is done and we haven't detected cheese, do standard macro
+    # Common locations
     spawn_location = bot.natural_expansion
-    # spawn_location = bot.start_location #need change this to confirm if there is a pylon in the spawn location
     production_location = bot.start_location
-
+    
+    # Common calculations
+    worker_limit = 90 if bot.game_state >= 1 else 66
+    optimal_worker_count = min(calculate_optimal_worker_count(bot), worker_limit)
+    
+    # Select army composition - standard or cheese defense
     if not bot._used_cheese_response:
-        macro_plan: MacroPlan = MacroPlan()
-        
-        # Select army composition based on current army state
         army_composition = select_army_composition(bot, main_army)
-        
-        # Calculate optimal worker count based on available resources
-        # Dynamic worker limit: 66 in mid game, 80 in late game
-        worker_limit = 80 if bot.game_state >= 2 else 66
-        optimal_worker_count = min(calculate_optimal_worker_count(bot), worker_limit)
-        
-        # Use the expansion_checker to determine the expansion count
         expansion_count = expansion_checker(bot, main_army)
-        
-        # Macro Plan
-        macro_plan.add(BuildWorkers(to_count=optimal_worker_count))
-        macro_plan.add(AutoSupply(base_location=production_location))
-        macro_plan.add(GasBuildingController(to_count=len(bot.townhalls)*2, max_pending=2))
-        macro_plan.add(ExpansionController(to_count=expansion_count, max_pending=1))
-        
-        macro_plan.add(ProductionController(army_composition, base_location=production_location, should_repower_structures=True))
-        macro_plan.add(UpgradeController(desired_upgrades, base_location=production_location))
-        
-        # Spawn units near Warp Prism if available, else at base
-        if warp_prism:
-            prism_position = warp_prism[0].position
-            macro_plan.add(
-                SpawnController(army_composition, spawn_target=prism_position, freeflow_mode=freeflow)
-            )
-        else:
-            macro_plan.add(SpawnController(army_composition, spawn_target=spawn_location, freeflow_mode=freeflow))
-
-        # Register the complete macro_plan once
-        bot.register_behavior(macro_plan)
-
-    # If we detected cheese
     else:
-        print("Cheese reaction")
-        # Calculate optimal worker count for cheese defense too
-        # Dynamic worker limit: 66 in mid game, 80 in late game
-        worker_limit = 80 if bot.game_state >= 2 else 66
-        optimal_worker_count = min(calculate_optimal_worker_count(bot), worker_limit)
-        bot.register_behavior(BuildWorkers(to_count=optimal_worker_count))
-        
-        if bot.game_state == 0:  # early game
-            bot.register_behavior(
-                ExpansionController(to_count=3, max_pending=1)
-            )
-            bot.register_behavior(
-                GasBuildingController(to_count=len(bot.townhalls)*2, max_pending=2)
-            )
-
-            # Build a cheese defense plan
-            cheese_defense_plan: MacroPlan = MacroPlan()
-            cheese_defense_plan.add(AutoSupply(base_location=production_location))
-            cheese_defense_plan.add(
-                SpawnController(CHEESE_DEFENSE_ARMY, spawn_target=spawn_location, freeflow_mode=True)
-            )
-            cheese_defense_plan.add(
-                ProductionController(CHEESE_DEFENSE_ARMY, base_location=production_location, should_repower_structures=True)
-            )
-
-            bot.register_behavior(cheese_defense_plan)
-        else:
-            #switch to the mid game build order
-            bot._used_cheese_response = False
-            bot._cheese_reaction_completed = True
-            print("Cheese reaction completed")
+        # Cheese defense composition and minimal expansion
+        army_composition = CHEESE_DEFENSE_ARMY
+        expansion_count = 3  # Conservative expansion during cheese
+        print("Cheese reaction - using defense composition")
+    
+    # Build unified macro plan (same structure for both paths)
+    macro_plan: MacroPlan = MacroPlan()
+    macro_plan.add(BuildWorkers(to_count=optimal_worker_count))
+    macro_plan.add(AutoSupply(base_location=production_location))
+    macro_plan.add(GasBuildingController(to_count=len(bot.townhalls)*2, max_pending=2))
+    
+    # Only expand if not in early cheese defense
+    if not (bot._used_cheese_response and bot.game_state == 0):
+        macro_plan.add(ExpansionController(to_count=expansion_count, max_pending=1))
+    
+    macro_plan.add(ProductionController(army_composition, base_location=production_location, should_repower_structures=True))
+    
+    # Only do upgrades in standard macro (not during cheese)
+    if not bot._used_cheese_response:
+        macro_plan.add(UpgradeController(desired_upgrades, base_location=production_location))
+    
+    # Spawn units - warp prism takes priority if available
+    spawn_target = warp_prism[0].position if warp_prism else spawn_location
+    spawn_freeflow = True if bot._used_cheese_response else freeflow  # Always freeflow during cheese
+    macro_plan.add(SpawnController(army_composition, spawn_target=spawn_target, freeflow_mode=spawn_freeflow))
+    
+    # Single registration point for all macro
+    bot.register_behavior(macro_plan)
+    
+    # Transition from cheese to standard macro when mid-game starts
+    if bot._used_cheese_response and bot.game_state >= 1:
+        bot._used_cheese_response = False
+        bot._cheese_reaction_completed = True
+        print("Cheese reaction completed - transitioning to standard macro")
         
 
 
