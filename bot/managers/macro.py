@@ -342,12 +342,14 @@ def get_desired_upgrades(bot) -> list[UpgradeId]:
 
 
 def require_warp_prism(bot) -> bool:
-    """Returns True if WarpPrism should be built (~60 supply). Limits to 1 total."""
+    """Returns True if WarpPrism should be built. Limits to 1 total."""
     # Check both forms: transport mode and phasing mode
     total_prisms = (bot.units(UnitTypeId.WARPPRISM).amount + 
                     bot.units(UnitTypeId.WARPPRISMPHASING).amount +
                     bot.already_pending(UnitTypeId.WARPPRISM))
     return (bot.structures(UnitTypeId.ROBOTICSFACILITY).ready
+            and bot.structures(UnitTypeId.TEMPLARARCHIVE).ready
+            and bot.structures(UnitTypeId.ROBOTICSBAY).ready
             and bot.supply_used >= 60
             and total_prisms == 0)
 
