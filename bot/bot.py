@@ -291,7 +291,7 @@ class PiG_Bot(AresBot):
                     self.mediator.assign_role(tag=zealot.tag, role=UnitRole.ATTACKING)
         else:
             self.game_state = 0  # early game
-            if self.enemy_race == Race.Zerg:
+            if self.enemy_race in {Race.Zerg, Race.Random}:
                 if not gatekeeper:
                     zealots = self.units(UnitTypeId.ZEALOT).ready
                     if zealots:
