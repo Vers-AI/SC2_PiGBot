@@ -160,7 +160,7 @@ class PiG_Bot(AresBot):
 
         self.expansions_generator = cycle(self.expansion_locations_list)
 
-        if self.enemy_race == Race.Zerg:
+        if self.enemy_race in {Race.Zerg, Race.Random}:
             if self.mediator.get_pvz_nat_gatekeeping_pos is not None:
                 self.gatekeeping_pos = self.mediator.get_pvz_nat_gatekeeping_pos
             else:
