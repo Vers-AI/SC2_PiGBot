@@ -79,6 +79,7 @@ def main():
             "IncorporealAIE_v4",
             "LeyLinesAIE_v3",
             "UltraloveAIE_v2"
+            "MagannathaAIE_v2"
 
         ]
 
