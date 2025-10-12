@@ -48,6 +48,8 @@ from bot.managers.reactions import (
 from bot.utilities.use_disruptor_nova import UseDisruptorNova
 from map_analyzer import MapData
 from bot.utilities.nova_manager import NovaManager
+from bot.utilities.performance_monitor import PerformanceMonitor
+from bot.utilities.game_report import print_end_game_report
 # # Wall manager removed - use generate_wall_placements.py to create wall data
 # from bot.utilities.natural_wall_manager import NaturalWallManager  # Temporarily disabled
 
@@ -111,6 +113,9 @@ class PiG_Bot(AresBot):
         # Target persistence for stable attack behavior
         self.current_attack_target = None
         self.target_lock_distance = 25.0  # Don't switch targets unless new one is 25+ units closer
+        
+        # Performance monitoring (tracks SQ and other efficiency metrics)
+        self.performance_monitor = PerformanceMonitor(sample_interval=22, alpha=0.1)
         
         # Natural wall management system
         self.wall_manager = None  # Will be initialized in on_start
@@ -183,6 +188,9 @@ class PiG_Bot(AresBot):
         and reaction modules to handle behavior.
         """
         await super(PiG_Bot, self).on_step(iteration)
+        
+        # Update performance metrics (SQ tracking)
+        self.performance_monitor.update(iteration, self)
         
         # Dynamic gas worker management (logic in macro.py)
         self.register_behavior(Mining(
@@ -409,9 +417,15 @@ class PiG_Bot(AresBot):
 
     async def on_end(self, game_result: Result) -> None:
         """
-        Called at the end of the game. This can be used for post-match analysis.
+        Called at the end of the game - prints performance report.
         """
-        await super().on_end(game_result)
+        print_end_game_report(
+            performance_monitor=self.performance_monitor,
+            game_result=game_result,
+            game_time=self.time,
+            idle_worker_time=self.state.score.idle_worker_time,
+            idle_production_time=self.state.score.idle_production_time
+        )
 
     # -------------------------------------
     # Utility / Additional Methods
