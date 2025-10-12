@@ -44,6 +44,14 @@ COMMON_UNIT_IGNORE_TYPES: set[UnitTypeId] = {
     UnitTypeId.CHANGELINGZERGLING,
 }
 
+# Disruptor-specific ignores: common ignores + workers + broodlings
+DISRUPTOR_IGNORE_TYPES: set[UnitTypeId] = COMMON_UNIT_IGNORE_TYPES | {
+    UnitTypeId.SCV,
+    UnitTypeId.DRONE,
+    UnitTypeId.PROBE,
+    UnitTypeId.BROODLING,
+}
+
 
 
 
@@ -147,26 +155,32 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                         melee_maneuver.add(AMove(m_unit, target=enemy_target.position))
                 bot.register_behavior(melee_maneuver)
                 
-            # Spellcasters - your original extensible design
+            # Spellcasters 
             if spellcasters:
                 disruptors = [spellcaster for spellcaster in spellcasters if spellcaster.type_id == UnitTypeId.DISRUPTOR]
-                for disruptor in disruptors:
-                    if AbilityId.EFFECT_PURIFICATIONNOVA in disruptor.abilities:
-                        try:
-                            nova_manager = bot.nova_manager if hasattr(bot, 'nova_manager') else None
-                            result = bot.use_disruptor_nova.execute(disruptor, all_close, units, nova_manager)
-                        except Exception as e:
-                            print(f"DEBUG ERROR in disruptor handling: {e}")
-                    else:
-                        bot.register_behavior(KeepUnitSafe(disruptor, avoid_grid))
-                        
-                    # Update Nova Manager with current units
-                    if hasattr(bot, 'nova_manager'):
-                        try:
-                            bot.nova_manager.update_units(all_close, units)
-                            bot.nova_manager.update(all_close, units)
-                        except Exception as e:
-                            print(f"DEBUG ERROR updating NovaManager: {e}")
+                if disruptors:
+                    # Filter enemies for disruptors once: exclude workers and broodlings
+                    disruptor_targets = all_close.filter(lambda u: u.type_id not in DISRUPTOR_IGNORE_TYPES)
+                    
+                    for disruptor in disruptors:
+                        if AbilityId.EFFECT_PURIFICATIONNOVA in disruptor.abilities:
+                            try:
+                                nova_manager = bot.nova_manager if hasattr(bot, 'nova_manager') else None
+                                result = bot.use_disruptor_nova.execute(disruptor, disruptor_targets, units, nova_manager)
+                                if not result:  # Nova didn't fire - keep safe
+                                    bot.register_behavior(KeepUnitSafe(disruptor, avoid_grid))
+                            except Exception as e:
+                                print(f"DEBUG ERROR in disruptor handling: {e}")
+                        else:
+                            bot.register_behavior(KeepUnitSafe(disruptor, avoid_grid))
+                            
+                        # Update Nova Manager with current units (use disruptor-filtered targets)
+                        if hasattr(bot, 'nova_manager'):
+                            try:
+                                bot.nova_manager.update_units(disruptor_targets, units)
+                                bot.nova_manager.update(disruptor_targets, units)
+                            except Exception as e:
+                                print(f"DEBUG ERROR updating NovaManager: {e}")
                         
         else:
             # Check for broader enemy presence (including all unit types)
@@ -187,6 +201,20 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     unit_grid = bot.mediator.get_climber_grid
                     
                 no_enemy_maneuver = CombatManeuver()
+                
+                # Disruptors follow squad center at safe distance
+                if unit.type_id == UnitTypeId.DISRUPTOR:
+                    # Use existing squad_position (already the center of squad units)
+                    distance_to_center = cy_distance_to(unit.position, squad_position)
+                    
+                    # If too far from squad, move towards center (use PathUnitToTarget since disruptors can't attack-move)
+                    if distance_to_center > 5.0:
+                        no_enemy_maneuver.add(PathUnitToTarget(
+                            unit=unit, grid=grid, target=squad_position, success_at_distance=4.0
+                        ))
+                    # Otherwise stay put (close enough to squad)
+                    bot.register_behavior(no_enemy_maneuver)
+                    continue  # Skip rest of movement logic for disruptors
                 
                 # Use PathUnitToTarget only when no enemies or structures nearby (map crossing)
                 if not close_by and not nearby_structures:
