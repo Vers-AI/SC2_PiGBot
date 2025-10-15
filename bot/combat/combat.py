@@ -1,6 +1,6 @@
 import numpy as np
 
-from sc2.position import Point2, Point3
+from sc2.position import Point2
 from sc2.units import Units
 from sc2.unit import Unit
 from sc2.ids.unit_typeid import UnitTypeId
@@ -21,7 +21,6 @@ from bot.constants import (
     DEFENDER_SQUAD_RADIUS,
     COMMON_UNIT_IGNORE_TYPES,
     DISRUPTOR_IGNORE_TYPES,
-    PRIORITY_TARGET_TYPES,
     MELEE_RANGE_THRESHOLD,
     STAY_AGGRESSIVE_DURATION,
     UNSAFE_GROUND_CHECK_RADIUS,
@@ -54,7 +53,7 @@ from bot.combat.debug import (
 )
 
 from cython_extensions import (
-    cy_center, cy_pick_enemy_target, cy_closest_to, cy_distance_to, cy_distance_to_squared, cy_attack_ready, cy_in_attack_range, cy_find_units_center_mass
+    cy_pick_enemy_target, cy_closest_to, cy_distance_to, cy_distance_to_squared, cy_in_attack_range, cy_find_units_center_mass
 )
 
 
