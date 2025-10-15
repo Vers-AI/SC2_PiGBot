@@ -14,11 +14,8 @@ from ares.behaviors.combat.individual import (
 from ares.managers.squad_manager import UnitSquad
 
 from ares.consts import UnitRole
-from ares.dicts.unit_data import UNIT_DATA
 
-from bot.utilities.use_disruptor_nova import UseDisruptorNova
-from bot.utilities.nova_manager import NovaManager
-from bot.managers.reactions import assess_threat, allocate_defensive_forces
+from bot.managers.reactions import assess_threat
 from bot.constants import (
     ATTACKING_SQUAD_RADIUS,
     DEFENDER_SQUAD_RADIUS,
@@ -48,10 +45,12 @@ from bot.constants import (
 from bot.combat.unit_micro import (
     micro_ranged_unit,
     micro_melee_unit,
-    micro_zealot,
     micro_disruptor,
-    micro_defender_unit,
     get_priority_targets,
+)
+from bot.combat.debug import (
+    render_combat_state_overlay,
+    log_nova_error,
 )
 
 from cython_extensions import (
@@ -152,7 +151,7 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     
                     for disruptor in disruptors:
                         nova_manager = bot.nova_manager if hasattr(bot, 'nova_manager') else None
-                        disruptor_maneuver = micro_disruptor(
+                        micro_disruptor(
                             disruptor=disruptor,
                             enemies=disruptor_targets,
                             friendly_units=units,
@@ -160,16 +159,14 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                             bot=bot,
                             nova_manager=nova_manager
                         )
-                        if disruptor_maneuver:
-                            bot.register_behavior(disruptor_maneuver)
-                            
+                        
                         # Update Nova Manager with current units (use disruptor-filtered targets)
                         if nova_manager:
                             try:
                                 nova_manager.update_units(disruptor_targets, units)
                                 nova_manager.update(disruptor_targets, units)
                             except Exception as e:
-                                print(f"DEBUG ERROR updating NovaManager: {e}")
+                                log_nova_error(e)
                         
         else:
             # Check for broader enemy presence (including all unit types)
@@ -326,47 +323,8 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
     if (is_early_defensive_mode and bot._one_base_reaction_completed) or bot.game_state == 1:  # mid game
         is_early_defensive_mode = False
     
-    # Debug info
-    if bot.debug:
-        fight_result = bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=True, good_positioning=True, workers_do_no_damage=True)
-        print(f"Can win fight: {fight_result}")
-        # Removed detailed army unit printing to reduce console spam
-
-        bot.client.debug_text_2d(f"Attack: {bot._commenced_attack} Threat: {enemy_threat_level} Under Attack: {bot._under_attack}", 
-                                Point2((0.1, 0.22)), None, 14)
-        bot.client.debug_text_2d(f"EarlyDefMode: {is_early_defensive_mode} Cheese: {bot._used_cheese_response} OneBase: {bot._used_one_base_response}", 
-                                Point2((0.1, 0.24)), None, 14)
-        
-        # Role and squad debug info
-        attacking_units = bot.mediator.get_units_from_role(role=UnitRole.ATTACKING)
-        defending_units = bot.mediator.get_units_from_role(role=UnitRole.DEFENDING) 
-        base_defender_units = bot.mediator.get_units_from_role(role=UnitRole.BASE_DEFENDER)
-        
-        # Squad counts
-        attacking_squads = bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0)
-        defending_squads = bot.mediator.get_squads(role=UnitRole.DEFENDING, squad_radius=9.0)
-        base_defender_squads = bot.mediator.get_squads(role=UnitRole.BASE_DEFENDER, squad_radius=6.0)
-        
-        bot.client.debug_text_2d(f"ROLES: ATK:{len(attacking_units)} DEF:{len(defending_units)} BASE:{len(base_defender_units)}", 
-                                Point2((0.1, 0.26)), None, 14)
-        bot.client.debug_text_2d(f"SQUADS: ATK:{len(attacking_squads)} DEF:{len(defending_squads)} BASE:{len(base_defender_squads)}", 
-                                Point2((0.1, 0.28)), None, 14)
-        
-        # Visual debug markers for targeting
-        if hasattr(bot, 'current_attack_target') and bot.current_attack_target:
-            bot.client.debug_text_2d(f"Current Target: {bot.current_attack_target}", 
-                                    Point2((0.1, 0.30)), None, 14)
-            target_3d = Point3((bot.current_attack_target.x, bot.current_attack_target.y, 
-                               bot.get_terrain_z_height(bot.current_attack_target)))
-            bot.client.debug_sphere_out(target_3d, 2, Point3((255, 0, 0)))
-        
-        if main_army:
-            army_center = main_army.center
-            bot.client.debug_text_2d(f"Army Center: {army_center}", 
-                                    Point2((0.1, 0.32)), None, 14)
-            army_center_3d = Point3((army_center.x, army_center.y, 
-                                   bot.get_terrain_z_height(army_center)))
-            bot.client.debug_sphere_out(army_center_3d, 3, Point3((0, 255, 0)))
+    # Debug visualization (controlled by bot.debug flag)
+    render_combat_state_overlay(bot, main_army, enemy_threat_level, is_early_defensive_mode)
 
     # Initialize attack state tracking if not present
     if not hasattr(bot, '_attack_commenced_time'):
@@ -575,24 +533,53 @@ def control_base_defenders(bot, defender_units: Units, threat_position: Point2) 
         for unit in units:
             unit_grid = bot.mediator.get_air_grid if unit.is_flying else grid
             
-            # Handle zealots simply (special case with just AMove + safety)
+            defending_maneuver = CombatManeuver()
+            defending_maneuver.add(KeepUnitSafe(unit=unit, grid=avoid_grid))
+            
+            # Handle zealots simply (special case - just AMove)
             if unit.type_id == UnitTypeId.ZEALOT:
-                zealot_maneuver = CombatManeuver()
-                zealot_maneuver.add(KeepUnitSafe(unit=unit, grid=avoid_grid))
-                zealot_maneuver.add(AMove(unit=unit, target=threat_position))
-                bot.register_behavior(zealot_maneuver)
+                defending_maneuver.add(AMove(unit=unit, target=threat_position))
+                bot.register_behavior(defending_maneuver)
                 continue
             
-            # Use unified defender micro (includes safety)
-            defender_maneuver = micro_defender_unit(
-                unit=unit,
-                enemies=all_close,
-                priority_targets=priority_targets,
-                threat_position=threat_position,
-                grid=unit_grid,
-                avoid_grid=avoid_grid
-            )
-            bot.register_behavior(defender_maneuver)
+            # Separate ranged from melee for better micro
+            if unit.ground_range > MELEE_RANGE_THRESHOLD:
+                # Ranged defender micro (like main army)
+                closest_enemy = cy_closest_to(unit.position, all_close) if all_close else None
+                
+                if closest_enemy and not unit.weapon_ready:
+                    defending_maneuver.add(StutterUnitBack(unit, target=closest_enemy, grid=unit_grid))
+                else:
+                    # Simplified targeting hierarchy: Priority -> Any -> Move
+                    if in_attack_range_priority := cy_in_attack_range(unit, priority_targets):
+                        defending_maneuver.add(ShootTargetInRange(unit=unit, targets=in_attack_range_priority))
+                    elif in_attack_range_any := cy_in_attack_range(unit, all_close):
+                        defending_maneuver.add(ShootTargetInRange(unit=unit, targets=in_attack_range_any))
+                    else:
+                        # Move towards threats or position
+                        if priority_targets:
+                            closest_priority = cy_closest_to(unit.position, priority_targets)
+                            defending_maneuver.add(AMove(unit=unit, target=closest_priority.position))
+                        elif all_close:
+                            closest_threat = cy_closest_to(unit.position, all_close)
+                            defending_maneuver.add(AMove(unit=unit, target=closest_threat.position))
+                        else:
+                            defending_maneuver.add(AMove(unit=unit, target=threat_position))
+            else:
+                # Melee defender micro (like main army)
+                if in_attack_range_priority := cy_in_attack_range(unit, priority_targets):
+                    defending_maneuver.add(ShootTargetInRange(unit=unit, targets=in_attack_range_priority))
+                elif in_attack_range_any := cy_in_attack_range(unit, all_close):
+                    defending_maneuver.add(ShootTargetInRange(unit=unit, targets=in_attack_range_any))
+                else:
+                    # Move towards priority target or threat position
+                    if priority_targets:
+                        closest_priority = cy_closest_to(unit.position, priority_targets)
+                        defending_maneuver.add(AMove(unit=unit, target=closest_priority.position))
+                    else:
+                        defending_maneuver.add(AMove(unit=unit, target=threat_position))
+            
+            bot.register_behavior(defending_maneuver)
 
 
 def manage_defensive_unit_roles(bot) -> None:

@@ -5,7 +5,7 @@ Key Decisions: Pure functions that create and return CombatManeuver instances
 Limitations: Assumes individual behavior pattern (one CombatManeuver per unit)
 """
 
-from typing import Optional, List
+from typing import List, Optional
 import numpy as np
 
 from sc2.unit import Unit
@@ -27,16 +27,14 @@ def micro_ranged_unit(
     enemies: List[Unit],
     priority_targets: List[Unit],
     grid: np.ndarray,
-    avoid_grid: np.ndarray,
-    skip_safe_check: bool = False
+    avoid_grid: np.ndarray
 ) -> CombatManeuver:
     """
     Create micro behaviors for a ranged unit.
     
     Implements priority targeting with stutter-step micro:
-    - Retreats when weapon on cooldown
-    - Prioritizes high-value targets when weapon ready
-    - Falls back to closest target or movement
+    - Weapon on cooldown: safety check + kite back
+    - Weapon ready: prioritize high-value targets
     
     Args:
         unit: The ranged unit to control
@@ -44,7 +42,6 @@ def micro_ranged_unit(
         priority_targets: High-priority targets (tanks, colossi, etc.)
         grid: Ground grid for pathfinding
         avoid_grid: Avoidance grid for safety checks
-        skip_safe_check: If True, don't add KeepUnitSafe behavior
         
     Returns:
         CombatManeuver with appropriate behaviors added
@@ -53,9 +50,8 @@ def micro_ranged_unit(
     closest_enemy = cy_closest_to(unit.position, enemies)
     
     if not unit.weapon_ready:
-        # Weapon on cooldown - retreat
-        if not skip_safe_check:
-            maneuver.add(KeepUnitSafe(unit, avoid_grid))
+        # Weapon on cooldown - explicit safety check then kite back
+        maneuver.add(KeepUnitSafe(unit, avoid_grid))
         maneuver.add(StutterUnitBack(unit, target=closest_enemy, grid=grid))
     else:
         # Weapon ready - engage with priority targeting
@@ -111,24 +107,6 @@ def micro_melee_unit(
     return maneuver
 
 
-def micro_zealot(unit: Unit, target_position: Point2) -> CombatManeuver:
-    """
-    Create micro behaviors for Zealots (simplified melee).
-    
-    Zealots use simple A-move without complex targeting logic.
-    
-    Args:
-        unit: The Zealot unit to control
-        target_position: Position to attack-move toward
-        
-    Returns:
-        CombatManeuver with AMove behavior
-    """
-    maneuver = CombatManeuver()
-    maneuver.add(AMove(unit=unit, target=target_position))
-    return maneuver
-
-
 def micro_disruptor(
     disruptor: Unit,
     enemies: List[Unit],
@@ -136,11 +114,11 @@ def micro_disruptor(
     avoid_grid: np.ndarray,
     bot,
     nova_manager
-) -> Optional[CombatManeuver]:
+) -> bool:
     """
-    Create micro behaviors for Disruptors.
+    Handle disruptor nova firing and fallback safety.
     
-    Handles nova firing logic and safety positioning when nova on cooldown.
+    Attempts to fire nova, falls back to KeepUnitSafe if not fired.
     
     Args:
         disruptor: The Disruptor unit to control
@@ -151,7 +129,7 @@ def micro_disruptor(
         nova_manager: NovaManager instance for coordination
         
     Returns:
-        CombatManeuver if nova didn't fire, None if nova fired successfully
+        True if nova fired or behavior registered, False otherwise
     """
     from sc2.ids.ability_id import AbilityId
     
@@ -160,22 +138,17 @@ def micro_disruptor(
             result = bot.use_disruptor_nova.execute(
                 disruptor, enemies, friendly_units, nova_manager
             )
-            if result:  # Nova fired successfully
-                return None
-            else:  # Nova didn't fire - keep safe
-                maneuver = CombatManeuver()
-                maneuver.add(KeepUnitSafe(disruptor, avoid_grid))
-                return maneuver
+            if not result:  # Nova didn't fire - keep safe
+                bot.register_behavior(KeepUnitSafe(disruptor, avoid_grid))
+            return True
         except Exception as e:
             print(f"DEBUG ERROR in disruptor handling: {e}")
-            maneuver = CombatManeuver()
-            maneuver.add(KeepUnitSafe(disruptor, avoid_grid))
-            return maneuver
+            bot.register_behavior(KeepUnitSafe(disruptor, avoid_grid))
+            return True
     else:
         # Ability not ready - keep safe
-        maneuver = CombatManeuver()
-        maneuver.add(KeepUnitSafe(disruptor, avoid_grid))
-        return maneuver
+        bot.register_behavior(KeepUnitSafe(disruptor, avoid_grid))
+        return True
 
 
 def get_priority_targets(enemies: List[Unit]) -> List[Unit]:
@@ -191,70 +164,3 @@ def get_priority_targets(enemies: List[Unit]) -> List[Unit]:
     return [u for u in enemies if u.type_id in PRIORITY_TARGET_TYPES]
 
 
-def micro_defender_unit(
-    unit: Unit,
-    enemies: List[Unit],
-    priority_targets: List[Unit],
-    threat_position: Point2,
-    grid: np.ndarray,
-    avoid_grid: np.ndarray
-) -> CombatManeuver:
-    """
-    Create micro behaviors for a defending unit (always includes KeepUnitSafe).
-    
-    Defensive micro with safety first:
-    - Always applies KeepUnitSafe
-    - Uses ranged or melee micro depending on unit type
-    - Falls back to threat position if no enemies
-    
-    Args:
-        unit: The defending unit to control
-        enemies: All enemy units in range
-        priority_targets: High-priority targets
-        threat_position: Position to move to if no targets
-        grid: Ground grid for pathfinding
-        avoid_grid: Avoidance grid for safety
-        
-    Returns:
-        CombatManeuver with safety and appropriate combat behaviors
-    """
-    from bot.constants import MELEE_RANGE_THRESHOLD
-    
-    maneuver = CombatManeuver()
-    maneuver.add(KeepUnitSafe(unit=unit, grid=avoid_grid))
-    
-    # Add combat behaviors based on unit type
-    if not enemies:
-        # No enemies - move to threat position
-        maneuver.add(AMove(unit=unit, target=threat_position))
-    elif unit.ground_range > MELEE_RANGE_THRESHOLD:
-        # Ranged defender
-        closest_enemy = cy_closest_to(unit.position, enemies)
-        if not unit.weapon_ready:
-            maneuver.add(StutterUnitBack(unit, target=closest_enemy, grid=grid))
-        else:
-            if in_attack_range_priority := cy_in_attack_range(unit, priority_targets):
-                maneuver.add(ShootTargetInRange(unit=unit, targets=in_attack_range_priority))
-            elif in_attack_range_any := cy_in_attack_range(unit, enemies):
-                maneuver.add(ShootTargetInRange(unit=unit, targets=in_attack_range_any))
-            else:
-                # Move towards priority or closest threat
-                if priority_targets:
-                    closest_priority = cy_closest_to(unit.position, priority_targets)
-                    maneuver.add(AMove(unit=unit, target=closest_priority.position))
-                else:
-                    maneuver.add(AMove(unit=unit, target=closest_enemy.position))
-    else:
-        # Melee defender
-        if in_attack_range_priority := cy_in_attack_range(unit, priority_targets):
-            maneuver.add(ShootTargetInRange(unit=unit, targets=in_attack_range_priority))
-        elif in_attack_range_any := cy_in_attack_range(unit, enemies):
-            maneuver.add(ShootTargetInRange(unit=unit, targets=in_attack_range_any))
-        else:
-            if priority_targets:
-                closest_priority = cy_closest_to(unit.position, priority_targets)
-                maneuver.add(AMove(unit=unit, target=closest_priority.position))
-            else:
-                maneuver.add(AMove(unit=unit, target=threat_position))
-    
-    return maneuver

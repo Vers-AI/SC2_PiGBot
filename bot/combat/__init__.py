@@ -28,9 +28,7 @@ from bot.combat.combat import (
 from bot.combat.unit_micro import (
     micro_ranged_unit,
     micro_melee_unit,
-    micro_zealot,
     micro_disruptor,
-    micro_defender_unit,
     get_priority_targets,
 )
 
@@ -56,8 +54,6 @@ __all__ = [
     # Unit micro functions
     "micro_ranged_unit",
     "micro_melee_unit",
-    "micro_zealot",
     "micro_disruptor",
-    "micro_defender_unit",
     "get_priority_targets",
 ]
