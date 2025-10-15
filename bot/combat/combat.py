@@ -79,6 +79,10 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
     for squad in squads:
         squad_position: Point2 = squad.squad_position
         units: list[Unit] = squad.squad_units
+        
+        # Skip empty squads
+        if not units:
+            continue
 
         # Main squad coordination: main squad goes to target, others converge on main squad
         move_to: Point2 = target if squad.main_squad else pos_of_main_squad
@@ -93,9 +97,11 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
         
         if all_close:
             # Separate melee, ranged and spell casters
-            melee = [u for u in units if u.ground_range <= MELEE_RANGE_THRESHOLD and (u.energy == 0 and u.can_attack)]
-            ranged = [u for u in units if u.ground_range > MELEE_RANGE_THRESHOLD and (u.energy == 0 and u.can_attack)]
-            spellcasters = [u for u in units if u.energy > 0 or not u.can_attack]
+            # Spellcasters: ground units with energy (HT, Sentries) OR Disruptors (by ID)
+            # Excludes: air units with energy (Observers)
+            melee = [u for u in units if u.ground_range <= MELEE_RANGE_THRESHOLD and u.energy == 0 and u.can_attack]
+            ranged = [u for u in units if u.ground_range > MELEE_RANGE_THRESHOLD and u.energy == 0 and u.can_attack]
+            spellcasters = [u for u in units if (u.energy > 0 and not u.is_flying) or u.type_id == UnitTypeId.DISRUPTOR]
             
             # Simple picking logic
             enemy_target = cy_pick_enemy_target(all_close)
@@ -144,6 +150,9 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
             # Spellcasters 
             if spellcasters:
                 disruptors = [spellcaster for spellcaster in spellcasters if spellcaster.type_id == UnitTypeId.DISRUPTOR]
+                other_casters = [spellcaster for spellcaster in spellcasters if spellcaster.type_id != UnitTypeId.DISRUPTOR]
+                
+                # Handle Disruptors with nova logic
                 if disruptors:
                     # Filter enemies for disruptors once: exclude workers and broodlings
                     disruptor_targets = all_close.filter(lambda u: u.type_id not in DISRUPTOR_IGNORE_TYPES)
@@ -167,6 +176,13 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                             nova_manager.update(disruptor_targets, units)
                         except Exception as e:
                             log_nova_error(e)
+                
+                # Handle other spellcasters (HTs, Sentries) - stay with army, stay safe
+                for caster in other_casters:
+                    caster_maneuver = CombatManeuver()
+                    caster_maneuver.add(KeepUnitSafe(unit=caster, grid=avoid_grid))
+                    caster_maneuver.add(AMove(unit=caster, target=move_to))
+                    bot.register_behavior(caster_maneuver)
                         
         else:
             # Check for broader enemy presence (including all unit types)
@@ -298,18 +314,21 @@ def warp_prism_follower(bot, warp_prisms: Units, main_army: Units) -> None:
     bot.register_behavior(maneuver)
 
 
-def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
+def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point2:
     """
     Enhanced attack toggles logic with smart threat response.
     
-    Controls when to attack and when to retreat based on relative army strength
+    Decides when to attack and when to retreat based on relative army strength
     and intelligent threat assessment that prevents bouncing.
+    
+    Returns the target position where army should move (attack target or retreat position).
+    DOES NOT control units - only sets flags and returns target.
     """
     
     # Check if main army is currently handling defense (set by threat_detection)
     if hasattr(bot, '_main_army_defending') and bot._main_army_defending and not bot._under_attack:
-        # Main army is handling a major threat, don't interfere
-        return
+        # Main army is handling a major threat, don't interfere - return current attack target
+        return attack_target
     
     # Assess the threat level of enemy units for main combat decisions
     enemy_threat_level = assess_threat(bot, bot.enemy_units, main_army)  # Returns simple int
@@ -339,12 +358,10 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
         if is_early_defensive_mode:
             bot._commenced_attack = False
             nearest_base = bot.townhalls.closest_to(main_army.center)
-            if nearest_base:
-                control_main_army(bot, main_army, nearest_base.position, 
-                                bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
+            return nearest_base.position if nearest_base else bot.start_location
         # Stay aggressive for minimum duration to prevent oscillation
         elif bot.time < bot._attack_commenced_time + STAY_AGGRESSIVE_FOR:
-            control_main_army(bot, main_army, attack_target, bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
+            return attack_target
         # Decide whether to retreat based on army ratio
         else:
             fight_result = bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=True, good_positioning=True, workers_do_no_damage=True)
@@ -352,33 +369,25 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
                 # Retreat to the closest base if we're outmatched
                 bot._commenced_attack = False
                 nearest_base = bot.townhalls.closest_to(main_army.center)
-                if nearest_base:
-                    control_main_army(bot, main_army, nearest_base.position, 
-                                    bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
+                return nearest_base.position if nearest_base else bot.start_location
             # Otherwise, stick with current attack target for stability
             else:
-                control_main_army(bot, main_army, attack_target, 
-                                bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
+                return attack_target
     else:
         # Check our fighting capability first
         fight_result = bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=True, good_positioning=True, workers_do_no_damage=True)
         
-        
         # Attack if we have a clear advantage (decisive victory or better), regardless of defensive flags
         if fight_result in VICTORY_DECISIVE_OR_BETTER:
-            control_main_army(bot, main_army, attack_target, 
-                            bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
             bot._commenced_attack = True
             bot._attack_commenced_time = bot.time
+            return attack_target
         # Only consider attacking if build order is complete and not in early defensive mode
         elif not is_early_defensive_mode:
             if (fight_result in TIE_OR_BETTER and not bot._under_attack):
-                control_main_army(bot, main_army, attack_target, 
-                                bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
                 bot._commenced_attack = True
                 bot._attack_commenced_time = bot.time
-            else:
-                pass
+                return attack_target
         # When build order isn't complete or in defensive mode, only redirect for major threats
         elif bot._under_attack and bot.enemy_units:
             # Use enhanced threat assessment to avoid bouncing
@@ -390,11 +399,11 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> None:
             # Only pull main army for significant threats
             if (major_threat_info["threat_level"] >= 7 or 
                 major_threat_info["response_type"] == "combat_response"):
-                control_main_army(bot, main_army, Point2(enemy_center), 
-                                bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0))
-            # Otherwise let allocated forces handle it
-        else:
-            pass
+                return Point2(enemy_center)
+        
+        # Default: stay at rally point or nearest base
+        nearest_base = bot.townhalls.closest_to(main_army.center) if bot.townhalls else None
+        return nearest_base.position if nearest_base else bot.start_location
 
 
 def attack_target(bot, main_army_position: Point2) -> Point2:
@@ -517,6 +526,10 @@ def control_base_defenders(bot, defender_units: Units, threat_position: Point2) 
     for squad in defensive_squads:
         squad_position: Point2 = squad.squad_position
         units: list[Unit] = squad.squad_units
+        
+        # Skip empty squads
+        if not units:
+            continue
         
         # Find nearby enemy units around this defensive squad
         all_close = bot.mediator.get_units_in_range(

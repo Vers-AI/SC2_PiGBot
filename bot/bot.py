@@ -200,16 +200,11 @@ class PiG_Bot(AresBot):
 
         self.enemy_army = self.mediator.get_cached_enemy_army
 
-        # Retrieve roles
+        # Retrieve roles (initial fetch)
         main_army = self.mediator.get_units_from_role(role=UnitRole.ATTACKING)
         warp_prism = self.mediator.get_units_from_role(role=UnitRole.DROP_SHIP)
         scout_units = self.mediator.get_units_from_role(role=UnitRole.SCOUTING)
         gatekeeper = self.mediator.get_units_from_role(role=UnitRole.GATE_KEEPER)
-
-
-        # Create Squad with tighter radius for better cohesion
-        from bot.constants import ATTACKING_SQUAD_RADIUS
-        squads: list[UnitSquad] = self.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=ATTACKING_SQUAD_RADIUS)
 
         # Always run combat-oriented threat detection first
         # This ensures we're always responding to immediate threats regardless of build order status
@@ -250,24 +245,28 @@ class PiG_Bot(AresBot):
         # Manage defensive unit roles (return them to attacking when threats are cleared)
         manage_defensive_unit_roles(self)
         
-        # Handle attack toggles if main_army exists and can form squads
-        if main_army:
-            # ARES requirement: Always refresh squads before getting squad position
-            from bot.constants import ATTACKING_SQUAD_RADIUS
-            current_squads = self.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=ATTACKING_SQUAD_RADIUS)
-            if current_squads:
-                self.main_army_position = self.mediator.get_position_of_main_squad(role=UnitRole.ATTACKING)
-                handle_attack_toggles(self, main_army, attack_target(self, main_army_position=self.main_army_position))
-            else:
-                # Fallback: use main army center if no squads can be formed
-                self.main_army_position = main_army.center
-                handle_attack_toggles(self, main_army, attack_target(self, main_army_position=self.main_army_position))
-
-        # Optionally control main army or warp prism outside macro
-        if self._commenced_attack and main_army:
-            # Use fresh squad calculation for control as well
-            fresh_squads = self.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=ATTACKING_SQUAD_RADIUS)
-            control_main_army(self, main_army, attack_target(self, main_army_position=self.main_army_position), fresh_squads)
+        # CRITICAL: Refresh main_army after role management to get current state
+        main_army = self.mediator.get_units_from_role(role=UnitRole.ATTACKING)
+        
+        # Create squads ONCE after all role management is complete (ARES pattern)
+        from bot.constants import ATTACKING_SQUAD_RADIUS
+        squads: list[UnitSquad] = self.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=ATTACKING_SQUAD_RADIUS)
+        
+        # Determine attack target and handle attack decision logic
+        if main_army and squads:
+            self.main_army_position = self.mediator.get_position_of_main_squad(role=UnitRole.ATTACKING)
+            # handle_attack_toggles decides target (attack/retreat/rally) and sets _commenced_attack flag
+            final_target = handle_attack_toggles(self, main_army, attack_target(self, main_army_position=self.main_army_position))
+            # Always control when we have squads - target determines behavior (attack/retreat/rally)
+            # This differs from OLD code which only controlled when _commenced_attack==True,
+            # but OLD code called control_main_army inside handle_attack_toggles for retreats.
+            # Net effect: army is always controlled when squads exist (same total behavior)
+            control_main_army(self, main_army, final_target, squads)
+        elif main_army:
+            # Fallback: use main army center if no squads can be formed
+            self.main_army_position = main_army.center
+            # Still run decision logic to set flags
+            handle_attack_toggles(self, main_army, attack_target(self, main_army_position=self.main_army_position))
 
         # Warp Prism following main army
         warp_prism_follower(self, warp_prism, main_army)
