@@ -149,8 +149,9 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     # Filter enemies for disruptors once: exclude workers and broodlings
                     disruptor_targets = all_close.filter(lambda u: u.type_id not in DISRUPTOR_IGNORE_TYPES)
                     
+                    nova_manager = bot.nova_manager if hasattr(bot, 'nova_manager') else None
+                    
                     for disruptor in disruptors:
-                        nova_manager = bot.nova_manager if hasattr(bot, 'nova_manager') else None
                         micro_disruptor(
                             disruptor=disruptor,
                             enemies=disruptor_targets,
@@ -159,14 +160,14 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                             bot=bot,
                             nova_manager=nova_manager
                         )
-                        
-                        # Update Nova Manager with current units (use disruptor-filtered targets)
-                        if nova_manager:
-                            try:
-                                nova_manager.update_units(disruptor_targets, units)
-                                nova_manager.update(disruptor_targets, units)
-                            except Exception as e:
-                                log_nova_error(e)
+                    
+                    # Update Nova Manager ONCE per squad (not per disruptor)
+                    if nova_manager:
+                        try:
+                            nova_manager.update_units(disruptor_targets, units)
+                            nova_manager.update(disruptor_targets, units)
+                        except Exception as e:
+                            log_nova_error(e)
                         
         else:
             # Check for broader enemy presence (including all unit types)
