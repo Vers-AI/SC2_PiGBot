@@ -64,6 +64,13 @@ STAY_AGGRESSIVE_DURATION = 20.0
 TARGET_LOCK_DISTANCE = 25.0
 """Distance threshold for switching attack targets - prevents oscillation"""
 
+# ===== COMBAT SIMULATOR THRESHOLDS =====
+SIEGE_TANK_SUPPLY_ADVANTAGE_REQUIRED = 2.0
+"""Supply advantage multiplier needed to attack into siege tanks (combat sim often underestimates them)"""
+
+SQUAD_NEARBY_FRIENDLY_RANGE_SQ = 255.0
+"""Squared distance (16^2) to find nearby friendly units for squad-level combat simulation"""
+
 # ===== DISTANCE THRESHOLDS =====
 UNSAFE_GROUND_CHECK_RADIUS = 8.0
 """Radius to search for safe spots when unit is on unsafe ground"""

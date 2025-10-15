@@ -40,6 +40,8 @@ from bot.constants import (
     WARP_PRISM_DANGER_DISTANCE,
     EARLY_GAME_TIME_LIMIT,
     EARLY_GAME_SAFE_GROUND_CHECK_BASES,
+    SIEGE_TANK_SUPPLY_ADVANTAGE_REQUIRED,
+    SQUAD_NEARBY_FRIENDLY_RANGE_SQ,
 )
 from bot.combat.unit_micro import (
     micro_ranged_unit,
@@ -96,6 +98,36 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
         )[0].filter(lambda u: not u.is_memory and not u.is_structure and u.type_id not in COMMON_UNIT_IGNORE_TYPES)
         
         if all_close:
+            # Squad-level combat simulation: Each squad independently evaluates if it can engage
+            # This prevents isolated squads from suiciding and allows tactical flexibility during multi-pronged attacks
+            own_nearby = main_army.filter(
+                lambda u: cy_distance_to_squared(u.position, squad_position) < SQUAD_NEARBY_FRIENDLY_RANGE_SQ
+            )
+            
+            squad_fight_result = bot.mediator.can_win_fight(
+                own_units=own_nearby,
+                enemy_units=all_close,
+                timing_adjust=True,
+            )
+            
+            # Initialize squad tracking if first encounter
+            squad_id = squad.squad_id
+            if squad_id not in bot._squad_engagement_tracker:
+                bot._squad_engagement_tracker[squad_id] = {"can_engage": True}
+            
+            # Apply engagement hysteresis: different thresholds for starting vs stopping engagement
+            # This prevents squads from flip-flopping between aggressive and defensive behavior
+            if bot._squad_engagement_tracker[squad_id]["can_engage"]:
+                # Already engaging: only retreat if situation becomes dire
+                if squad_fight_result in LOSS_OVERWHELMING_OR_WORSE:
+                    bot._squad_engagement_tracker[squad_id]["can_engage"] = False
+            else:
+                # Not engaging: require advantage before committing to fight
+                if squad_fight_result in VICTORY_MARGINAL_OR_BETTER:
+                    bot._squad_engagement_tracker[squad_id]["can_engage"] = True
+            
+            can_engage = bot._squad_engagement_tracker[squad_id]["can_engage"]
+            
             # Separate melee, ranged and spell casters
             # Spellcasters: ground units with energy (HT, Sentries) OR Disruptors (by ID)
             # Excludes: air units with energy (Observers)
@@ -355,46 +387,48 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
     # Debug visualization (controlled by bot.debug flag)
     render_combat_state_overlay(bot, main_army, enemy_threat_level, is_early_defensive_mode)
 
-    # Initialize attack state tracking if not present
-    if not hasattr(bot, '_attack_commenced_time'):
-        bot._attack_commenced_time = 0.0
+    # Siege tank special case: Combat simulator underestimates siege tanks due to splash damage
+    # and positional advantage, so require overwhelming force before engaging them
+    if bot.enemy_units({UnitTypeId.SIEGETANK, UnitTypeId.SIEGETANKSIEGED}):
+        own_supply = sum(bot.calculate_supply_cost(u.type_id) for u in bot.own_army)
+        enemy_supply = sum(bot.calculate_supply_cost(u.type_id) for u in bot.enemy_army)
+        if own_supply < enemy_supply * SIEGE_TANK_SUPPLY_ADVANTAGE_REQUIRED:
+            bot._commenced_attack = False
+            nearest_base = bot.townhalls.closest_to(main_army.center)
+            return nearest_base.position if nearest_base else bot.start_location
     
-    # Use constant for hysteresis duration
-    STAY_AGGRESSIVE_FOR = STAY_AGGRESSIVE_DURATION
-    
-    # If the army is already attacking, decide whether to continue or retreat
+    # Evaluate current attack state with engagement hysteresis
     if bot._commenced_attack:
-        # Immediately retreat if we enter an early defensive mode
+        # Immediately retreat if early game defensive conditions are met
         if is_early_defensive_mode:
             bot._commenced_attack = False
             nearest_base = bot.townhalls.closest_to(main_army.center)
             return nearest_base.position if nearest_base else bot.start_location
-        # Stay aggressive for minimum duration to prevent oscillation
-        elif bot.time < bot._attack_commenced_time + STAY_AGGRESSIVE_FOR:
+        # Maintain commitment for minimum duration to prevent rapid oscillation
+        elif bot.time < bot._attack_commenced_time + STAY_AGGRESSIVE_DURATION:
             return attack_target
-        # Decide whether to retreat based on army ratio
+        # Re-evaluate: use lenient threshold to maintain engagement once committed
         else:
             fight_result = bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=True, good_positioning=True, workers_do_no_damage=True)
-            if fight_result in LOSS_MARGINAL_OR_WORSE:
-                # Retreat to the closest base if we're outmatched
+            # Only disengage if situation is dire (overwhelming loss)
+            if fight_result in LOSS_OVERWHELMING_OR_WORSE:
                 bot._commenced_attack = False
                 nearest_base = bot.townhalls.closest_to(main_army.center)
                 return nearest_base.position if nearest_base else bot.start_location
-            # Otherwise, stick with current attack target for stability
             else:
                 return attack_target
     else:
-        # Check our fighting capability first
+        # Not currently attacking: evaluate if we should initiate attack
         fight_result = bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=True, good_positioning=True, workers_do_no_damage=True)
         
-        # Attack if we have a clear advantage (decisive victory or better), regardless of defensive flags
+        # Initiate attack with decisive advantage regardless of defensive flags
         if fight_result in VICTORY_DECISIVE_OR_BETTER:
             bot._commenced_attack = True
             bot._attack_commenced_time = bot.time
             return attack_target
-        # Only consider attacking if build order is complete and not in early defensive mode
+        # With build order complete, attack with marginal advantage (stricter threshold than maintaining engagement)
         elif not is_early_defensive_mode:
-            if (fight_result in TIE_OR_BETTER and not bot._under_attack):
+            if (fight_result in VICTORY_MARGINAL_OR_BETTER and not bot._under_attack):
                 bot._commenced_attack = True
                 bot._attack_commenced_time = bot.time
                 return attack_target

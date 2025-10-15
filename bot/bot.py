@@ -114,6 +114,10 @@ class PiG_Bot(AresBot):
         self.current_attack_target = None
         self.target_lock_distance = 25.0  # Don't switch targets unless new one is 25+ units closer
         
+        # Combat engagement tracking
+        self._attack_commenced_time = 0.0  # Time when attack was initiated
+        self._squad_engagement_tracker = {}  # Per-squad engagement decisions for tactical control
+        
         # Performance monitoring (tracks SQ and other efficiency metrics)
         self.performance_monitor = PerformanceMonitor(sample_interval=22, alpha=0.1)
         
