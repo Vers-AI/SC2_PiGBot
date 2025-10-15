@@ -597,7 +597,7 @@ def threat_detection(bot, main_army: Units) -> None:
     instead of always redirecting the entire main army.
     """
     # Import here to avoid circular dependency
-    from bot.managers.combat import control_main_army
+    from bot.combat import control_main_army
     
     ground_near = bot.mediator.get_ground_enemy_near_bases
     flying_near = bot.mediator.get_flying_enemy_near_bases
@@ -666,7 +666,7 @@ def threat_detection(bot, main_army: Units) -> None:
                         bot.mediator.assign_role(tag=unit.tag, role=UnitRole.BASE_DEFENDER)
                     
                     # Use dedicated BASE_DEFENDER control function
-                    from bot.managers.combat import control_base_defenders
+                    from bot.combat import control_base_defenders
                     control_base_defenders(bot, defensive_units, threat_position)
                 
                 # Note: Overwhelming threat handling is now managed by handle_attack_toggles

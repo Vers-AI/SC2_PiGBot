@@ -24,7 +24,7 @@ from ares.dicts.unit_data import UNIT_DATA
 from ares.consts import LOSS_MARGINAL_OR_BETTER
 
 from bot.managers.scouting import control_scout
-from bot.managers.combat import COMMON_UNIT_IGNORE_TYPES
+from bot.constants import COMMON_UNIT_IGNORE_TYPES
 
 
 def get_freeflow_mode(bot) -> bool:

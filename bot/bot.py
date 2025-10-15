@@ -28,7 +28,7 @@ from sc2.data import Race
 # Modular imports for separated concerns
 from bot.managers.macro import handle_macro, get_optimal_gas_workers, get_freeflow_mode
 from bot.managers.reactions import defend_cannon_rush, defend_worker_rush, early_threat_sensor, cheese_reaction, one_base_reaction, threat_detection
-from bot.managers.combat import (
+from bot.combat import (
     control_main_army,
     warp_prism_follower,
     handle_attack_toggles,
@@ -208,7 +208,8 @@ class PiG_Bot(AresBot):
 
 
         # Create Squad with tighter radius for better cohesion
-        squads: list[UnitSquad] = self.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0)
+        from bot.constants import ATTACKING_SQUAD_RADIUS
+        squads: list[UnitSquad] = self.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=ATTACKING_SQUAD_RADIUS)
 
         # Always run combat-oriented threat detection first
         # This ensures we're always responding to immediate threats regardless of build order status
@@ -252,7 +253,8 @@ class PiG_Bot(AresBot):
         # Handle attack toggles if main_army exists and can form squads
         if main_army:
             # ARES requirement: Always refresh squads before getting squad position
-            current_squads = self.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0)
+            from bot.constants import ATTACKING_SQUAD_RADIUS
+            current_squads = self.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=ATTACKING_SQUAD_RADIUS)
             if current_squads:
                 self.main_army_position = self.mediator.get_position_of_main_squad(role=UnitRole.ATTACKING)
                 handle_attack_toggles(self, main_army, attack_target(self, main_army_position=self.main_army_position))
@@ -264,7 +266,7 @@ class PiG_Bot(AresBot):
         # Optionally control main army or warp prism outside macro
         if self._commenced_attack and main_army:
             # Use fresh squad calculation for control as well
-            fresh_squads = self.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=9.0)
+            fresh_squads = self.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=ATTACKING_SQUAD_RADIUS)
             control_main_army(self, main_army, attack_target(self, main_army_position=self.main_army_position), fresh_squads)
 
         # Warp Prism following main army

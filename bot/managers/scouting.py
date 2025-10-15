@@ -11,7 +11,7 @@ from sc2.ids.unit_typeid import UnitTypeId
 from ares.behaviors.combat import CombatManeuver
 from ares.behaviors.combat.individual import KeepUnitSafe, PathUnitToTarget, UseAbility
 from ares.consts import UnitRole, UnitTreeQueryType
-from bot.managers.combat import attack_target
+from bot.combat import attack_target
 
 # TODO add survilaence mode to primary obs when its at th ol spot, and patrol obs when it reaches desitnation 
 def control_observers(bot, all_observers: Units, main_army: Units) -> None:
