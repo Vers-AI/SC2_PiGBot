@@ -204,15 +204,25 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     
                 no_enemy_maneuver = CombatManeuver()
                 
-                # Disruptors follow squad center at safe distance
+                # Disruptors follow ground army center at safe distance (excludes air units like warp prism/observers)
                 if unit.type_id == UnitTypeId.DISRUPTOR:
-                    # Use existing squad_position (already the center of squad units)
-                    distance_to_center = cy_distance_to(unit.position, squad_position)
-                    
-                    # If too far from squad, move towards center (use PathUnitToTarget since disruptors can't attack-move)
-                    if distance_to_center > DISRUPTOR_SQUAD_FOLLOW_DISTANCE:
+                    # Calculate center of ground units only to avoid being pulled by air units
+                    ground_units = [u for u in units if not u.is_flying]
+                    if ground_units:
+                        ground_center, _ = cy_find_units_center_mass(ground_units, 10.0)
+                        distance_to_center = cy_distance_to(unit.position, ground_center)
+                        
+                        # If too far from ground army, move towards center
+                        if distance_to_center > DISRUPTOR_SQUAD_FOLLOW_DISTANCE:
+                            no_enemy_maneuver.add(PathUnitToTarget(
+                                unit=unit, grid=grid, target=Point2(ground_center), 
+                                success_at_distance=DISRUPTOR_SQUAD_TARGET_DISTANCE
+                            ))
+                    else:
+                        # Fallback to move_to if no ground units (shouldn't normally happen)
                         no_enemy_maneuver.add(PathUnitToTarget(
-                            unit=unit, grid=grid, target=squad_position, success_at_distance=DISRUPTOR_SQUAD_TARGET_DISTANCE
+                            unit=unit, grid=grid, target=move_to,
+                            success_at_distance=DISRUPTOR_SQUAD_TARGET_DISTANCE
                         ))
                     # Otherwise stay put (close enough to squad)
                     bot.register_behavior(no_enemy_maneuver)
