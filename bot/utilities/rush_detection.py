@@ -141,16 +141,36 @@ def get_ling_rush_signals(bot: "PiG_Bot") -> dict:
     tier = bot.rush_distance_tier
     scout_status = _probe_scout_status(bot)
     
-    # Natural timing check (distance-adjusted)
-    natural_thresholds = {
-        'short': 75,   # 1:15
-        'medium': 90,  # 1:30
-        'long': 105    # 1:45
-    }
-    natural_absent = (
-        bot.time < natural_thresholds[tier] 
-        and not any(bot.enemy_structures.closer_than(15, bot.mediator.get_enemy_nat))
-    )
+    # Check if enemy has a natural expansion
+    # Use scout status to determine if we've seen the natural
+    # If scout has been to natural and didn't see structures = natural_absent=True
+    # If scout hasn't been there yet = natural_absent=False (don't know yet)
+    enemy_nat_pos = bot.mediator.get_enemy_nat
+    
+    # Track if we've ever had vision of the natural
+    if not hasattr(bot, '_natural_ever_scouted'):
+        bot._natural_ever_scouted = False
+    
+    # Check visibility in a wider area (5 radius) around natural
+    # Also check fog of war state (1 = fogged/previously seen, 2 = currently visible)
+    visibility_state = bot.state.visibility[enemy_nat_pos.rounded]
+    currently_visible = visibility_state == 2
+    previously_seen = visibility_state >= 1  # 1 = fogged (was seen), 2 = visible
+    
+    # Update if we have vision or if the area shows as previously seen
+    if currently_visible or previously_seen:
+        bot._natural_ever_scouted = True
+    
+    # Check for structures at natural (works with snapshots/memory too)
+    structures_at_natural = bot.enemy_structures.closer_than(15, enemy_nat_pos)
+    has_natural_structure = len(structures_at_natural) > 0
+    
+    # Natural is absent if: we've scouted it AND there's no structure there
+    natural_absent = bot._natural_ever_scouted and not has_natural_structure
+    
+    # Debug: Print status (remove after testing)
+    if bot.time < 180.0 and int(bot.time) % 30 == 0:
+        print(f"DEBUG Natural Check: ever_scouted={bot._natural_ever_scouted}, has_structure={has_natural_structure}, absent={natural_absent}")
     
     # Ling counts
     enemy_lings = bot.mediator.get_enemy_army_dict.get(UnitTypeId.ZERGLING, [])
@@ -191,7 +211,7 @@ def get_enemy_ling_rushed_v2(bot: "PiG_Bot") -> bool:
     Returns:
         True if ling rush detected, False otherwise (sticky once True)
     """
-    # Initialize sticky flag and reason tracking
+    # Initialize sticky flag and reason tracking if needed
     if not hasattr(bot, '_ling_rushed_v2'):
         bot._ling_rushed_v2 = False
         bot._ling_rush_reason = None
@@ -203,6 +223,12 @@ def get_enemy_ling_rushed_v2(bot: "PiG_Bot") -> bool:
     signals = get_ling_rush_signals(bot)
     tier = signals['tier']
     
+    # Debug: Print signals every 30 seconds (remove after testing)
+    if bot.time < 240.0 and int(bot.time) % 30 == 0:
+        print(f"DEBUG Rush Signals [{bot.time_formatted}]: tier={tier}, total_lings={signals['total_lings']}, "
+              f"lings_near={signals['lings_near_base']}, natural_absent={signals['natural_absent']}, "
+              f"speed_seen={signals['speed_seen']}")
+    
     # Distance-tiered thresholds
     # Format: (time_window, lings_near_threshold, total_lings_threshold)
     thresholds = {
@@ -212,7 +238,7 @@ def get_enemy_ling_rushed_v2(bot: "PiG_Bot") -> bool:
             'early_total': 5,
             'mid_time': 150,    # 2:30
             'mid_near': 3,
-            'mid_total': 7,
+            'mid_total': 6,  # Lowered from 7 to catch 6-ling rushes at 02:00
         },
         'medium': {
             'early_time': 105,  # 1:45

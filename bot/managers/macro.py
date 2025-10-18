@@ -130,9 +130,11 @@ PVP_ARMY_1 = {
 }
 
 CHEESE_DEFENSE_ARMY = {
-    UnitTypeId.ZEALOT: {"proportion": 0.5, "priority": 0},
-    UnitTypeId.STALKER: {"proportion": 0.4, "priority": 1},
-    UnitTypeId.ADEPT: {"proportion": 0.1, "priority": 2},
+    UnitTypeId.ADEPT: {"proportion": 0.25, "priority": 1},
+    UnitTypeId.STALKER: {"proportion": 0.15, "priority": 0},
+    UnitTypeId.ZEALOT: {"proportion": 0.6, "priority": 2},
+    
+    
 }
 
 # No static upgrade list - use get_desired_upgrades() instead
