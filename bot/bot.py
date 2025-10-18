@@ -95,6 +95,7 @@ class PiG_Bot(AresBot):
         self._commenced_attack = False
         self._used_cheese_response = False
         self._used_one_base_response = False
+        self._rush_time_seconds = 0.0  # Rush time calculated in on_start
         self._under_attack = False
         self._cheese_reaction_completed = False
         self._one_base_reaction_completed = False
@@ -185,6 +186,12 @@ class PiG_Bot(AresBot):
         
         print("Build Chosen:", self.build_order_runner.chosen_opening)
         print("the enemy race is:", self.enemy_race)
+        
+        # Compute rush distance tier for ling rush detection (used in reactions.py)
+        from bot.utilities.rush_detection import compute_rush_distance_tier
+        self.rush_distance_tier = compute_rush_distance_tier(self)
+        rush_time_str = f"{self._rush_time_seconds:.1f}s" if self._rush_time_seconds > 0 else "unknown (pathfind failed)"
+        print(f"Rush distance tier: {self.rush_distance_tier} ({rush_time_str} rush time)")
 
     async def on_step(self, iteration: int) -> None:
         """

@@ -125,3 +125,7 @@ EARLY_GAME_TIME_LIMIT = 600.0
 
 EARLY_GAME_SAFE_GROUND_CHECK_BASES = 1
 """Maximum number of bases to still check for safe ground positioning"""
+
+# ===== RUSH DETECTION =====
+ZERGLING_SPEED = 4.13
+"""Zergling movement speed (used for rush distance calculations)"""

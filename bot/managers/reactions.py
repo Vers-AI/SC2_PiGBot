@@ -233,6 +233,7 @@ def one_base_reaction(bot):
         bot._one_base_reaction_completed = True
 
 from bot.utilities.intel import get_enemy_cannon_rushed
+from bot.utilities.rush_detection import get_enemy_ling_rushed_v2
 
 def early_threat_sensor(bot):
     """
@@ -251,7 +252,7 @@ def early_threat_sensor(bot):
         bot._cannon_rush_response = True
     
     elif (
-        bot.mediator.get_enemy_ling_rushed
+        get_enemy_ling_rushed_v2(bot)  # New distance-tiered ling rush detection
         or (bot.mediator.get_enemy_marauder_rush and bot.time < 150.0)
         or bot.mediator.get_enemy_marine_rush
         or bot.mediator.get_is_proxy_zealot
