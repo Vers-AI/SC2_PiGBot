@@ -129,3 +129,6 @@ EARLY_GAME_SAFE_GROUND_CHECK_BASES = 1
 # ===== RUSH DETECTION =====
 RUSH_SPEED = 3.94
 """Rush movement speed (used for rush distance calculations)"""
+
+RUSH_DISTANCE_CALIBRATION = 0.833
+"""Calibration factor to match official map rush distances (36s official / 43.2s calculated = 0.833)"""

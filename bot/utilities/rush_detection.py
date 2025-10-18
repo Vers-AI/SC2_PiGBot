@@ -14,7 +14,7 @@ from sc2.ids.unit_typeid import UnitTypeId
 from ares.consts import UnitRole
 
 from cython_extensions import cy_dijkstra
-from bot.constants import RUSH_SPEED
+from bot.constants import RUSH_SPEED, RUSH_DISTANCE_CALIBRATION
 
 
 if TYPE_CHECKING:
@@ -47,7 +47,7 @@ def compute_rush_distance_tier(bot: "PiG_Bot") -> str:
     
     # Run Dijkstra from our position 
     targets = np.array([[our_x, our_y]], dtype=np.intp)
-    dijkstra_result = cy_dijkstra(cost_grid, targets, checks_enabled=False)
+    dijkstra_result = cy_dijkstra(cost_grid, targets, checks_enabled=True)
     
     # Get ground distance to enemy position
     ground_distance = dijkstra_result.distance[enemy_x, enemy_y]
@@ -58,7 +58,13 @@ def compute_rush_distance_tier(bot: "PiG_Bot") -> str:
         return "medium"
     
     # Use rush speed from constants
-    rush_time = ground_distance / RUSH_SPEED
+    # Apply calibration factor to match official map rush distances
+    # TODO: Investigate 1-2s variance with official times. Possible causes:
+    #   - Official measurements use different pathfinding (air distance?)
+    #   - Dijkstra edge costs vs SC2 actual pathing
+    #   - 3-tile offset interaction with terrain
+    rush_time = (ground_distance / RUSH_SPEED) * RUSH_DISTANCE_CALIBRATION
+    
     # Classify into distance tiers
     if rush_time <= 36:
         tier = "short"
