@@ -14,7 +14,7 @@ from sc2.ids.unit_typeid import UnitTypeId
 from ares.consts import UnitRole
 
 from cython_extensions import cy_dijkstra
-from bot.constants import ZERGLING_SPEED
+from bot.constants import RUSH_SPEED
 
 
 if TYPE_CHECKING:
@@ -57,8 +57,8 @@ def compute_rush_distance_tier(bot: "PiG_Bot") -> str:
         bot._rush_time_seconds = 0.0  # Mark as unknown
         return "medium"
     
-    # Use zergling speed from constants
-    rush_time = ground_distance / ZERGLING_SPEED
+    # Use rush speed from constants
+    rush_time = ground_distance / RUSH_SPEED
     # Classify into distance tiers
     if rush_time <= 36:
         tier = "short"

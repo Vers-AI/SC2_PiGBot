@@ -127,5 +127,5 @@ EARLY_GAME_SAFE_GROUND_CHECK_BASES = 1
 """Maximum number of bases to still check for safe ground positioning"""
 
 # ===== RUSH DETECTION =====
-ZERGLING_SPEED = 4.13
-"""Zergling movement speed (used for rush distance calculations)"""
+RUSH_SPEED = 3.94
+"""Rush movement speed (used for rush distance calculations)"""
