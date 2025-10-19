@@ -429,7 +429,7 @@ class PiG_Bot(AresBot):
 
     async def on_end(self, game_result: Result) -> None:
         """
-        Called at the end of the game - prints performance report.
+        Called at the end of the game - prints performance report and logs rush detection data.
         """
         print_end_game_report(
             performance_monitor=self.performance_monitor,
@@ -438,6 +438,10 @@ class PiG_Bot(AresBot):
             idle_worker_time=self.state.score.idle_worker_time,
             idle_production_time=self.state.score.idle_production_time
         )
+        
+        # Log rush detection results for ML training
+        from bot.utilities.rush_detection import log_rush_detection_result
+        log_rush_detection_result(self)
 
     # -------------------------------------
     # Utility / Additional Methods

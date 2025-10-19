@@ -7,6 +7,8 @@ Limitations: Requires enemy main location scouted; probe death reduces signal qu
 """
 
 from typing import TYPE_CHECKING
+import json
+from pathlib import Path
 
 import numpy as np
 from sc2.position import Point2
@@ -23,13 +25,13 @@ if TYPE_CHECKING:
 
 def compute_rush_distance_tier(bot: "PiG_Bot") -> str:
     """
-    Compute rush distance tier based on ground path time at zergling speed.
+    Compute map offset for rush timing based on zergling travel time.
     
     Uses Dijkstra pathfinding from our start location to enemy start location,
     offset by 3 tiles to avoid blocked building positions.
     
-    Returns:
-        'short' (≤36s), 'medium' (37-45s), or 'long' (≥46s)
+    Stores map_offset and rush_time_zergling_seconds on bot object.
+    Returns tier string for backward compatibility (deprecated).
     """
     # Offset start locations by 3 tiles to get off the Nexus/Hatchery
     our_offset_pos = bot.start_location.towards(bot.enemy_start_locations[0], 3)
@@ -57,24 +59,152 @@ def compute_rush_distance_tier(bot: "PiG_Bot") -> str:
         bot._rush_time_seconds = 0.0  # Mark as unknown
         return "medium"
     
-    # Use rush speed from constants
-    # Apply calibration factor to match official map rush distances
-    # TODO: Investigate 1-2s variance with official times. Possible causes:
-    #   - Official measurements use different pathfinding (air distance?)
-    #   - Dijkstra edge costs vs SC2 actual pathing
-    #   - 3-tile offset interaction with terrain
-    rush_time = (ground_distance / RUSH_SPEED) * RUSH_DISTANCE_CALIBRATION
+    # Calculate rush time using worker speed (our current RUSH_SPEED)
+    rush_time_worker = (ground_distance / RUSH_SPEED) * RUSH_DISTANCE_CALIBRATION
     
-    # Classify into distance tiers
-    if rush_time <= 36:
+    # Convert to zergling time (zergling = 4.13 tiles/s, worker = 3.94 tiles/s)
+    # Zerglings are slower, so rush time is LONGER
+    rush_time_zergling = rush_time_worker * (RUSH_SPEED / 4.13)
+    
+    # Compute map offset relative to 120s reference (medium map)
+    # Negative on short maps, positive on long maps
+    map_offset = rush_time_zergling - 120.0
+    
+    # Store both values on bot
+    bot._rush_time_seconds = rush_time_worker  # Keep for backward compat
+    bot._rush_time_zergling_seconds = rush_time_zergling
+    bot._map_offset = map_offset
+    
+    # Derive map-aware checkpoints (computed once, used throughout detection)
+    bot._T_POOL_CHECK = 65.0 + map_offset
+    bot._T_NAT_CHECK = 80.0 + map_offset
+    bot._T_LING_SIGHT = 105.0 + map_offset
+    bot._T_LING_CONTACT_NAT = 120.0 + map_offset
+    bot._T_QUEEN_CHECK = 125.0 + map_offset
+    
+    # Return tier for backward compatibility (deprecated, use checkpoints instead)
+    if rush_time_zergling <= 110:
         tier = "short"
-    elif rush_time <= 45:
+    elif rush_time_zergling <= 130:
         tier = "medium"
     else:
         tier = "long"
     
-    bot._rush_time_seconds = rush_time
     return tier
+
+
+def _estimate_building_start_time(bot: "PiG_Bot", building) -> float:
+    """
+    Estimate when a building started based on current build progress.
+    
+    Formula from spec:
+        start_time = current_time - (build_progress * build_duration / 22.4)
+    
+    Args:
+        building: Unit object with build_progress and _type_data
+    
+    Returns:
+        Estimated game time when building started morphing
+    """
+    build_duration = building._type_data.cost.time  # In game loops
+    build_progress = building.build_progress  # 0.0 to 1.0
+    
+    # Convert game loops to Faster-speed seconds (22.4 loops/second)
+    elapsed_build_time = (build_progress * build_duration) / 22.4
+    
+    return bot.time - elapsed_build_time
+
+
+def _track_enemy_timings(bot: "PiG_Bot"):
+    """
+    Track enemy building and unit timings for rush detection.
+    
+    Stores timestamps on bot object:
+        - _enemy_nat_started_at: float | None
+        - _pool_seen_state: str (none/morphing/done/unknown)
+        - _pool_seen_time: float | None
+        - _extractor_seen_time: float | None
+        - _queen_started_time: float | None
+        - _first_ling_seen_time: float | None
+        - _first_ling_contact_nat_time: float | None
+    """
+    # Initialize tracking attributes
+    if not hasattr(bot, '_enemy_nat_started_at'):
+        bot._enemy_nat_started_at = None
+    if not hasattr(bot, '_pool_seen_state'):
+        bot._pool_seen_state = "none"
+    if not hasattr(bot, '_pool_seen_time'):
+        bot._pool_seen_time = None
+    if not hasattr(bot, '_extractor_seen_time'):
+        bot._extractor_seen_time = None
+    if not hasattr(bot, '_queen_started_time'):
+        bot._queen_started_time = None
+    if not hasattr(bot, '_first_ling_seen_time'):
+        bot._first_ling_seen_time = None
+    if not hasattr(bot, '_first_ling_contact_nat_time'):
+        bot._first_ling_contact_nat_time = None
+    
+    enemy_nat_pos = bot.mediator.get_enemy_nat
+    
+    # Track natural hatchery
+    if bot._enemy_nat_started_at is None:
+        nat_hatcheries = [
+            s for s in bot.enemy_structures
+            if s.type_id == UnitTypeId.HATCHERY and s.distance_to(enemy_nat_pos) < 10
+        ]
+        if nat_hatcheries:
+            hatch = nat_hatcheries[0]
+            if hatch.is_ready:
+                # Estimate backwards from completion
+                bot._enemy_nat_started_at = _estimate_building_start_time(bot, hatch)
+            else:
+                # Estimate from current progress
+                bot._enemy_nat_started_at = _estimate_building_start_time(bot, hatch)
+    
+    # Track spawning pool
+    pools = [s for s in bot.enemy_structures if s.type_id == UnitTypeId.SPAWNINGPOOL]
+    if pools and bot._pool_seen_state == "none":
+        pool = pools[0]
+        bot._pool_seen_time = _estimate_building_start_time(bot, pool)
+        if pool.is_ready:
+            bot._pool_seen_state = "done"
+        else:
+            bot._pool_seen_state = "morphing"
+    elif pools and bot._pool_seen_state == "morphing":
+        # Update to done if completed
+        if pools[0].is_ready:
+            bot._pool_seen_state = "done"
+    
+    # Track extractor (first one)
+    if bot._extractor_seen_time is None:
+        extractors = [s for s in bot.enemy_structures if s.type_id == UnitTypeId.EXTRACTOR]
+        if extractors:
+            bot._extractor_seen_time = _estimate_building_start_time(bot, extractors[0])
+    
+    # Track queen (first one)
+    if bot._queen_started_time is None:
+        queens = [u for u in bot.enemy_units if u.type_id == UnitTypeId.QUEEN]
+        if queens:
+            # Queens can't estimate start time easily, use first seen time
+            bot._queen_started_time = bot.time
+    
+    # Track zerglings
+    enemy_lings = bot.mediator.get_enemy_army_dict.get(UnitTypeId.ZERGLING, [])
+    
+    if enemy_lings:
+        # First ling seen anywhere
+        if bot._first_ling_seen_time is None:
+            bot._first_ling_seen_time = bot.time
+        
+        # First ling contact at our natural
+        if bot._first_ling_contact_nat_time is None:
+            our_nat_pos = bot.mediator.get_own_nat
+            lings_at_nat = [
+                ling for ling in enemy_lings
+                if ling.distance_to(our_nat_pos) < 15
+            ]
+            if lings_at_nat:
+                bot._first_ling_contact_nat_time = bot.time
 
 
 def _probe_scout_status(bot: "PiG_Bot") -> dict:
@@ -128,9 +258,11 @@ def get_ling_rush_signals(bot: "PiG_Bot") -> dict:
     """
     Gather all observable signals for rush detection.
     
+    Updates enemy timing trackers and returns current state.
+    
     Returns:
         Dictionary with keys:
-            - tier: str ('short', 'medium', 'long')
+            - tier: str ('short', 'medium', 'long') - deprecated
             - natural_absent: bool
             - lings_near_base: int
             - total_lings: int
@@ -138,6 +270,9 @@ def get_ling_rush_signals(bot: "PiG_Bot") -> dict:
             - scout_died_early: bool
             - saw_natural: bool
     """
+    # Update enemy timings first
+    _track_enemy_timings(bot)
+    
     tier = bot.rush_distance_tier
     scout_status = _probe_scout_status(bot)
     
@@ -200,113 +335,195 @@ def get_ling_rush_signals(bot: "PiG_Bot") -> dict:
 
 def get_enemy_ling_rushed_v2(bot: "PiG_Bot") -> bool:
     """
-    Main boolean heuristic for ling rush detection (sticky once triggered).
+    Map-aware score-based ling rush detection (spec-compliant).
     
-    Uses distance-tiered thresholds and multiple signals:
-    - Natural expansion timing
-    - Zergling counts (total and near our base)
-    - Early speed detection
-    - Probe scout death handling
+    Uses observable features scored against map-adjusted checkpoints:
+    - Natural timing
+    - Pool timing and state
+    - Zergling sighting and contact timing
+    - Gas and Queen timing (refiners)
     
     Returns:
-        True if ling rush detected, False otherwise (sticky once True)
+        True if rush detected (score >= 5), False otherwise
+        Debounced to prevent flapping
     """
-    # Initialize sticky flag and reason tracking if needed
+    # Initialize tracking attributes
     if not hasattr(bot, '_ling_rushed_v2'):
         bot._ling_rushed_v2 = False
-        bot._ling_rush_reason = None
+        bot._rush_score = 0
+        bot._rush_label = "likely_macro"
+        bot._rush_debounce_until = 0.0
     
-    # Return early if already triggered (sticky)
-    if bot._ling_rushed_v2:
+    # Debounce: hold decision for 20s once triggered
+    if bot._ling_rushed_v2 and bot.time < bot._rush_debounce_until:
         return True
     
+    # Update signals (triggers _track_enemy_timings)
     signals = get_ling_rush_signals(bot)
-    tier = signals['tier']
     
-    # Debug: Print signals every 30 seconds (remove after testing)
-    if bot.time < 240.0 and int(bot.time) % 30 == 0:
-        print(f"DEBUG Rush Signals [{bot.time_formatted}]: tier={tier}, total_lings={signals['total_lings']}, "
-              f"lings_near={signals['lings_near_base']}, natural_absent={signals['natural_absent']}, "
-              f"speed_seen={signals['speed_seen']}")
+    # Get map-aware checkpoints
+    T_NAT_CHECK = bot._T_NAT_CHECK
+    T_POOL_CHECK = bot._T_POOL_CHECK
+    T_LING_SIGHT = bot._T_LING_SIGHT
+    T_LING_CONTACT_NAT = bot._T_LING_CONTACT_NAT
+    T_QUEEN_CHECK = bot._T_QUEEN_CHECK
     
-    # Distance-tiered thresholds
-    # Format: (time_window, lings_near_threshold, total_lings_threshold)
-    thresholds = {
-        'short': {
-            'early_time': 90,   # 1:30
-            'early_near': 2,
-            'early_total': 5,
-            'mid_time': 150,    # 2:30
-            'mid_near': 3,
-            'mid_total': 6,  # Lowered from 7 to catch 6-ling rushes at 02:00
-        },
-        'medium': {
-            'early_time': 105,  # 1:45
-            'early_near': 3,
-            'early_total': 5,
-            'mid_time': 180,    # 3:00
-            'mid_near': 3,
-            'mid_total': 7,
-        },
-        'long': {
-            'early_time': 120,  # 2:00
-            'early_near': 3,
-            'early_total': 6,
-            'mid_time': 210,    # 3:30
-            'mid_near': 3,
-            'mid_total': 8,
-        },
-    }
+    time_now = bot.time
     
-    t = thresholds[tier]
+    # === FEATURE EVALUATION ===
     
-    # Apply scout death penalty (reduce thresholds slightly if scout died without seeing natural)
-    scout_penalty = 0.85 if (signals['scout_died_early'] and not signals['saw_natural']) else 1.0
+    # 1. No natural by T_NAT_CHECK (strong, 3 points)
+    no_natural_by_T = (
+        bot._enemy_nat_started_at is None and 
+        time_now >= T_NAT_CHECK
+    )
     
-    triggered = False
-    reason = None
+    # 2. Pool early with no natural (strong, 3 points)
+    pool_early = (
+        bot._pool_seen_state in {"morphing", "done"} and
+        bot._pool_seen_time is not None and
+        bot._pool_seen_time <= T_POOL_CHECK and
+        bot._enemy_nat_started_at is None
+    )
     
-    # Rule 1: Early lings near base (pool-first indicators)
-    if bot.time < t['early_time']:
-        adjusted_near = int(t['early_near'] * scout_penalty)
-        adjusted_total = int(t['early_total'] * scout_penalty)
-        
-        if signals['lings_near_base'] >= adjusted_near:
-            triggered = True
-            reason = f"12p-prox-early-{tier}"
-        elif signals['total_lings'] >= adjusted_total:
-            triggered = True
-            reason = f"12p-total-early-{tier}"
+    # 3. Early lings seen (strong, 3 points)
+    early_lings_seen = (
+        bot._first_ling_seen_time is not None and
+        bot._first_ling_seen_time <= T_LING_SIGHT
+    )
     
-    # Rule 2: Mid-game ling counts (general rush)
-    if not triggered and bot.time < t['mid_time']:
-        if signals['lings_near_base'] >= t['mid_near']:
-            triggered = True
-            reason = f"ling-prox-mid-{tier}"
-        elif signals['total_lings'] >= t['mid_total']:
-            triggered = True
-            reason = f"ling-total-mid-{tier}"
+    # 4. Ling contact by expected time (very strong, 4 points - confirmatory)
+    ling_contact_by_T = (
+        bot._first_ling_contact_nat_time is not None and
+        bot._first_ling_contact_nat_time <= T_LING_CONTACT_NAT
+    )
     
-    # Rule 3: No natural + early lings (strong pool-first signal)
-    if not triggered and signals['natural_absent'] and bot.time < t['early_time']:
-        if signals['total_lings'] >= max(4, int(t['early_total'] * 0.8)):
-            triggered = True
-            reason = f"no-nat-{tier}"
+    # 5. Gasless early (refiner, 1 point)
+    gasless_early = (
+        bot._extractor_seen_time is None and
+        time_now >= (80.0 + bot._map_offset)
+    )
     
-    # Rule 4: Early speed detection (13/12 or 14/14 speedling)
-    if not triggered and signals['speed_seen'] and bot.time < 180.0:
-        if signals['total_lings'] >= 6:
-            triggered = True
-            reason = f"early-speed-{tier}"
+    # 6. Queen late with lings out (refiner, 1 point)
+    queen_late_with_lings = (
+        bot._queen_started_time is None and
+        early_lings_seen and
+        time_now >= T_QUEEN_CHECK
+    )
     
-    # Rule 5: Very early single ling (proxy hatch or extreme cheese)
-    if not triggered and bot.time < 105.0 and signals['lings_near_base'] >= 1:
-        triggered = True
-        reason = f"very-early-ling-{tier}"
+    # === SCORING ===
     
-    if triggered:
+    score = 0
+    
+    # Strong signals
+    if no_natural_by_T:
+        score += 3
+    if pool_early:
+        score += 3
+    if early_lings_seen:
+        score += 3
+    if ling_contact_by_T:
+        score += 4  # Confirmation
+    
+    # Refiners
+    if gasless_early and early_lings_seen:
+        score += 1
+    if queen_late_with_lings:
+        score += 1
+    
+    # False positive reducer: late natural with no lings
+    if (bot._enemy_nat_started_at is not None and
+        bot._enemy_nat_started_at <= T_NAT_CHECK + 15 and
+        not early_lings_seen):
+        score -= 1  # Defensive pool-first, not rush
+    
+    # === CLASSIFICATION ===
+    
+    if score >= 6:
+        rush_label = "12pool_class_rush"
+    elif 3 <= score <= 5:
+        rush_label = "pool_first_pressure"
+    else:
+        rush_label = "likely_macro"
+    
+    # Update bot state
+    bot._rush_score = score
+    bot._rush_label = rush_label
+    
+    # Threshold: score >= 5 triggers rush response
+    rush_detected = score >= 5
+    
+    # Debug output (remove after testing)
+    if time_now < 240.0 and int(time_now) % 30 == 0:
+        print(f"DEBUG Rush Score [{bot.time_formatted}]: score={score}, label={rush_label}, "
+              f"no_nat={no_natural_by_T}, pool_early={pool_early}, lings_seen={early_lings_seen}, "
+              f"contact={ling_contact_by_T}")
+    
+    # Trigger detection and set debounce
+    if rush_detected and not bot._ling_rushed_v2:
         bot._ling_rushed_v2 = True
-        bot._ling_rush_reason = reason
-        print(f"{bot.time_formatted}: Ling rush detected! Reason: {reason}")
+        bot._rush_debounce_until = time_now + 20.0  # Hold for 20 seconds
+        print(f"{bot.time_formatted}: Ling rush detected! Score={score}, Label={rush_label}")
+    
+    # Downgrade rule: if natural appears + no contact by T+10, cancel alarm
+    if (bot._ling_rushed_v2 and 
+        time_now >= bot._rush_debounce_until and
+        bot._enemy_nat_started_at is not None and
+        (bot._first_ling_contact_nat_time is None or 
+         bot._first_ling_contact_nat_time > T_LING_CONTACT_NAT + 10)):
+        bot._ling_rushed_v2 = False
+        bot._rush_label = "likely_macro"
+        print(f"{bot.time_formatted}: Rush alarm downgraded - natural appeared, no ling contact")
     
     return bot._ling_rushed_v2
+
+
+def log_rush_detection_result(bot: "PiG_Bot"):
+    """
+    Log rush detection results at game end for ML training and analysis.
+    
+    Creates a JSON log entry with all timing data and the final outcome.
+    Appends to data/rush_detection_log.jsonl (one line per game).
+    
+    Call this from bot.on_end() method.
+    """
+    # Skip if we haven't initialized tracking yet
+    if not hasattr(bot, '_map_offset'):
+        return
+    
+    log_dir = Path("data")
+    log_dir.mkdir(exist_ok=True)
+    log_file = log_dir / "rush_detection_log.jsonl"
+    
+    log_entry = {
+        "map_name": bot.game_info.map_name,
+        "enemy_race": str(bot.enemy_race),
+        "rush_time_zergling_seconds": getattr(bot, '_rush_time_zergling_seconds', None),
+        "map_offset": getattr(bot, '_map_offset', None),
+        
+        # Timing observations
+        "t_nat_started": bot._enemy_nat_started_at,
+        "pool_seen_state": bot._pool_seen_state,
+        "t_pool_seen": bot._pool_seen_time,
+        "t_extractor_seen": bot._extractor_seen_time,
+        "t_queen_started": bot._queen_started_time,
+        "t_first_ling_seen": bot._first_ling_seen_time,
+        "t_first_ling_contact_nat": bot._first_ling_contact_nat_time,
+        
+        # Detection results
+        "score": bot._rush_score,
+        "rush_label": bot._rush_label,
+        "rush_detected": bot._ling_rushed_v2,
+        
+        # Game outcome
+        "result": str(bot.state.result) if hasattr(bot.state, 'result') else None,
+        "game_time_seconds": bot.time,
+    }
+    
+    # Append to JSONL (one line per game)
+    try:
+        with open(log_file, 'a') as f:
+            f.write(json.dumps(log_entry) + '\n')
+        print(f"Rush detection logged to {log_file}")
+    except Exception as e:
+        print(f"Failed to log rush detection: {e}")
