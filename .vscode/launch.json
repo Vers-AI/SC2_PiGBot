@@ -16,7 +16,14 @@
                 "SC2PATH": "D:\\StarCraft II",
                 "PYTHONPATH": "${workspaceFolder}/ares-sc2/src:${workspaceFolder}",
                 "PYTHONUNBUFFERED": "1"
-            }
+             },
+            "justMyCode": false,
+            "runtimeExecutable": "poetry",
+            "args": [
+                "run",
+                "python",
+                "${workspaceFolder}/run.py"
+            ]
         },
         {
             "name": "SC2 Bot: Ladder Game",
