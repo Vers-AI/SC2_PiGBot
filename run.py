@@ -107,9 +107,12 @@ class WorkerRushBot(BotAI):
             
         # If we still don't have any workers, we're probably dead
         if not workers:
-            returneap_center  # Fallback
+            return  # Nothing to do
+        
         if self.enemy_start_locations:
             enemy_start = self.enemy_start_locations[0]
+        else:
+            return  # No enemy location known yet
             
         # Send all workers to attack the enemy start location
         for worker in workers:
