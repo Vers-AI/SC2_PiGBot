@@ -43,7 +43,7 @@ Builds:
             - 16 GATEWAY @ nat_wall
             - 16 CHRONO @ NEXUS
             - 16 WORKER_SCOUT:
-                [enemy_spawn, enemy_nat, map_center, fourth,third, enemy_nat,spawn,nat,]
+                [enemy_spawn, enemy_nat, map_center, fourth,third, enemy_nat,nat,spawn]
             - 16 GAS
             - 20 EXPAND
             - 20 CORE @ nat_wall
@@ -114,7 +114,7 @@ Builds:
             - 16 GATEWAY 
             - 16 CHRONO @ NEXUS
             - 16 WORKER_SCOUT:
-                [enemy_spawn, enemy_nat, map_center, fourth,third, enemy_nat]
+                [nat, spawn,enemy_spawn, enemy_nat,fourth,third, nat, spawn]
             - 17 GAS
             - 18 GAS
             - 19 GATEWAY @ ramp

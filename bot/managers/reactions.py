@@ -15,7 +15,8 @@ from ares.managers.manager_mediator import ManagerMediator
 from ares.dicts.unit_data import UNIT_DATA
 
 from cython_extensions import (
-    cy_distance_to, cy_distance_to_squared, cy_center, cy_find_units_center_mass
+    cy_distance_to, cy_distance_to_squared, cy_center, cy_find_units_center_mass,
+    cy_closest_to, cy_attack_ready, cy_in_attack_range, cy_pick_enemy_target
 )
 
 
@@ -23,121 +24,172 @@ from cython_extensions import (
 def defend_cannon_rush(bot):
     """
     Defends against cannon rush by pulling appropriate number of workers.
-    Manages bot state flags to coordinate with other threat responses.
+    Uses continue-based priority chain for clean worker control.
+    Workers automatically return to mining when no threats present.
     
     Args:
         bot: The bot instance
-        enemy_probes: Enemy probe units involved in cannon rush
-        enemy_cannons: Enemy cannons (in progress or completed)
     """
-    # Only respond if we haven't completed the cannon rush response
+    # Get enemy units in base area
     enemy_units: Units = bot.mediator.get_units_in_range(
-                        start_points=[bot.start_location],
-                        distances=14,
-                        query_tree=UnitTreeQueryType.AllEnemy,
-                    )[0]
-    if not getattr(bot, '_cannon_rush_completed', False):
-        # Set initial flags if not already set
-        if not getattr(bot, '_cannon_rush_active', False):
-            bot._cannon_rush_active = True
-            bot.build_order_runner.switch_opening("Cheese_Reaction_Build")
-            bot._used_cheese_response = True
-            bot._under_attack = True
-            bot._worker_cannon_rush_response = True
-        
-        enemy_probes = enemy_units.filter(lambda u: u.type_id == UnitTypeId.PROBE)
-        enemy_cannons = enemy_units.filter(lambda u: u.type_id == UnitTypeId.PHOTONCANNON)
-        enemy_pylons = enemy_units.filter(lambda u: u.type_id == UnitTypeId.PYLON)
-
-        # Calculate how many workers to pull (1 per cannon + 1 per 2 probes, max 8)
-        workers_needed = min(24, len(enemy_cannons) + (len(enemy_probes) // 2) + 8)
-        
-        # Get current defending workers
-        defending_workers = bot.mediator.get_units_from_role(
-            role=UnitRole.DEFENDING,
-            unit_type=UnitTypeId.PROBE
-        )
-        
-        # Get workers that should be mining (not already defending)
-        available_workers = bot.workers.filter(
-            lambda w: w.tag not in defending_workers.tags
-        )
-        
-        # Assign more workers if needed
-        while len(defending_workers) < workers_needed and available_workers:
-            worker = available_workers.closest_to(bot.start_location)
-            if not worker:
-                break
-            bot.mediator.assign_role(tag=worker.tag, role=UnitRole.DEFENDING)
-            defending_workers.append(worker)
-            available_workers.remove(worker)
-        
-        # Target selection and attack logic
-        for worker in defending_workers:
-            # Prioritize cannons that are nearly complete or complete
-            urgent_targets = enemy_cannons.filter(
-                lambda c: c.build_progress > 0.5 or c.is_ready
+        start_points=[bot.start_location],
+        distances=14,
+        query_tree=UnitTreeQueryType.AllEnemy,
+    )[0]
+    
+    enemy_probes = enemy_units.filter(lambda u: u.type_id == UnitTypeId.PROBE)
+    enemy_cannons = enemy_units.filter(lambda u: u.type_id == UnitTypeId.PHOTONCANNON)
+    enemy_pylons = enemy_units.filter(lambda u: u.type_id == UnitTypeId.PYLON)
+    
+    # Check if cannon rush is active
+    has_cannon_threats = bool(enemy_probes or enemy_cannons or enemy_pylons)
+    
+    if not has_cannon_threats:
+        # No threats - clean up if we were defending
+        if getattr(bot, '_cannon_rush_active', False):
+            defending_workers = bot.mediator.get_units_from_role(
+                role=UnitRole.DEFENDING,
+                unit_type=UnitTypeId.PROBE
             )
-            
-            if urgent_targets:
-                target = urgent_targets.closest_to(worker)
-            elif enemy_probes:
-                target = enemy_probes.closest_to(worker)
-            elif enemy_cannons:  # Only target cannons < 50% if nothing else
-                target = enemy_cannons.closest_to(worker)
-            elif enemy_pylons:
-                target = enemy_pylons.closest_to(worker)
-            else:
-                # No targets, return to mineral line
+            # Return all defenders to gathering
+            for worker in defending_workers:
                 bot.mediator.assign_role(tag=worker.tag, role=UnitRole.GATHERING)
-                
-            # Attack the target
-            worker.attack(target)
+            
+            # Complete cheese reaction build if both threats cleared
+            if (bot._used_cheese_response
+                and not getattr(bot, '_worker_rush_active', False)  # Other threat also clear
+                and bot.build_order_runner.chosen_opening == "Cheese_Reaction_Build"
+                and not bot.build_order_runner.build_completed):
+                bot.build_order_runner.set_build_completed()
+                bot._cheese_reaction_completed = True
+                print(f"Cheese reaction build completed - cannon rush cleared at {bot.time:.1f}s")
+            
+            # Reset flags
+            bot._cannon_rush_active = False
+            bot._cannon_rush_response = False
+            bot._under_attack = False
+        return
+    
+    # Set initial flags if not already set
+    if not getattr(bot, '_cannon_rush_active', False):
+        bot._cannon_rush_active = True
+        bot.build_order_runner.switch_opening("Cheese_Reaction_Build")
+        bot._used_cheese_response = True
+        bot._under_attack = True
+        bot._worker_cannon_rush_response = True
+    
+    # Calculate how many workers to pull (cannon-specific formula)
+    workers_needed = min(24, len(enemy_cannons) + (len(enemy_probes) // 2) + 8)
+    
+    # Get current defending workers
+    defending_workers = bot.mediator.get_units_from_role(
+        role=UnitRole.DEFENDING,
+        unit_type=UnitTypeId.PROBE
+    )
+    
+    # Get workers that should be mining (not already defending)
+    available_workers = bot.workers.filter(
+        lambda w: w.tag not in defending_workers.tags
+    )
+    
+    # Assign more workers if needed
+    while len(defending_workers) < workers_needed and available_workers:
+        worker = available_workers.closest_to(bot.start_location)
+        if not worker:
+            break
+        bot.mediator.assign_role(tag=worker.tag, role=UnitRole.DEFENDING)
+        defending_workers.append(worker)
+        available_workers.remove(worker)
+    
+    # Per-worker control with priority chain (from example pattern)
+    for worker in defending_workers:
+        # 1. Handle resource return (from example)
+        if worker.is_carrying_resource and bot.townhalls:
+            worker.return_resource()
+            continue
         
-        # Check if threat is over
-        if not enemy_probes and not enemy_cannons and not enemy_pylons:
-            # Small delay before cleaning up to ensure threat is really gone
-            if not hasattr(bot, '_cannon_rush_cleanup_timer'):
-                bot._cannon_rush_cleanup_timer = bot.time
-            elif bot.time - bot._cannon_rush_cleanup_timer > 10:  # 10 second delay
-                # Clean up workers and flags
-                for worker in defending_workers:
-                    bot.mediator.assign_role(tag=worker.tag, role=UnitRole.GATHERING)
-                
-                # Reset flags
-                bot._cannon_rush_completed = True
-                bot._cannon_rush_response = False
-                bot._used_cheese_response = False
-                bot._under_attack = False
-                
-                # Clean up timers
-                if hasattr(bot, '_cannon_rush_cleanup_timer'):
-                    del bot._cannon_rush_cleanup_timer
-        else:
-            # Reset cleanup timer if we see threats again
-            if hasattr(bot, '_cannon_rush_cleanup_timer'):
-                del bot._cannon_rush_cleanup_timer
+        # 2. Cannon-specific prioritization (your logic - keep this!)
+        # Prioritize cannons that are nearly complete or complete
+        urgent_targets = enemy_cannons.filter(
+            lambda c: c.build_progress > 0.5 or c.is_ready
+        )
+        
+        if urgent_targets:
+            target = cy_closest_to(worker.position, urgent_targets)
+            worker.attack(target)
+            continue
+        
+        if enemy_probes:
+            target = cy_closest_to(worker.position, enemy_probes)
+            # Only attack if in range and ready (smarter targeting)
+            if cy_attack_ready(bot, worker, target):
+                worker.attack(target)
+            else:
+                worker.move(target.position)
+            continue
+        
+        if enemy_cannons:  # Cannons < 50% complete
+            target = cy_closest_to(worker.position, enemy_cannons)
+            worker.attack(target)
+            continue
+        
+        if enemy_pylons:
+            target = cy_closest_to(worker.position, enemy_pylons)
+            worker.attack(target)
+            continue
+        
+        # 3. Automatic fallback to mining (from example - no timer needed!)
+        if bot.mineral_field:
+            mf = cy_closest_to(worker.position, bot.mineral_field)
+            worker.gather(mf)
+            bot.mediator.assign_role(tag=worker.tag, role=UnitRole.GATHERING)
 
 def defend_worker_rush(bot):
     """
     Defends against worker rush by pulling appropriate number of workers.
-    Manages bot state flags to coordinate with other threat responses.
+    Uses continue-based priority chain for clean worker control.
+    Workers automatically return to mining when no threats present.
     
     Args:
         bot: The bot instance
     """
-    #TODO Fix why Probes dont' return to work after worker rush
     # Get all enemy units in our base and filter for workers
+    defense_point = bot.natural_expansion if bot.structures.closer_than(8, bot.natural_expansion) else bot.start_location
     
     enemy_units = bot.mediator.get_units_in_range(
-        start_points=[bot.natural_expansion if bot.structures.closer_than(8, bot.natural_expansion) else bot.start_location],
+        start_points=[defense_point],
         distances=25,  # Larger radius to catch workers coming in
         query_tree=UnitTreeQueryType.AllEnemy,
     )[0]
-    enemy_workers = enemy_units.filter(lambda u: u.type_id == UnitTypeId.PROBE)
+    enemy_workers = enemy_units.filter(lambda u: u.type_id in WORKER_TYPES)
 
-    # Only respond if we actually see enemy workers
-    if not enemy_workers:
+    # Check if worker rush is active
+    has_worker_threats = bool(enemy_workers)
+    
+    if not has_worker_threats:
+        # No threats - clean up if we were defending
+        if getattr(bot, '_worker_rush_active', False):
+            defending_workers = bot.mediator.get_units_from_role(
+                role=UnitRole.DEFENDING,
+                unit_type=UnitTypeId.PROBE
+            )
+            # Return all defenders to gathering
+            for worker in defending_workers:
+                bot.mediator.assign_role(tag=worker.tag, role=UnitRole.GATHERING)
+            
+            # Complete cheese reaction build if both threats cleared
+            if (bot._used_cheese_response
+                and not getattr(bot, '_cannon_rush_active', False)  # Other threat also clear
+                and bot.build_order_runner.chosen_opening == "Cheese_Reaction_Build"
+                and not bot.build_order_runner.build_completed):
+                bot.build_order_runner.set_build_completed()
+                bot._cheese_reaction_completed = True
+                print(f"Cheese reaction build completed - worker rush cleared at {bot.time:.1f}s")
+            
+            # Reset flags
+            bot._worker_rush_active = False
+            bot._not_worker_rush = True
+            bot._under_attack = False
         return
 
     # Set initial flags if not already set
@@ -154,7 +206,7 @@ def defend_worker_rush(bot):
         unit_type=UnitTypeId.PROBE
     )
     
-    # Calculate how many workers to pull (1.5x enemy workers, min 4, max 16)
+    # Calculate how many workers to pull (worker rush specific: 1.5x enemy workers)
     workers_needed = min(16, max(4, int(len(enemy_workers) * 1.5)))
     
     # Get workers that should be mining (not already defending)
@@ -171,42 +223,25 @@ def defend_worker_rush(bot):
         defending_workers.append(worker)
         available_workers.remove(worker)
     
-    # Target selection and attack logic
+    # Per-worker control with priority chain (from example pattern)
     for worker in defending_workers:
-        # Find closest enemy worker to this worker
+        # 1. Handle resource return (from example)
+        if worker.is_carrying_resource and bot.townhalls:
+            worker.return_resource()
+            continue
+        
+        # 2. Worker rush specific: use WorkerKiteBack for micro
         if enemy_workers:
-            target = enemy_workers.closest_to(worker)
-            # Use WorkerKiteBack behavior for better micro
+            target = cy_closest_to(worker.position, enemy_workers)
+            # Use WorkerKiteBack behavior for better micro (kiting)
             bot.register_behavior(WorkerKiteBack(unit=worker, target=target))
-        else:
-            # No targets, return to mining
-            if bot.mineral_field:
-                mf = bot.mineral_field.closest_to(bot.start_location)
-                worker.gather(mf)
+            continue
+        
+        # 3. Automatic fallback to mining (from example - no timer needed!)
+        if bot.mineral_field:
+            mf = cy_closest_to(worker.position, bot.mineral_field)
+            worker.gather(mf)
             bot.mediator.assign_role(tag=worker.tag, role=UnitRole.GATHERING)
-    
-    # Check if threat is over (no enemy workers for 5 seconds)
-    if not enemy_workers:
-        if not hasattr(bot, '_worker_rush_cleanup_timer'):
-            bot._worker_rush_cleanup_timer = bot.time
-        elif bot.time - bot._worker_rush_cleanup_timer > 5.0:  # 5 second delay
-            # Clean up workers by returning them to gathering
-            for worker in defending_workers:
-                bot.mediator.assign_role(tag=worker.tag, role=UnitRole.GATHERING)
-            
-            # Reset flags
-            bot._worker_rush_active = False
-            bot._not_worker_rush = True
-            bot._used_cheese_response = False
-            bot._under_attack = False
-            
-            # Clean up timer
-            if hasattr(bot, '_worker_rush_cleanup_timer'):
-                del bot._worker_rush_cleanup_timer
-    else:
-        # Reset cleanup timer if we see threats again
-        if hasattr(bot, '_worker_rush_cleanup_timer'):
-            del bot._worker_rush_cleanup_timer
 
 
 def cheese_reaction(bot):

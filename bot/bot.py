@@ -77,7 +77,7 @@ class PiG_Bot(AresBot):
         self.bases = {}
         self.total_health_shield_percentage = 1.0
         self.enemy_army = None
-        self.own_army = None
+        self.own_army: Units = Units([], self)
         # Game state: 0 = early game, 1 = mid game, 2 = late game
         self.game_state = 0
         self.early_game_threshold = 360  # 6 minutes in seconds
