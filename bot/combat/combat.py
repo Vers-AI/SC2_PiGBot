@@ -399,15 +399,30 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
     
     # Evaluate current attack state with engagement hysteresis
     if bot._commenced_attack:
-        # Immediately retreat if early game defensive conditions are met
-        if is_early_defensive_mode:
-            bot._commenced_attack = False
-            nearest_base = bot.townhalls.closest_to(main_army.center)
-            return nearest_base.position if nearest_base else bot.start_location
         # Maintain commitment for minimum duration to prevent rapid oscillation
-        elif bot.time < bot._attack_commenced_time + STAY_AGGRESSIVE_DURATION:
+        if bot.time < bot._attack_commenced_time + STAY_AGGRESSIVE_DURATION:
             return attack_target
-        # Re-evaluate: use lenient threshold to maintain engagement once committed
+        # After minimum duration, check if we should retreat
+        # For early defensive mode (cheese), check for active engagement before retreating
+        elif is_early_defensive_mode:
+            # Don't immediately retreat if we're actively engaged with enemies nearby
+            # This prevents bouncing during cheese reactions
+            enemies_near_army = bot.mediator.get_units_in_range(
+                start_points=[main_army.center],
+                distances=15,
+                query_tree=UnitTreeQueryType.AllEnemy,
+                return_as_dict=False,
+            )[0].filter(lambda u: not u.is_memory and not u.is_structure)
+            
+            if enemies_near_army:
+                # In active combat - maintain current engagement for stability
+                return attack_target
+            else:
+                # No nearby enemies - safe to retreat
+                bot._commenced_attack = False
+                nearest_base = bot.townhalls.closest_to(main_army.center)
+                return nearest_base.position if nearest_base else bot.start_location
+        # For normal mode, re-evaluate fight result after minimum duration
         else:
             fight_result = bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=True, good_positioning=True, workers_do_no_damage=True)
             # Only disengage if situation is dire (overwhelming loss)

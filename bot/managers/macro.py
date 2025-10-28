@@ -442,7 +442,7 @@ async def handle_macro(
         # Cheese defense composition and minimal expansion
         army_composition = CHEESE_DEFENSE_ARMY
         expansion_count = 3  # Conservative expansion during cheese
-        print("Cheese reaction - using defense composition")
+
     
     # Build warp prism at 60+ supply
     if require_warp_prism(bot):
