@@ -474,8 +474,7 @@ async def handle_macro(
    
     macro_plan.add(ExpansionController(to_count=expansion_count, max_pending=1))
     
-    macro_plan.add(ProductionController(army_composition, base_location=production_location, add_production_at_bank=(450,450), ignore_below_propotion=0.3))
-    
+    macro_plan.add(ProductionController(army_composition, base_location=production_location, add_production_at_bank=(450,450), ignore_below_proportion=0.3))
     
     macro_plan.add(UpgradeController(get_desired_upgrades(bot), base_location=production_location))
     
