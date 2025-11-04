@@ -68,6 +68,7 @@ tags:
   - [x] Dodge ravager/disruptor balls & nukes
   - [x] React to Liberator zones
   - [x] React to invisible enemies
+- [ ] Add Sentry logic
 
 ### Tactics ✅
 - [x] Break army into squads
@@ -77,7 +78,7 @@ tags:
 ### Macro
 - [ ] Build‑order recovery if buildings get destroyed (consult Rasper)
 - [ ] Adjust PvP strategy to 1‑base (instead of natural)
-- [ ] Fluid weighted composition vs enemy comp
+- [ ] Fluid weighted composition vs enemy comp [Next]
 
 ### Build Manager
 - [ ] Implement PvT Standard Macro build
@@ -85,16 +86,18 @@ tags:
 - [ ] Implement PvZ Standard Robo Opener
 - [ ] Implement PvZ Double Stargate Phoenix (vs Mutas)
 - [ ] Implement PvP 4‑Gate All‑in
-- [ ] Implement PvP 2‑Gate Expand
+- [x] Implement PvP 2‑Gate Expand
 - [ ] Build selector by opponent race + scout info
 - [ ] Connect selected build to `BuildOrderRunner` at game start
 - [ ] Mid‑game build switch logic (e.g., Spire → Stargate)
 - [ ] Tests for builds (ideal + edge conditions)
+- [ ] Adjust transition from build order to fluid composition to wait till amount of macro to sustain [urgent]
+
 
 ### Scouting & Interpretation
 - [ ] `scouted_spire()` and other scout triggers
 - [ ] Fallback logic if scout dies early
-- [ ] Interpret scout info → build decisions
+- [ ] Create a Reaction System [Current]
 - [ ] Observers ensure mid‑game critical tech scouting
 
 ### Logging & Data Storage
