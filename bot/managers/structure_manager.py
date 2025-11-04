@@ -97,16 +97,20 @@ def use_chronoboost(bot) -> bool:
 
     # Priority order for chronoboosting (production > research > economy)
     priority_structures = [
-        # Production buildings - highest priority
-        UnitTypeId.GATEWAY,
-        UnitTypeId.ROBOTICSFACILITY,
-        UnitTypeId.STARGATE,
-
-        # Research buildings - medium priority
+        # Research buildings - highest priority
         UnitTypeId.FORGE,
         UnitTypeId.CYBERNETICSCORE,
         UnitTypeId.TWILIGHTCOUNCIL,
         UnitTypeId.ROBOTICSBAY,
+
+        # Production buildings - medium priority
+        UnitTypeId.GATEWAY,
+        UnitTypeId.ROBOTICSFACILITY,
+        UnitTypeId.STARGATE,
+
+        # Economic buildings - lowest priority
+        UnitTypeId.NEXUS,
+        
 
     ]
 
@@ -119,7 +123,13 @@ def use_chronoboost(bot) -> bool:
             if not structure.has_buff(BuffId.CHRONOBOOSTENERGYCOST) and structure.is_active:
                 # Check if there's more than 30 seconds remaining
                 remaining_time = get_remaining_activity_time(bot, structure)
-                if remaining_time > 30.0:
+                
+                # Probes are an exception - always chronoboost them even if < 30 seconds
+                is_probe_production = (structure.type_id == UnitTypeId.NEXUS and 
+                                     structure.orders and 
+                                     any(order.ability.id == AbilityId.NEXUSTRAIN_PROBE for order in structure.orders))
+                
+                if remaining_time > 30.0 or is_probe_production:
                     candidates.append(structure)
 
         if candidates:
