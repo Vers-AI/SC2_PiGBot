@@ -188,11 +188,11 @@ Builds:
         ConstantWorkerProductionTill: 30
         AutoSupplyAtSupply: 0
         OpeningBuildOrder:
-            - 21 CYBERNETICSCORE @ nat_wall
-            - 22 ZEALOT
-            - 22 CHRONO @ GATEWAY
-            - 23 GATEWAY @ nat_wall
-            - 24 SHIELDBATTERY @ nat_wall
-            - 24 ZEALOT
-            - 27 PYLON @ nat_wall
+            - 0 CYBERNETICSCORE @ nat_wall
+            - 0 ZEALOT
+            - 0 CHRONO @ GATEWAY
+            - 0 GATEWAY @ nat_wall
+            - 0 SHIELDBATTERY @ nat_wall
+            - 0 ZEALOT
+            - 0 PYLON @ nat_wall
         
