@@ -383,7 +383,7 @@ def get_enemy_ling_rushed_v2(bot: "PiG_Bot") -> bool:
     # Update signals (triggers _track_enemy_timings)
     signals = get_ling_rush_signals(bot)
     
-    # Fixed timing constants (not map-aware per new spec)
+    # Fixed timing constants 
     T_POOL_CHECK = 65.0
     T_NAT_CHECK = 80.0
     T_LING_EARLY = 105.0
@@ -515,8 +515,9 @@ def get_enemy_ling_rushed_v2(bot: "PiG_Bot") -> bool:
     
     # Debug output
     if time_now < 240.0 and int(time_now) % 30 == 0:
+        pool_time_str = f"{bot._pool_seen_time:.1f}s" if bot._pool_seen_time else "None"
         print(f"DEBUG Rush [{bot.time_formatted}]: total={total_score} (R1={r1_score}, R2={r2_score}, R3={r3_score}), "
-              f"label={rush_label}, nat={no_natural}, pool={pool_early}, lings={early_lings}")
+              f"label={rush_label}, nat={no_natural}, pool_state={bot._pool_seen_state}, pool_start={pool_time_str}, lings={early_lings}")
     
     # Trigger detection
     if rush_detected:
@@ -526,7 +527,7 @@ def get_enemy_ling_rushed_v2(bot: "PiG_Bot") -> bool:
     return bot._ling_rushed_v2
 
 
-def log_rush_detection_result(bot: "PiG_Bot"):
+def log_rush_detection_result(bot: "PiG_Bot", game_result):
     """
     Log rush detection results at game end for ML training and analysis.
     
@@ -534,6 +535,10 @@ def log_rush_detection_result(bot: "PiG_Bot"):
     Appends to data/rush_detection_log.jsonl (one line per game).
     
     Call this from bot.on_end() method.
+    
+    Args:
+        bot: PiG_Bot instance
+        game_result: Result enum from on_end parameter
     """
     # Skip if we haven't initialized tracking yet
     if not hasattr(bot, '_rush_score'):
@@ -567,7 +572,7 @@ def log_rush_detection_result(bot: "PiG_Bot"):
         "is_rushed": getattr(bot, '_ling_rushed_v2', False),
         
         # Game outcome
-        "result": str(bot.state.result),
+        "result": str(game_result),
         "game_time_seconds": bot.time,
     }
     

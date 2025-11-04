@@ -19,6 +19,9 @@ from cython_extensions import (
     cy_closest_to, cy_attack_ready, cy_in_attack_range, cy_pick_enemy_target
 )
 
+from bot.utilities.intel import get_enemy_cannon_rushed
+from bot.utilities.rush_detection import get_enemy_ling_rushed_v2
+
 
 
 def defend_cannon_rush(bot):
@@ -267,8 +270,6 @@ def one_base_reaction(bot):
     if bot.build_order_runner.build_completed:
         bot._one_base_reaction_completed = True
 
-from bot.utilities.intel import get_enemy_cannon_rushed
-from bot.utilities.rush_detection import get_enemy_ling_rushed_v2
 
 def early_threat_sensor(bot):
     """

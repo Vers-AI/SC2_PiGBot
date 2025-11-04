@@ -446,7 +446,7 @@ class PiG_Bot(AresBot):
         
         # Log rush detection results for ML training
         from bot.utilities.rush_detection import log_rush_detection_result
-        log_rush_detection_result(self)
+        log_rush_detection_result(self, game_result)
 
    
     
