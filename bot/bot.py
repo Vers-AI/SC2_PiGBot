@@ -27,6 +27,7 @@ from sc2.data import Race
 
 # Modular imports for separated concerns
 from bot.managers.macro import handle_macro, get_optimal_gas_workers, get_freeflow_mode
+from bot.managers.structure_manager import use_chronoboost
 from bot.managers.reactions import defend_cannon_rush, defend_worker_rush, early_threat_sensor, cheese_reaction, one_base_reaction, threat_detection
 from bot.combat import (
     control_main_army,
@@ -252,6 +253,9 @@ class PiG_Bot(AresBot):
                 scout_units=scout_units,
                 freeflow=get_freeflow_mode(self),  # Dynamic calculation
             )
+            
+            # Use chronoboost on production/research structures
+            use_chronoboost(self)
 
         # Manage defensive unit roles (return them to attacking when threats are cleared)
         manage_defensive_unit_roles(self)
@@ -294,10 +298,7 @@ class PiG_Bot(AresBot):
             for templar in self.units(UnitTypeId.HIGHTEMPLAR).ready:
                 templar(AbilityId.MORPH_ARCHON)
 
-        # Fail-safe: Force complete build if banking too many minerals
-        if self.minerals > 2800 and not self.build_order_runner.build_completed:
-            self.build_order_runner.set_build_completed()
-            print(f"Build order force-completed at {self.time:.1f}s due to high minerals")
+       
         
         # Update game state based on game time
         current_time = self.time
@@ -310,6 +311,10 @@ class PiG_Bot(AresBot):
                     self.mediator.clear_role(tag=zealot.tag)
                     self.mediator.assign_role(tag=zealot.tag, role=UnitRole.ATTACKING)
         else:
+             # Fail-safe: Force complete build if banking too many minerals
+            if self.minerals > 800 and not self.build_order_runner.build_completed:
+                self.build_order_runner.set_build_completed()
+                print(f"Build order force-completed at {self.time:.1f}s due to high minerals")
             self.game_state = 0  # early game
             if self.enemy_race in {Race.Zerg, Race.Random}:
                 if not gatekeeper:
@@ -443,70 +448,7 @@ class PiG_Bot(AresBot):
         from bot.utilities.rush_detection import log_rush_detection_result
         log_rush_detection_result(self)
 
-    # -------------------------------------
-    # Utility / Additional Methods
-    # -------------------------------------
+   
     
-    def use_recharge(self, main_army: Units) -> bool:
-        """
-        Uses Energy Recharge on the unit with the lowest energy percentage within range of the closest Nexus.
-        
-        Targets specific energy-using units: Mothership, High Templar, Oracle, and Sentry.
-        
-        Args:
-            main_army: Units to consider for the army center calculation
-            
-        Returns:
-            bool: True if Energy Recharge was used, False otherwise
-        """
-        #TODO Test this
-        if not main_army:
-            return False
-
-        # Define energy-using unit types in priority order
-        priority_unit_types = [
-            UnitTypeId.MOTHERSHIP,
-            UnitTypeId.HIGHTEMPLAR,
-            UnitTypeId.ORACLE,
-            UnitTypeId.SENTRY
-        ]
-
-        # Find the closest Nexus to the army center
-        closest_nexus = None
-        closest_distance = float("inf")
-        for nexus in self.structures(UnitTypeId.NEXUS).ready:
-            if nexus.energy < 50:  # Need enough energy for the ability
-                continue
-            distance = main_army.center.distance_to(nexus.position)
-            if distance < closest_distance:
-                closest_distance = distance
-                closest_nexus = nexus
-
-        if not closest_nexus:
-            return False
-
-        # Find target unit by priority order
-        target_unit = None
-        for unit_type in priority_unit_types:
-            # Get all units of this type within range that need energy
-            candidates = []
-            for unit in self.units:
-                if (unit.type_id == unit_type and 
-                    unit.distance_to(closest_nexus) <= 12 and
-                    unit.energy_percentage < 1.0):  # Unit needs energy
-                    candidates.append(unit)
-            
-            # If we found candidates of this priority type, pick the one with lowest energy
-            if candidates:
-                target_unit = min(candidates, key=lambda u: u.energy_percentage)
-                break
-
-        if not target_unit:
-            return False
-
-        # Cast Energy Recharge on the target unit
-        closest_nexus(AbilityId.ENERGYRECHARGE_ENERGYRECHARGE, target_unit)
-        return True
-
 
    
