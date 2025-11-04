@@ -87,10 +87,10 @@ tags:
 - [ ] Implement PvZ Double Stargate Phoenix (vs Mutas)
 - [ ] Implement PvP 4‑Gate All‑in
 - [x] Implement PvP 2‑Gate Expand
+- [ ] Add Repear wall positions
 - [ ] Build selector by opponent race + scout info
 - [ ] Connect selected build to `BuildOrderRunner` at game start
 - [ ] Mid‑game build switch logic (e.g., Spire → Stargate)
-- [ ] Tests for builds (ideal + edge conditions)
 - [ ] Adjust transition from build order to fluid composition to wait till amount of macro to sustain [urgent]
 
 
@@ -121,10 +121,10 @@ tags:
 ### Misc / TODO
 - [x] Change Gamestate from text → INT
 - [x] Optimal worker check includes minerals + gas
-- [ ] Review macro cycle (floating minerals during build order)
-- [ ] Worker‑rush returns to mining afterward
+- [x] Review macro cycle (floating minerals during build order)
+- [x] Worker‑rush returns to mining afterward
 - [ ] Add cheese detection: structure near our town hall / mediator `get_enemy_PF_rushed`
-- [ ] Adjust `Worker_rush` detection range
+- [x] Adjust `Worker_rush` detection range
 - [x] Remove Target Unit; use Target Unit **position**
 - [x] Check if regrouping is too aggressive in `regroup_army`
 - [ ] Check threat sensitivity—Marines/Marauders/Reapers
@@ -133,10 +133,13 @@ tags:
 - [x] Remove Overcharge
 - [ ] Test Energy Recharge
 - [ ] Test new battle‑sim conditions
-- [ ] Fix battle lockout bouncing
+- [x] Fix battle lockout bouncing
 - [x] Cap workers at a set limit (80; 8 on gold base)
-- [ ] Add upgrades logic
+- [x] Add upgrades logic
 - [ ] Inner/outer radius for unit grouping; break when 30% engaged
+- [ ] Add Logs for every 30 seconds
+- [ ] Put debug in game
+- [ ] Add Tags for replays
 - [x] Fix Gatekeeper off in non‑PvZ
 
 ### Gatekeeper System (PvZ Wall Logic) ✅
