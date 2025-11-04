@@ -324,7 +324,7 @@ def get_desired_upgrades(bot) -> list[UpgradeId]:
         upgrades.append(UpgradeId.EXTENDEDTHERMALLANCE)
     
     # Charge when Twilight exists or 2+ bases at 54+ supply
-    if bot.structures(UnitTypeId.TWILIGHTCOUNCIL) or (len(bot.townhalls) >= 2 and bot.supply_used >= 54):
+    if bot.structures(UnitTypeId.TWILIGHTCOUNCIL) or (len(bot.townhalls) >= 3 and bot.supply_used >= 54):
         upgrades.append(UpgradeId.CHARGE)
     
     # Gate early upgrades if economy not ready
@@ -334,8 +334,8 @@ def get_desired_upgrades(bot) -> list[UpgradeId]:
         or bot.supply_army < 15):
         return upgrades
     
-    # Ground upgrades when Forge exists or 2+ bases at 56+ supply
-    if bot.structures(UnitTypeId.FORGE) or (len(bot.townhalls) >= 2 and bot.supply_used >= 56):
+    # Ground upgrades when Forge exists or 3+ bases at 56+ supply
+    if bot.structures(UnitTypeId.FORGE) and ((len(bot.townhalls) >= 3 and bot.supply_used >= 56)):
         upgrades.extend([
             UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1,
             UpgradeId.PROTOSSGROUNDARMORSLEVEL1,
@@ -366,9 +366,9 @@ def get_desired_gateway_count(bot) -> int:
     Returns desired gateway/warpgate count based on supply and bases.
     Build order provides 3, scales to 5, then 8 for mid-game production.
     """
-    if bot.supply_used >= 62 and len(bot.townhalls) >= 2:
+    if bot.supply_used >= 62 and len(bot.townhalls) >= 5:
         return 8
-    elif bot.supply_used >= 54:
+    elif bot.supply_used >= 54 and len(bot.townhalls) >= 3:
         return 5
     else:
         return 3
@@ -471,15 +471,13 @@ async def handle_macro(
     macro_plan.add(AutoSupply(base_location=production_location))
     macro_plan.add(GasBuildingController(to_count=len(bot.townhalls)*2, max_pending=2))
     
-    # Skip expansion during early cheese defense
-    if not (bot._used_cheese_response and bot.game_state == 0):
-        macro_plan.add(ExpansionController(to_count=expansion_count, max_pending=1))
+   
+    macro_plan.add(ExpansionController(to_count=expansion_count, max_pending=1))
     
-    macro_plan.add(ProductionController(army_composition, base_location=production_location, should_repower_structures=True))
+    macro_plan.add(ProductionController(army_composition, base_location=production_location, add_production_at_bank=(450,450), ignore_below_propotion=0.3))
     
-    # Upgrades (skipped during cheese)
-    if not bot._used_cheese_response:
-        macro_plan.add(UpgradeController(get_desired_upgrades(bot), base_location=production_location))
+    
+    macro_plan.add(UpgradeController(get_desired_upgrades(bot), base_location=production_location))
     
     # Spawn units at warp prism or natural
     spawn_target = warp_prism[0].position if warp_prism else spawn_location
