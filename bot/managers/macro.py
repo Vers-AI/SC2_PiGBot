@@ -313,6 +313,11 @@ def get_desired_upgrades(bot) -> list[UpgradeId]:
     """
     upgrades: list[UpgradeId] = []
     
+    
+    # WarpGate when WarpPrism ready and not researched
+    if not bot.already_pending_upgrade(UpgradeId.WARPGATERESEARCH):
+        upgrades.append(UpgradeId.WARPGATERESEARCH)
+    
     # ExtendedThermalLance when RoboticsBay ready and Colossi present
     if (bot.structures(UnitTypeId.ROBOTICSBAY) 
         and (bot.units(UnitTypeId.COLOSSUS) or bot.already_pending(UnitTypeId.COLOSSUS))):
