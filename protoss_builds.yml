@@ -185,18 +185,14 @@ Builds:
 
     Cheese_Reaction_Build:
         # Chesese reaction Build order
-        ConstantWorkerProductionTill: 20
+        ConstantWorkerProductionTill: 30
         AutoSupplyAtSupply: 0
         OpeningBuildOrder:
-            - 20 PYLON @ nat_wall
-            - 20 GATEWAY @ nat_wall
-            - 20 CORE @ nat_wall
-            - 20 ZEALOT
-            - 22 SHIELDBATTERY @ nat_wall
+            - 21 CYBERNETICSCORE @ nat_wall
             - 22 ZEALOT
-            - 24 PYLON @ nat_wall
-            - 24 GATEWAY @ nat_wall
-            - 24 WARPGATERESEARCH
-            - 24 PYLON @ nat_wall
-            - 24 CHRONO @ GATEWAY
+            - 22 CHRONO @ GATEWAY
+            - 23 GATEWAY @ nat_wall
+            - 24 SHIELDBATTERY @ nat_wall
+            - 24 ZEALOT
+            - 27 PYLON @ nat_wall
         
