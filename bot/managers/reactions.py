@@ -76,7 +76,7 @@ def defend_cannon_rush(bot):
     # Set initial flags if not already set
     if not getattr(bot, '_cannon_rush_active', False):
         bot._cannon_rush_active = True
-        bot.build_order_runner.switch_opening("Cheese_Reaction_Build")
+        bot.build_order_runner.switch_opening("Cheese_Reaction_Build", remove_completed=False)
         bot._used_cheese_response = True
         bot._under_attack = True
         bot._worker_cannon_rush_response = True
@@ -198,7 +198,7 @@ def defend_worker_rush(bot):
     # Set initial flags if not already set
     if not getattr(bot, '_worker_rush_active', False):
         bot._worker_rush_active = True
-        bot.build_order_runner.switch_opening("Cheese_Reaction_Build")
+        bot.build_order_runner.switch_opening("Cheese_Reaction_Build", remove_completed=False)
         bot._used_cheese_response = True
         bot._under_attack = True
         bot._not_worker_rush = False
@@ -252,7 +252,7 @@ def cheese_reaction(bot):
     Builds pylon/gateway/shield battery to defend early cheese.
     """
     #print(f"Current build: {bot.build_order_runner.chosen_opening}")
-    bot.build_order_runner.switch_opening("Cheese_Reaction_Build")
+    bot.build_order_runner.switch_opening("Cheese_Reaction_Build", remove_completed=False)
 
     # Cancel a fast-expanding Nexus if it's started and we detect cheese
     pending_townhalls = bot.structure_pending(UnitTypeId.NEXUS)
