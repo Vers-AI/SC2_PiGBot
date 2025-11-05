@@ -100,7 +100,7 @@ SQUAD_ENEMY_DETECTION_RANGE = 9.0
 DEFENDER_ENEMY_DETECTION_RANGE = 8.0
 """Range to detect enemies around defensive squad position (smaller for base defense)"""
 
-GATEKEEPER_DETECTION_RANGE = 4.0
+GATEKEEPER_DETECTION_RANGE = 6.0
 """Range to detect enemies around gatekeeping position"""
 
 GATEKEEPER_MOVE_DISTANCE = 3.0

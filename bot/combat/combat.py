@@ -298,7 +298,7 @@ def gatekeeper_control(bot, gatekeeper: Units) -> None:
     for gate in gatekeeper:
         dist_to_gate: float = cy_distance_to_squared(gate.position, gate_keep_pos)
         if any_close:
-            if dist_to_gate > 1.0:
+            if dist_to_gate != 0:
                 gate.move(gate_keep_pos)
                 gate(AbilityId.HOLDPOSITION, queue=True)
             else:
