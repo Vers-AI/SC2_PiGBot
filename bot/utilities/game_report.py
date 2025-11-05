@@ -1,8 +1,268 @@
 """
 Game Report Utility
-Handles presentation and formatting of end-game performance reports.
-Works with PerformanceMonitor to display collected metrics.
+Handles presentation and formatting of reports:
+- Startup report (called once in on_start)
+- Periodic intel reports (every 30 game seconds)
+- Replay tagging (for filtering replays later)
+- End-game performance report (uses PerformanceMonitor)
 """
+
+from sc2.ids.unit_typeid import UnitTypeId
+from ares.consts import UnitRole
+from sc2.data import Race
+
+
+def print_startup_report(bot) -> None:
+    """Print one-time startup report with static game information.
+    
+    Called once in on_start() to log initial game state.
+    Always prints (not gated by bot.debug).
+    
+    Args:
+        bot: Bot instance
+    """
+    print("\n" + "="*60)
+    print("  GAME STARTUP REPORT")
+    print("="*60)
+    print(f"  Map: {bot.game_info.map_name}")
+    print(f"  Enemy Race: {bot.enemy_race.name}")
+    print(f"  Build Chosen: {bot.build_order_runner.chosen_opening}")
+    print(f"  Natural Expansion: {bot.natural_expansion}")
+    print(f"  Enemy Natural: {bot.mediator.get_enemy_nat}")
+    print(f"  Rush Distance Tier: {bot.rush_distance_tier}")
+    rush_time_str = f"{bot._rush_time_seconds:.1f}s" if bot._rush_time_seconds > 0 else "unknown"
+    print(f"  Rush Time: {rush_time_str}")
+    print("="*60 + "\n")
+
+
+def print_periodic_intel_report(bot, iteration: int) -> None:
+    """Print periodic intelligence report every 30 game seconds.
+    
+    Shows bot decision-making state for field analysis.
+    Always prints (not gated by bot.debug).
+    
+    Args:
+        bot: Bot instance
+        iteration: Current game iteration
+    """
+    # Only report every 30 game seconds (22.4 steps per second)
+    # Start at 30 seconds, not at iteration 0
+    report_interval = 30 * 22.4
+    if iteration == 0 or iteration % int(report_interval) != 0:
+        return
+    
+    game_time_minutes = int(bot.time // 60)
+    game_time_seconds = int(bot.time % 60)
+    
+    print("\n" + "="*60)
+    print(f"  INTEL REPORT {game_time_minutes}:{game_time_seconds:02d}")
+    print("="*60)
+    
+    # === COMBAT STATUS ===
+    print("\n  COMBAT STATUS:")
+    print(f"    Attack Commenced: {bot._commenced_attack}")
+    print(f"    Under Attack: {bot._under_attack}")
+    print(f"    Cheese Response: {bot._used_cheese_response}")
+    print(f"    One Base Response: {bot._used_one_base_response}")
+    print(f"    Game State: {bot.game_state} ({'Early' if bot.game_state == 0 else 'Mid' if bot.game_state == 1 else 'Late'})")
+    
+    # Fight simulation
+    try:
+        fight_result = bot.mediator.can_win_fight(
+            own_units=bot.own_army,
+            enemy_units=bot.enemy_army,
+            timing_adjust=True,
+            good_positioning=True,
+            workers_do_no_damage=True
+        )
+        print(f"    Can Win Fight: {fight_result}")
+    except Exception as e:
+        print(f"    Can Win Fight: Error ({e})")
+    
+    # === ARMY COMPOSITION ===
+    print("\n  ARMY COMPOSITION:")
+    _print_army_composition(bot)
+    
+    # === UNIT ROLES ===
+    print("\n  UNIT ROLES:")
+    _print_unit_roles(bot)
+    
+    # === ENEMY INTELLIGENCE ===
+    print("\n  ENEMY INTELLIGENCE:")
+    _print_enemy_intel(bot)
+    
+    # === ECONOMY ===
+    print("\n  ECONOMY:")
+    _print_economy_state(bot)
+    
+    # === TARGET & POSITIONING ===
+    if hasattr(bot, 'current_attack_target') and bot.current_attack_target:
+        print("\n  TARGETING:")
+        print(f"    Current Target: {bot.current_attack_target}")
+    
+    # === RUSH DETECTION (Zerg only) ===
+    if bot.enemy_race in {Race.Zerg, Race.Random}:
+        _print_rush_detection_status(bot)
+    
+    print("="*60 + "\n")
+
+
+def get_replay_tags_to_send(bot) -> list[str]:
+    """
+    Collect replay tags that should be sent this iteration.
+    Returns list of tags to send via chat_send().
+    
+    Tags are only sent once per game (tracked in bot._replay_tags_sent).
+    
+    Args:
+        bot: Bot instance
+        
+    Returns:
+        List of tag strings to send
+    """
+    # Initialize tags set if needed
+    if not hasattr(bot, '_replay_tags_sent'):
+        bot._replay_tags_sent = set()
+    
+    tags = []
+    
+    # Tag rush type when detected (Zerg only, once per game)
+    if (bot.enemy_race in {Race.Zerg, Race.Random} 
+        and hasattr(bot, '_ling_rushed_v2') 
+        and bot._ling_rushed_v2
+        and hasattr(bot, '_rush_label')
+        and bot._rush_label != 'none'
+        and 'Rush' not in bot._replay_tags_sent):
+        
+        tags.append(f"Rush_{bot._rush_label}")
+        bot._replay_tags_sent.add('Rush')
+    
+    # Tag worker rush
+    if not bot._not_worker_rush and 'WorkerRush' not in bot._replay_tags_sent:
+        tags.append("WorkerRush")
+        bot._replay_tags_sent.add('WorkerRush')
+    
+    # Tag cannon rush
+    if bot._cannon_rush_response and 'CannonRush' not in bot._replay_tags_sent:
+        tags.append("CannonRush")
+        bot._replay_tags_sent.add('CannonRush')
+    
+    # Tag one base all-in
+    if bot._used_one_base_response and 'AllIn' not in bot._replay_tags_sent:
+        tags.append("All_In")
+        bot._replay_tags_sent.add('AllIn')
+    
+    return tags
+
+
+def _print_army_composition(bot) -> None:
+    """Print breakdown of army unit types and totals."""
+    if not bot.own_army:
+        print("    No army units")
+        return
+    
+    # Count units by type
+    unit_counts = {}
+    for unit in bot.own_army:
+        type_name = unit.type_id.name
+        unit_counts[type_name] = unit_counts.get(type_name, 0) + 1
+    
+    # Print sorted by count (descending)
+    for unit_type, count in sorted(unit_counts.items(), key=lambda x: x[1], reverse=True):
+        print(f"    {unit_type}: {count}")
+    
+    print(f"    Total Army: {len(bot.own_army)} units")
+
+
+def _print_unit_roles(bot) -> None:
+    """Print unit role assignments and squad counts."""
+    try:
+        attacking = bot.mediator.get_units_from_role(role=UnitRole.ATTACKING)
+        defending = bot.mediator.get_units_from_role(role=UnitRole.DEFENDING)
+        base_defenders = bot.mediator.get_units_from_role(role=UnitRole.BASE_DEFENDER)
+        
+        print(f"    ATTACKING: {len(attacking)}")
+        print(f"    DEFENDING: {len(defending)}")
+        print(f"    BASE_DEFENDER: {len(base_defenders)}")
+        
+        # Squad counts
+        from bot.constants import ATTACKING_SQUAD_RADIUS, DEFENDER_SQUAD_RADIUS
+        attacking_squads = bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=ATTACKING_SQUAD_RADIUS)
+        defending_squads = bot.mediator.get_squads(role=UnitRole.DEFENDING, squad_radius=ATTACKING_SQUAD_RADIUS)
+        base_squads = bot.mediator.get_squads(role=UnitRole.BASE_DEFENDER, squad_radius=DEFENDER_SQUAD_RADIUS)
+        
+        print(f"    Squads: ATK:{len(attacking_squads)} DEF:{len(defending_squads)} BASE:{len(base_squads)}")
+    except Exception as e:
+        print(f"    Error getting roles: {e}")
+
+
+def _print_enemy_intel(bot) -> None:
+    """Print scouted enemy units and structures."""
+    if not bot.enemy_units and not bot.enemy_structures:
+        print("    No enemy scouted")
+        return
+    
+    # Count enemy units
+    if bot.enemy_units:
+        unit_counts = {}
+        for unit in bot.enemy_units:
+            type_name = unit.type_id.name
+            unit_counts[type_name] = unit_counts.get(type_name, 0) + 1
+        
+        print("    Enemy Units:")
+        for unit_type, count in sorted(unit_counts.items(), key=lambda x: x[1], reverse=True):
+            print(f"      {unit_type}: {count}")
+    
+    # Count enemy structures
+    if bot.enemy_structures:
+        structure_counts = {}
+        for structure in bot.enemy_structures:
+            type_name = structure.type_id.name
+            structure_counts[type_name] = structure_counts.get(type_name, 0) + 1
+        
+        print("    Enemy Structures:")
+        for struct_type, count in sorted(structure_counts.items(), key=lambda x: x[1], reverse=True):
+            print(f"      {struct_type}: {count}")
+
+
+def _print_economy_state(bot) -> None:
+    """Print economy state (bases, workers, resources)."""
+    gatherers = bot.mediator.get_units_from_role(role=UnitRole.GATHERING)
+    
+    print(f"    Bases: {len(bot.townhalls)}")
+    print(f"    Workers: {len(bot.workers)} (Gathering: {len(gatherers)})")
+    print(f"    Supply: {bot.supply_used}/{bot.supply_cap}")
+    print(f"    Minerals: {bot.minerals}")
+    print(f"    Vespene: {bot.vespene}")
+    print(f"    Income: {bot.state.score.collection_rate_minerals}/min minerals, {bot.state.score.collection_rate_vespene}/min gas")
+
+
+def _print_rush_detection_status(bot) -> None:
+    """Print rush detection intel (Zerg only - early game)."""
+    if not hasattr(bot, '_rush_score') or bot.time > 240.0:
+        return
+    
+    print("\n  RUSH DETECTION (vs Zerg):")
+    
+    # Rush scores
+    total = getattr(bot, '_rush_score', 0)
+    r1 = getattr(bot, '_r1_score', 0)
+    r2 = getattr(bot, '_r2_score', 0)
+    r3 = getattr(bot, '_r3_score', 0)
+    
+    print(f"    Rush Score: {total} (R1={r1}, R2={r2}, R3={r3})")
+    print(f"    Rush Label: {getattr(bot, '_rush_label', 'none')}")
+    print(f"    Rush Detected: {getattr(bot, '_ling_rushed_v2', False)}")
+    
+    # Natural scouting
+    natural_scouted = getattr(bot, '_natural_ever_scouted', False)
+    print(f"    Enemy Natural Scouted: {natural_scouted}")
+    
+    # Pool info
+    pool_state = getattr(bot, '_pool_seen_state', 'none')
+    pool_time = getattr(bot, '_pool_seen_time', None)
+    pool_time_str = f"{pool_time:.1f}s" if pool_time else "unknown"
+    print(f"    Spawning Pool: {pool_state} (seen at {pool_time_str})")
 
 
 def print_end_game_report(

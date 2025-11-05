@@ -41,7 +41,6 @@ def get_enemy_cannon_rushed(bot, detection_radius: float = 25.0) -> bool:
         
         # If we see cannons or multiple pylons near our bases, it's likely a cannon rush
         if cannon_count > 0 or pylon_count > 1:
-            print(f"Cannon rush detected with {cannon_count} cannons and {pylon_count} pylons within {detection_radius} units of our bases")
             return True
             
         return False

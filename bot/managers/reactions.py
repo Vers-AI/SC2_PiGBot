@@ -277,13 +277,11 @@ def early_threat_sensor(bot):
     Sets flags so the bot can respond (e.g., cheese_reaction).
     """
     if bot.mediator.get_enemy_worker_rushed and bot.game_state == 0:
-        print("Rushed worker detected")
         bot._not_worker_rush = False
         bot._used_cheese_response = True
     
     # Check for cannon rush
     elif get_enemy_cannon_rushed(bot):
-        print("Cannon rush detected")
         bot._used_cheese_response = True
         bot._cannon_rush_response = True
     

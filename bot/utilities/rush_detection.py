@@ -327,10 +327,6 @@ def get_ling_rush_signals(bot: "PiG_Bot") -> dict:
     # Natural is absent if: we've scouted it AND there's no structure there
     natural_absent = bot._natural_ever_scouted and not has_natural_structure
     
-    # Debug: Print status (remove after testing)
-    if bot.time < 180.0 and int(bot.time) % 30 == 0:
-        print(f"DEBUG Natural Check: ever_scouted={bot._natural_ever_scouted}, has_structure={has_natural_structure}, absent={natural_absent}")
-    
     # Ling counts
     enemy_lings = bot.mediator.get_enemy_army_dict.get(UnitTypeId.ZERGLING, [])
     lings_near_main = [
@@ -512,12 +508,6 @@ def get_enemy_ling_rushed_v2(bot: "PiG_Bot") -> bool:
     
     # Threshold: score >= 5 triggers rush response
     rush_detected = total_score >= 5
-    
-    # Debug output
-    if time_now < 240.0 and int(time_now) % 30 == 0:
-        pool_time_str = f"{bot._pool_seen_time:.1f}s" if bot._pool_seen_time else "None"
-        print(f"DEBUG Rush [{bot.time_formatted}]: total={total_score} (R1={r1_score}, R2={r2_score}, R3={r3_score}), "
-              f"label={rush_label}, nat={no_natural}, pool_state={bot._pool_seen_state}, pool_start={pool_time_str}, lings={early_lings}")
     
     # Trigger detection
     if rush_detected:

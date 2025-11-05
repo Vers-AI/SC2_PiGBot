@@ -50,7 +50,7 @@ from bot.utilities.use_disruptor_nova import UseDisruptorNova
 from map_analyzer import MapData
 from bot.utilities.nova_manager import NovaManager
 from bot.utilities.performance_monitor import PerformanceMonitor
-from bot.utilities.game_report import print_end_game_report
+from bot.utilities.game_report import print_end_game_report, print_startup_report, print_periodic_intel_report, get_replay_tags_to_send
 # # Wall manager removed - use generate_wall_placements.py to create wall data
 # from bot.utilities.natural_wall_manager import NaturalWallManager  # Temporarily disabled
 
@@ -137,7 +137,6 @@ class PiG_Bot(AresBot):
         and calculates where to take expansions first.
         """
         await super().on_start()
-        print("Game started")
 
         # Debug on start
         self.map_data: MapData  = self.mediator.get_map_data_object
@@ -166,9 +165,6 @@ class PiG_Bot(AresBot):
 
         # Reserve expansions and set flags
         self.natural_expansion: Point2 = self.mediator.get_own_nat
-        print("Natural Expansion:", self.natural_expansion)
-        print("Enemy Start:", self.mediator.get_enemy_nat)
-
         self.expansions_generator = cycle(self.expansion_locations_list)
 
         if self.enemy_race in {Race.Zerg, Race.Random}:
@@ -185,14 +181,12 @@ class PiG_Bot(AresBot):
         else:
             self.rally_point = self.natural_expansion.towards(self.game_info.map_center, 5)
         
-        print("Build Chosen:", self.build_order_runner.chosen_opening)
-        print("the enemy race is:", self.enemy_race)
-        
         # Compute rush distance tier for ling rush detection (used in reactions.py)
         from bot.utilities.rush_detection import compute_rush_distance_tier
         self.rush_distance_tier = compute_rush_distance_tier(self)
-        rush_time_str = f"{self._rush_time_seconds:.1f}s" if self._rush_time_seconds > 0 else "unknown (pathfind failed)"
-        print(f"Rush distance tier: {self.rush_distance_tier} ({rush_time_str} rush time)")
+        
+        # Print startup report with all initial game info
+        print_startup_report(self)
 
     async def on_step(self, iteration: int) -> None:
         """
@@ -200,6 +194,13 @@ class PiG_Bot(AresBot):
         and reaction modules to handle behavior.
         """
         await super(PiG_Bot, self).on_step(iteration)
+        
+        # Print periodic intel report (every 30 game seconds)
+        print_periodic_intel_report(self, iteration)
+        
+        # Send replay tags (for filtering replays later)
+        for tag in get_replay_tags_to_send(self):
+            await self.chat_send(f"Tag: {tag}")
         
         # Update performance metrics (SQ tracking)
         self.performance_monitor.update(iteration, self)
@@ -272,10 +273,6 @@ class PiG_Bot(AresBot):
             self.main_army_position = self.mediator.get_position_of_main_squad(role=UnitRole.ATTACKING)
             # handle_attack_toggles decides target (attack/retreat/rally) and sets _commenced_attack flag
             final_target = handle_attack_toggles(self, main_army, attack_target(self, main_army_position=self.main_army_position))
-            # Always control when we have squads - target determines behavior (attack/retreat/rally)
-            # This differs from OLD code which only controlled when _commenced_attack==True,
-            # but OLD code called control_main_army inside handle_attack_toggles for retreats.
-            # Net effect: army is always controlled when squads exist (same total behavior)
             control_main_army(self, main_army, final_target, squads)
         elif main_army:
             # Fallback: use main army center if no squads can be formed

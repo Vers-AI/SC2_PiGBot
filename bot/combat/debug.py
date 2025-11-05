@@ -25,16 +25,6 @@ def render_combat_state_overlay(bot, main_army: Units, enemy_threat_level: int, 
     if not bot.debug:
         return
     
-    # Fight simulation result
-    fight_result = bot.mediator.can_win_fight(
-        own_units=bot.own_army, 
-        enemy_units=bot.enemy_army, 
-        timing_adjust=True, 
-        good_positioning=True, 
-        workers_do_no_damage=True
-    )
-    print(f"Can win fight: {fight_result}")
-    
     # Combat state overlay
     bot.client.debug_text_2d(
         f"Attack: {bot._commenced_attack} Threat: {enemy_threat_level} Under Attack: {bot._under_attack}", 
