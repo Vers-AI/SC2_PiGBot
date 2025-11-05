@@ -1,0 +1,3463 @@
+2025/10/31 21:32:11 Error getting user directory: user: Current requires cgo or $USER set in environment
+2025/10/31 21:32:11 Error reading `executable`: open : no such file or directory
+2025/10/31 21:32:11 Can't find executable path, hope that it's ok. If not, please run StarCraft II first or use the --executable <path> arg
+2025/10/31 21:32:11 Connecting to port 10001
+
+2025/10/31 21:32:13 Connected to 127.0.0.1:10001
+Player Name: negativeZero
+2025/10/31 21:32:23  Successfully joined game
+Initializing bot 0 : negativeZero : negativeZero
+Input args are [./negativeZero --GamePort 10001 --LadderServer 127.0.0.1 --StartPort 10001 --OpponentId 2557ad1d-ee42-4aaa-aa1b-1b46d31153d2] and type is []string
+Opponent ID: 2557ad1d-ee42-4aaa-aa1b-1b46d31153d2
+Loading Opponent Data
+Current Opponent Found Terran
+Loading StrategyList: [TerrAdeptTwist TerrBlinkRobo]
+Strategy TerrAdeptTwist WinPer: 66 Wins: 4 Total: 6
+Strategy TerrBlinkRobo WinPer: 100 Wins: 6 Total: 6
+Chosen Strategy is:  TerrBlinkRobo
+Match ID: 1761946343
+map: LeyLinesAIE
+Load String: LoadLeyLinesAIE
+Loading Map LeyLinesAIE-X42-Y40 OneBase
+Populating Expansion List
+Expansion Location:  {43.5 96.5} 70.448 146.90747
+Expansion Location:  {157.5 104.5} 159.12549 37.26001
+Expansion Location:  {104.5 107.5} 110.09277 76.83838
+Expansion Location:  {44.5 123.5} 96.81494 140.59888
+Expansion Location:  {120.5 36.5} 109.67822 118.8186
+Expansion Location:  {125.5 88.5} 123.15747 67.22583
+Expansion Location:  {104.5 132.5} 123.687256 81.218506
+Expansion Location:  {93.5 41.5} 81.220215 123.686035
+Expansion Location:  {130.5 118.5} 136.2732 51.841797
+Expansion Location:  {67.5 55.5} 51.84326 136.27124
+Expansion Location:  {77.5 137.5} 118.82056 109.67676
+Expansion Location:  {40.5 69.5} 37.260742 159.12402
+Expansion Location:  {154.5 77.5} 146.90918 70.44629
+Expansion Location:  {153.5 50.5} 140.60059 96.81348
+Expansion Location:  {72.5 85.5} 67.22754 123.15576
+Expansion Location:  {93.5 66.5} 76.84009 110.09082
+Expansion Location:  {155.5 133.5} 177.37329 0
+Expansion Location:  {42.5 40.5} 0 177.3728
+Loaded Strategy: Terran Blink Robo
+Running:  LoadTerranOneBasePositions
+Load String: LoadLeyLinesAIE
+Loading Map LeyLinesAIE-X42-Y40 TerranOneBase
+Training Starting Probe 0
+RealTime Detected: false
+Main Base Loaded
+Next Expansion Trigger: Update Friend Owned
+
+Updating Defensive Point
+Using Block Pylon Position
+274     0:12    Supply:14/15          Minerals:70      Vespene:0       [4348968961] Nexus        Training Probe
+332     0:14    Supply:14/15          Minerals:100     Vespene:0       Terran Blink Robo         Building Pylon [X:53, Y:46]
+548     0:24    Supply:15/15          Minerals:75      Vespene:0       [4348968961] Nexus        Training Probe
+758     0:33    Supply:15/23          Minerals:215     Vespene:0       Terran Blink Robo         Building Gateway [X:55.5, Y:46.5]
+Sending Scout
+822     0:36    Supply:16/23          Minerals:50      Vespene:0       [4348968961] Nexus        Training Probe
+824     0:36    Supply:16/23          Minerals:50      Vespene:0       Terran Blink Robo         ChronoBoosting 0 Nexus 0 false
+856     0:38    Supply:16/23          Minerals:75      Vespene:0       Terran Blink Robo         Building Assimilator
+1006    0:44    Supply:17/23          Minerals:35      Vespene:0       [4348968961] Nexus        Training Probe
+1190    0:53    Supply:18/23          Minerals:115     Vespene:0       [4348968961] Nexus        Training Probe
+Intel Report 1:00
+
+Enemy Unit Report  1:00
+
+Enemy Building Report  1:00
+
+Ideal Counters Report  1:00
+Zealot: Demand Score, 100[0%] Needed: 1, Existing: 0, Demand: 1
+
+Live Counters Report  1:00
+
+Army Report 1:00
+Win Air: false [ 0 ]
+Air Ground: false [ 0 ]
+Air All: false [ 0 ]
+Army Power: 0.017
+Enemy Power: 0
+Attack Status: true
+Rally Point: {36.051315 49.15395}
+Defensive Point: {37 52}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 0
+Next Expansion: {40.5 69.5}
+Best Expansion: {40.5 69.5}
+Should Expand: false
+Expand Saving: false
+Air Superiority: true
+Alloc = 12 MiB	TotalAlloc = 278 MiB	Sys = 40 MiB	NumGC = 28
+
+1422    1:03    Supply:19/23          Minerals:245     Vespene:0       [4348968961] Nexus        Training Probe
+1574    1:10    Supply:19/23          Minerals:340     Vespene:12      Map Info                  Enemy Natural Ramp Scouted
+1696    1:15    Supply:20/23          Minerals:370     Vespene:28      [4348968961] Nexus        Training Probe
+1806    1:20    Supply:20/23          Minerals:440     Vespene:40      Map Info                  Enemy Main Ramp Scouted
+Enemy Building: SupplyDepot Distance 17.10263
+1820    1:21    Supply:20/23          Minerals:445     Vespene:44      Terran Blink Robo         Building Cybernetics Core [X:53.5, Y:50.5]
+1966    1:27    Supply:20/23          Minerals:405     Vespene:60      Terran Blink Robo         Expanding to Natural
+Next Expansion Trigger: Update Friend Owned
+
+Updating Defensive Point
+Unable to find Defensive Position
+Intel Report 1:30
+
+Enemy Unit Report  1:30
+SCV: 14/14
+
+Enemy Building Report  1:30
+Refinery: 1
+SupplyDepot: 1
+SupplyDepotLowered: 1
+CommandCenter: 1
+
+Ideal Counters Report  1:30
+Zealot: Demand Score, 100[0%] Needed: 1, Existing: 0, Demand: 1
+
+Live Counters Report  1:30
+Zealot: Demand Score, 100[0%] Needed: 1, Existing: 0, Demand: 1
+
+Army Report 1:30
+Win Air: false [ 0 ]
+Air Ground: false [ 0 ]
+Air All: false [ 0 ]
+Army Power: 0.019000001
+Enemy Power: 0.0150000015
+Attack Status: true
+Rally Point: {36.051315 49.15395}
+Defensive Point: {36.683773 51.051315}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 18
+Next Expansion: {67.5 55.5}
+Best Expansion: {67.5 55.5}
+Should Expand: false
+Expand Saving: false
+Air Superiority: true
+Alloc = 17 MiB	TotalAlloc = 422 MiB	Sys = 40 MiB	NumGC = 40
+
+2054    1:31    Supply:21/23          Minerals:5       Vespene:72      [4348968961] Nexus        Training Probe
+2180    1:37    Supply:21/23          Minerals:100     Vespene:88      Terran Blink Robo         Building Pylon [X:55, Y:34]
+2288 First Time Finished, Add Natural
+2292    1:42    Supply:21/23          Minerals:75      Vespene:100     Terran Blink Robo         Building Assimilator
+2370    1:45    Supply:22/23          Minerals:5       Vespene:112     [4348968961] Nexus        Training Probe
+2404 Trip Finished
+2404 : Scout Print Out 107.321434
+CommandCenter: Last Updated Frame: 2404(1:47) Progress: 1
+Factory: Last Updated Frame: 2404(1:47) Progress: 0.0625
+Refinery: Last Updated Frame: 2404(1:47) Progress: 1
+Vespene: 2166 Harvesters: 0
+SupplyDepot: Last Updated Frame: 2404(1:47) Progress: 0.6145834
+SupplyDepot: Last Updated Frame: 2404(1:47) Progress: 1
+Worker Counts: 17
+SCV Count: 17
+2644    1:58    Supply:23/23          Minerals:160     Vespene:144     [4348968961] Nexus        Training Probe
+2660    1:58    Supply:23/31          Minerals:165     Vespene:144     Terran Blink Robo         Training Adept
+2662    1:58    Supply:25/31          Minerals:75      Vespene:119     Cybernetics Core          Researching Research Warpgate
+2662    1:58    Supply:25/31          Minerals:25      Vespene:69      Terran Blink Robo         ChronoBoosting 1 Gateway 824 false
+Intel Report 2:00
+
+Enemy Unit Report  2:00
+SCV: 19/19
+
+Enemy Building Report  2:00
+Factory: 1
+OrbitalCommand: 1
+Refinery: 1
+SupplyDepot: 1
+SupplyDepotLowered: 1
+
+Ideal Counters Report  2:00
+Zealot: Demand Score, 100[0%] Needed: 1, Existing: 0, Demand: 1
+
+Live Counters Report  2:00
+Zealot: Demand Score, 100[0%] Needed: 1, Existing: 0, Demand: 1
+
+Army Report 2:00
+Win Air: false [ 0 ]
+Air Ground: false [ 0 ]
+Air All: false [ 0 ]
+Army Power: 0.021000002
+Enemy Power: 0.019000001
+Attack Status: true
+Rally Point: {36.051315 49.15395}
+Defensive Point: {36.683773 51.051315}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 25
+Next Expansion: {67.5 55.5}
+Best Expansion: {67.5 55.5}
+Should Expand: false
+Expand Saving: false
+Air Superiority: true
+Alloc = 19 MiB	TotalAlloc = 605 MiB	Sys = 40 MiB	NumGC = 55
+
+2918    2:10    Supply:26/31          Minerals:155     Vespene:105     [4348968961] Nexus        Training Probe
+3018 Trip Finished
+3018 : Scout Print Out 134.73215
+Refinery: Last Updated Frame: 3018(2:14) Progress: 1
+Vespene: 2090 Harvesters: 0
+SupplyDepot: Last Updated Frame: 3018(2:14) Progress: 1
+OrbitalCommand: Last Updated Frame: 3018(2:14) Progress: 1
+SupplyDepot: Last Updated Frame: 3018(2:14) Progress: 0.6145834
+Factory: Last Updated Frame: 3018(2:14) Progress: 0.703125
+Worker Counts: 19
+SCV Count: 19
+3112    2:18    Supply:26/31          Minerals:305     Vespene:153     Terran Blink Robo         Training Stalker
+3114    2:19    Supply:28/31          Minerals:180     Vespene:103     Terran Blink Robo         ChronoBoosting 2 Gateway 2662 false
+3114    2:19    Supply:28/31          Minerals:180     Vespene:103     Terran Blink Robo         Building Twilight Council [X:51.5, Y:30.5]
+3192    2:22    Supply:29/31          Minerals:45      Vespene:23      [4348968961] Nexus        Training Probe
+Loading Contain: LoadTerrContainDefense
+3300    2:27    Supply:29/31          Minerals:115     Vespene:51      Terran Blink Robo         Terran Contain Defense Started
+3300    2:27    Supply:29/31          Minerals:115     Vespene:51      Attack Mode Ended - 1 Base Standoff [Enemy: 350.02106/875.0526 Ours: 150.022] AttackCommander
+3300    2:27    Supply:29/31          Minerals:115     Vespene:51      Terran Contain Defense    Building Pylon [X:53, Y:48]
+3302    2:27    Supply:29/31          Minerals:320     Vespene:51      Combat                    Dead Friend: Nexus [4361551873]
+Next Expansion Trigger: Update Friend Owned
+Updating Defensive Position due to nexus loss
+
+Updating Defensive Point
+Using Block Pylon Position
+Intel Report 2:30
+
+Enemy Unit Report  2:30
+SCV: 21/21
+Bunker: 1/1
+
+Enemy Building Report  2:30
+Refinery: 1
+SupplyDepot: 2
+Bunker: 1
+Factory: 1
+OrbitalCommand: 1
+
+Ideal Counters Report  2:30
+Stalker: Demand Score, 0[1999%] Needed: 0, Existing: 1, Demand: 0.05000000074505806
+
+Live Counters Report  2:30
+Stalker: Demand Score, 225[49%] Needed: 1.0000000298023224, Existing: 1, Demand: 2.0000000298023224
+
+Army Report 2:30
+Win Air: false [ 0 ]
+Air Ground: false [ 0 ]
+Air All: false [ 0 ]
+Army Power: 150.022
+Enemy Power: 350.02115
+Attack Status: false
+Rally Point: {0 0}
+Defensive Point: {37 52}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 28
+Next Expansion: {40.5 69.5}
+Best Expansion: {40.5 69.5}
+Should Expand: false
+Expand Saving: false
+Air Superiority: true
+Alloc = 12 MiB	TotalAlloc = 813 MiB	Sys = 40 MiB	NumGC = 73
+
+3396    2:31    Supply:29/31          Minerals:390     Vespene:75      Terran Contain Defense    Building Gateway [X:55.5, Y:31.5]
+3502    2:36    Supply:29/31          Minerals:315     Vespene:99      Terran Contain Defense    Building Gateway [X:58.5, Y:33.5]
+3522    2:37    Supply:29/31          Minerals:175     Vespene:103     Terran Contain Defense    Training Stalker
+3588    2:40    Supply:31/31          Minerals:5       Vespene:69      Economy                   Building Pylon [X:46, Y:42]
+3608    2:41    Supply:31/31          Minerals:20      Vespene:73      Attack Mode Started - 0 Nexus [Enemy: 400.022 Ours: 375.02316] AttackCommander
+3632 Trip Finished
+Scouting Finished
+3632 : Scout Print Out 162.14285
+Refinery: Last Updated Frame: 3632(2:42) Progress: 1
+Vespene: 2014 Harvesters: 0
+CommandCenter: Last Updated Frame: 3632(2:42) Progress: 0.004374981
+Factory: Last Updated Frame: 3632(2:42) Progress: 1
+SupplyDepot: Last Updated Frame: 3632(2:42) Progress: 1
+OrbitalCommand: Last Updated Frame: 3632(2:42) Progress: 1
+SupplyDepot: Last Updated Frame: 3632(2:42) Progress: 0.6145834
+Bunker: Last Updated Frame: 3632(2:42) Progress: 1
+FactoryTechLab: Last Updated Frame: 3632(2:42) Progress: 0.8575
+Worker Counts: 21
+SCV Count: 21
+Bunker Count: 1
+Marine Count: 1
+Gatherer
+Intel Report 3:00
+
+Enemy Unit Report  3:00
+SCV: 21/21
+Bunker: 1/1
+Marine: 2/2
+
+Enemy Building Report  3:00
+SupplyDepot: 3
+Refinery: 1
+Factory: 1
+OrbitalCommand: 1
+Bunker: 1
+FactoryTechLab: 1
+CommandCenter: 1
+
+Ideal Counters Report  3:00
+Stalker: Demand Score, -225[3999%] Needed: -1, Existing: 2, Demand: 0.05000000074505806
+
+Live Counters Report  3:00
+Stalker: Demand Score, 258[63%] Needed: 1.1500000022351742, Existing: 2, Demand: 3.150000002235174
+
+Army Report 3:00
+Win Air: false [ 0 ]
+Air Ground: false [ 0 ]
+Air All: false [ 0 ]
+Army Power: 375.02316
+Enemy Power: 450.022
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {37 52}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 33
+Next Expansion: {67.5 55.5}
+Best Expansion: {40.5 69.5}
+Should Expand: false
+Expand Saving: false
+Air Superiority: true
+Alloc = 17 MiB	TotalAlloc = 1035 MiB	Sys = 40 MiB	NumGC = 92
+
+4114    3:03    Supply:31/47          Minerals:420     Vespene:197     Terran Contain Defense    Training Stalker
+4208    3:07    Supply:33/47          Minerals:370     Vespene:167     Map Info                  Enemy Natural Ramp Scouted
+4296    3:11    Supply:33/47          Minerals:430     Vespene:191     Terran Contain Defense    Chronoboosting Gateway [4357619713]
+4388    3:15    Supply:33/47          Minerals:505     Vespene:215     Terran Contain Defense    Building Forge [X:56.5, Y:37.5]
+4410    3:16    Supply:33/47          Minerals:375     Vespene:215     Combat                    Dead Enemy: SCV [4353949697]
+4532    3:22    Supply:33/47          Minerals:460     Vespene:247     Terran Contain Defense    Training Stalker
+4532    3:22    Supply:35/47          Minerals:235     Vespene:197     Economy                   Building Pylon [X:49, Y:35]
+4584    3:24    Supply:35/47          Minerals:275     Vespene:213     Terran Contain Defense    Training Stalker
+4634    3:26    Supply:37/47          Minerals:190     Vespene:171     Terran Contain Defense    Training Stalker
+4654    3:27    Supply:39/47          Minerals:90      Vespene:129     Combat                    Dead Enemy: SCV [4366270465]
+4702    3:29    Supply:39/47          Minerals:125     Vespene:137     Map Info                  Enemy Main Ramp Scouted
+Enemy Building: FactoryTechLab Distance 10.511898
+Enemy Building: SupplyDepot Distance 19.455076
+Enemy Building: SupplyDepot Distance 17.10263
+Enemy Building: Refinery Distance 22.561028
+Enemy Building: Bunker Distance 117.17508
+Enemy Building: CommandCenter Distance 14.035668
+Enemy Building: Factory Distance 13
+Enemy Building: SupplyDepot Distance 21.78302
+Enemy Building: OrbitalCommand Distance 15.033297
+Enemy Building: SupplyDepot Distance 18.179659
+Intel Report 3:30
+
+Enemy Unit Report  3:30
+SCV: 20/22
+Bunker: 1/1
+Marine: 2/2
+
+Enemy Building Report  3:30
+FactoryTechLab: 1
+SupplyDepot: 4
+Refinery: 1
+Bunker: 1
+CommandCenter: 1
+Factory: 1
+OrbitalCommand: 1
+
+Ideal Counters Report  3:30
+Stalker: Demand Score, -1125[11999%] Needed: -5, Existing: 6, Demand: 0.05000000074505806
+
+Live Counters Report  3:30
+Stalker: Demand Score, 303[81%] Needed: 1.3500000052154064, Existing: 6, Demand: 7.350000005215406
+
+Army Report 3:30
+Win Air: false [ 0 ]
+Air Ground: false [ 0 ]
+Air All: false [ 0 ]
+Army Power: 825.02246
+Enemy Power: 450.02112
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {37 52}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 33
+Next Expansion: {40.5 69.5}
+Best Expansion: {40.5 69.5}
+Should Expand: false
+Expand Saving: false
+Air Superiority: true
+Alloc = 20 MiB	TotalAlloc = 1275 MiB	Sys = 41 MiB	NumGC = 112
+
+4772    3:33    Supply:39/47          Minerals:175     Vespene:153     Combat                    Dead Enemy: SCV [4352901121]
+4890    3:38    Supply:39/47          Minerals:265     Vespene:185     Combat                    Dead Enemy: SCV [4355260417]
+4968    3:41    Supply:39/55          Minerals:340     Vespene:201     Combat                    Dead Enemy: SCV [4358144001]
+5114    3:48    Supply:39/55          Minerals:450     Vespene:241     [4357619713] Gateway      Morphing to Warpgate
+5194    3:51    Supply:39/55          Minerals:515     Vespene:257     Combat                    Dead Enemy: SCV [4359454721]
+5244    3:54    Supply:39/55          Minerals:555     Vespene:273     [4368367617] Gateway      Morphing to Warpgate
+5278    3:55    Supply:39/55          Minerals:580     Vespene:281     Terran Contain Defense    Warping Stalker
+5304    3:56    Supply:41/55          Minerals:485     Vespene:235     Terran Contain Defense    Warping Stalker
+5304    3:56    Supply:43/55          Minerals:260     Vespene:185     Economy                   Building Pylon [X:44, Y:44]
+5312    3:57    Supply:41/55          Minerals:265     Vespene:189     Combat                    Dead Friend: Adept [4365221889]
+Intel Report 4:00
+
+Enemy Unit Report  4:00
+SCV: 21/22
+Bunker: 1/1
+Marine: 5/5
+SiegeTank: 1/1
+
+Enemy Building Report  4:00
+Refinery: 1
+Bunker: 1
+Factory: 1
+Barracks: 1
+CommandCenter: 1
+OrbitalCommand: 1
+FactoryTechLab: 1
+SupplyDepot: 4
+
+Ideal Counters Report  4:00
+Stalker: Demand Score, -1800[17999%] Needed: -8, Existing: 9, Demand: 0.05000000074505806
+
+Live Counters Report  4:00
+Stalker: Demand Score, 708[74%] Needed: 3.150000002235174, Existing: 9, Demand: 12.150000002235174
+
+Army Report 4:00
+Win Air: false [ 0 ]
+Air Ground: false [ 0 ]
+Air All: false [ 0 ]
+Army Power: 1800.0225
+Enemy Power: 1000.0218
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {37 52}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 40
+Next Expansion: {67.5 55.5}
+Best Expansion: {40.5 69.5}
+Should Expand: false
+Expand Saving: false
+Air Superiority: true
+Alloc = 17 MiB	TotalAlloc = 1530 MiB	Sys = 41 MiB	NumGC = 134
+
+5394    4:00    Supply:39/55          Minerals:325     Vespene:205     Combat                    Dead Friend: Stalker [4371513346]
+5408    4:01    Supply:39/55          Minerals:340     Vespene:213     Terran Contain Defense    Warping Stalker
+5446    4:03    Supply:41/55          Minerals:240     Vespene:171     Combat                    Dead Enemy: SCV [4360241153]
+5482    4:04    Supply:39/55          Minerals:265     Vespene:179     Combat                    Dead Friend: Stalker [4358144002]
+Expansion Trigger Dead Enemy Structure
+5518    4:06    Supply:39/55          Minerals:295     Vespene:187     Combat                    Dead Enemy: Bunker [4364173313]
+Unknown Name 24
+No Cost Data for 24
+5542    4:07    Supply:39/55          Minerals:315     Vespene:195     Combat                    Dead Enemy: Marine [4364959745]
+5558    4:08    Supply:39/55          Minerals:325     Vespene:195     Combat                    Dead Enemy: Marine [4361814017]
+5594    4:09    Supply:39/55          Minerals:355     Vespene:203     Combat                    Dead Enemy: Marine [4367056897]
+Leaving Contain: TerrContainDefense
+5654    4:12    Supply:39/55          Minerals:395     Vespene:219     Combat                    Dead Enemy: Marine [4363386881]
+5656    4:12    Supply:39/55          Minerals:400     Vespene:219     Terran Contain Defense    Expanding to Natural
+Next Expansion Trigger: Update Friend Owned
+
+Updating Defensive Point
+Unable to find Defensive Position
+5770    4:17    Supply:39/63          Minerals:90      Vespene:251     Terran Contain Defense    42.41 seconds ahead of schedule
+5770    4:17    Supply:39/63          Minerals:90      Vespene:251     Terran Contain Defense    Stage Finished
+5772    4:17    Supply:40/63          Minerals:40      Vespene:251     [4348968961] Nexus        Training Probe
+5828    4:20    Supply:40/63          Minerals:100     Vespene:259     Forge                     Researching Weapons 1
+6000    4:27    Supply:42/63          Minerals:5       Vespene:157     [4368367617] WarpGate     Warping Stalker
+Intel Report 4:30
+
+Enemy Unit Report  4:30
+SCV: 20/22
+Bunker: 0/1
+Marine: 3/7
+SiegeTank: 1/1
+
+Enemy Building Report  4:30
+Refinery: 1
+SupplyDepot: 4
+Factory: 1
+Barracks: 1
+OrbitalCommand: 1
+CommandCenter: 1
+FactoryTechLab: 1
+
+Ideal Counters Report  4:30
+Stalker: Demand Score, -1800[17999%] Needed: -8, Existing: 9, Demand: 0.05000000074505806
+
+Live Counters Report  4:30
+Stalker: Demand Score, 247[89%] Needed: 1.1000000014901161, Existing: 9, Demand: 10.100000001490116
+
+Army Report 4:30
+Win Air: true [ 33.425484 ]
+Air Ground: true [ 16.403568 ]
+Air All: true [ 16.403568 ]
+Army Power: 1800.0234
+Enemy Power: 550.0209
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {36.683773 51.051315}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 36
+Next Expansion: {67.5 55.5}
+Best Expansion: {67.5 55.5}
+Should Expand: false
+Expand Saving: false
+Air Superiority: true
+Alloc = 15 MiB	TotalAlloc = 1781 MiB	Sys = 41 MiB	NumGC = 155
+
+6062    4:30    Supply:43/63          Minerals:0       Vespene:169     [4348968961] Nexus        Training Probe
+6220    4:37    Supply:45/63          Minerals:0       Vespene:155     [4367843329] WarpGate     Warping Stalker
+6336    4:42    Supply:46/63          Minerals:50      Vespene:187     [4348968961] Nexus        Training Probe
+6440    4:47    Supply:48/63          Minerals:0       Vespene:161     [4357619713] WarpGate     Warping Stalker
+6574    4:53    Supply:50/63          Minerals:0       Vespene:143     [4368367617] WarpGate     Warping Stalker
+6644    4:56    Supply:51/63          Minerals:0       Vespene:159     [4348968961] Nexus        Training Probe
+Intel Report 5:00
+
+Enemy Unit Report  5:00
+SCV: 20/22
+Bunker: 1/1
+Marine: 4/7
+SiegeTank: 1/1
+Hellion: 1/1
+
+Enemy Building Report  5:00
+BarracksFlying: 1
+SupplyDepot: 4
+Factory: 1
+Barracks: 1
+Bunker: 1
+OrbitalCommand: 1
+CommandCenter: 1
+FactoryTechLab: 1
+Refinery: 1
+
+Ideal Counters Report  5:00
+Stalker: Demand Score, -2250[21999%] Needed: -10, Existing: 11, Demand: 0.05000000074505806
+
+Live Counters Report  5:00
+Stalker: Demand Score, 247[90%] Needed: 1.1000000014901161, Existing: 11, Demand: 12.100000001490116
+
+Army Report 5:00
+Win Air: true [ 41.146 ]
+Air Ground: true [ 22.727516 ]
+Air All: true [ 22.727516 ]
+Army Power: 2475.0254
+Enemy Power: 1050.0208
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {36.683773 51.051315}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 40
+Next Expansion: {67.5 55.5}
+Best Expansion: {67.5 55.5}
+Should Expand: false
+Expand Saving: false
+Air Superiority: true
+Alloc = 14 MiB	TotalAlloc = 2039 MiB	Sys = 41 MiB	NumGC = 178
+
+6770    5:02    Supply:51/63          Minerals:0       Vespene:191     Economy                   Building Pylon [X:44, Y:73]
+6918    5:08    Supply:52/63          Minerals:70      Vespene:223     [4348968961] Nexus        Training Probe
+6972    5:11    Supply:54/63          Minerals:0       Vespene:189     [4367843329] WarpGate     Warping Stalker
+7112    5:17    Supply:54/63          Minerals:115     Vespene:221     [4348968961] Nexus        Chronoboosting Forge [4353949698]
+7118    5:17    Supply:56/63          Minerals:0       Vespene:175     [4357619713] WarpGate     Warping Stalker
+7192    5:21    Supply:57/63          Minerals:5       Vespene:195     [4348968961] Nexus        Training Probe
+7330    5:27    Supply:59/71          Minerals:5       Vespene:177     [4368367617] WarpGate     Warping Stalker
+7368    5:28    Supply:59/71          Minerals:25      Vespene:185     Cloak Command             Initiated
+Intel Report 5:30
+
+Enemy Unit Report  5:30
+Marine: 7/7
+SiegeTank: 1/1
+Hellion: 1/1
+WidowMineBurrowed: 2/2
+SCV: 20/22
+Bunker: 1/1
+
+Enemy Building Report  5:30
+Refinery: 1
+Factory: 1
+Barracks: 1
+CommandCenter: 1
+SupplyDepot: 3
+SupplyDepotLowered: 1
+OrbitalCommand: 1
+FactoryTechLab: 1
+Bunker: 1
+
+Ideal Counters Report  5:30
+Observer: Demand Score, 20[0%] Needed: 2, Existing: 0, Demand: 1.399999976158142
+Stalker: Demand Score, -3150[29999%] Needed: -14, Existing: 15, Demand: 0.05000000074505806
+
+Live Counters Report  5:30
+Stalker: Demand Score, 247[93%] Needed: 1.1000000014901161, Existing: 15, Demand: 16.100000001490116
+
+Army Report 5:30
+Win Air: true [ 9.743213 ]
+Air Ground: true [ 6.266082 ]
+Air All: true [ 6.0607324 ]
+Army Power: 3150.0273
+Enemy Power: 1450.0206
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {36.683773 51.051315}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 44
+Next Expansion: {67.5 55.5}
+Best Expansion: {67.5 55.5}
+Should Expand: false
+Expand Saving: false
+Air Superiority: true
+Alloc = 21 MiB	TotalAlloc = 2319 MiB	Sys = 41 MiB	NumGC = 201
+
+7402    5:30    Supply:59/86          Minerals:60      Vespene:193     Combat                    Dead Enemy: SCV [4370726914]
+7420    5:31    Supply:57/86          Minerals:70      Vespene:201     Combat                    Dead Friend: Stalker [4373610498]
+7450    5:32    Supply:55/86          Minerals:105     Vespene:205     Combat                    Dead Friend: Stalker [4374659076]
+7452    5:32    Supply:53/86          Minerals:105     Vespene:209     Combat                    Dead Friend: Stalker [4373348354]
+7466    5:33    Supply:51/86          Minerals:120     Vespene:209     Combat                    Dead Friend: Stalker [4364173317]
+7488    5:34    Supply:51/86          Minerals:0       Vespene:117     Production                Building Robotics Facility [X:48.5, Y:41]
+7546    5:36    Supply:52/86          Minerals:0       Vespene:129     [4367056900] Nexus        Training Probe
+7598    5:39    Supply:53/86          Minerals:0       Vespene:141     [4367056900] Nexus        Training Probe
+7700    5:43    Supply:53/86          Minerals:100     Vespene:165     Commander Manager          Building Shield Battery [X:40, Y:73]
+7810    5:48    Supply:55/86          Minerals:5       Vespene:143     [4367843329] WarpGate     Warping Stalker
+7856    5:50    Supply:56/86          Minerals:0       Vespene:155     [4348968961] Nexus        Training Probe
+7892    5:52    Supply:57/86          Minerals:0       Vespene:163     [4367056900] Nexus        Training Probe
+7994    5:56    Supply:59/86          Minerals:0       Vespene:137     [4368367617] WarpGate     Warping Stalker
+Intel Report 6:00
+
+Enemy Unit Report  6:00
+SCV: 21/22
+Bunker: 1/1
+Marine: 8/8
+SiegeTank: 1/1
+Hellion: 1/1
+WidowMineBurrowed: 2/2
+
+Enemy Building Report  6:00
+Refinery: 1
+Barracks: 1
+Factory: 1
+OrbitalCommand: 2
+Bunker: 1
+FactoryTechLab: 1
+SupplyDepot: 4
+
+Ideal Counters Report  6:00
+Observer: Demand Score, 20[0%] Needed: 2, Existing: 0, Demand: 1.399999976158142
+Stalker: Demand Score, -2700[25999%] Needed: -12, Existing: 13, Demand: 0.05000000074505806
+
+Live Counters Report  6:00
+Stalker: Demand Score, 922[76%] Needed: 4.100000001490116, Existing: 13, Demand: 17.100000001490116
+
+Army Report 6:00
+Win Air: true [ 6.6821833 ]
+Air Ground: true [ 4.300553 ]
+Air All: true [ 2.9705224 ]
+Army Power: 2700.0303
+Enemy Power: 1500.0205
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {36.683773 51.051315}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 46
+Next Expansion: {67.5 55.5}
+Best Expansion: {67.5 55.5}
+Should Expand: false
+Expand Saving: false
+Air Superiority: true
+Alloc = 22 MiB	TotalAlloc = 2611 MiB	Sys = 41 MiB	NumGC = 225
+
+8098    6:01    Supply:61/86          Minerals:5       Vespene:111     [4357619713] WarpGate     Warping Stalker
+8140    6:03    Supply:62/86          Minerals:0       Vespene:123     [4348968961] Nexus        Training Probe
+8170    6:04    Supply:63/86          Minerals:0       Vespene:127     [4367056900] Nexus        Training Probe
+8324    6:11    Supply:65/86          Minerals:75      Vespene:117     [4367843329] WarpGate     Warping Stalker
+8414    6:15    Supply:66/86          Minerals:135     Vespene:141     [4348968961] Nexus        Training Probe
+8444    6:16    Supply:67/86          Minerals:135     Vespene:149     [4367056900] Nexus        Training Probe
+8470    6:18    Supply:67/86          Minerals:160     Vespene:153     Forge                     Researching Weapons 2
+8512    6:20    Supply:67/86          Minerals:0       Vespene:15      Economy                   Building Assimilator
+8534    6:20    Supply:67/86          Minerals:25      Vespene:15      [4348968961] Nexus        Chronoboosting Forge [4353949698]
+8688    6:27    Supply:68/86          Minerals:195     Vespene:55      [4348968961] Nexus        Training Probe
+8718    6:29    Supply:69/86          Minerals:200     Vespene:63      [4367056900] Nexus        Training Probe
+Intel Report 6:30
+
+Enemy Unit Report  6:30
+SCV: 21/22
+Bunker: 1/1
+Marine: 8/8
+SiegeTank: 1/1
+Hellion: 1/1
+WidowMineBurrowed: 2/2
+Marauder: 2/2
+
+Enemy Building Report  6:30
+Factory: 1
+Bunker: 1
+SupplyDepot: 4
+OrbitalCommand: 2
+FactoryTechLab: 1
+Refinery: 1
+Barracks: 1
+
+Ideal Counters Report  6:30
+Observer: Demand Score, 20[0%] Needed: 2, Existing: 0, Demand: 1.399999976158142
+Stalker: Demand Score, -2925[27999%] Needed: -13, Existing: 14, Demand: 0.05000000074505806
+
+Live Counters Report  6:30
+Immortal: Demand Score, 475[0%] Needed: 1, Existing: 0, Demand: 1
+Zealot: Demand Score, 100[0%] Needed: 1, Existing: 0, Demand: 1
+Observer: Demand Score, 20[0%] Needed: 2, Existing: 0, Demand: 1.399999976158142
+Stalker: Demand Score, 922[77%] Needed: 4.100000001490116, Existing: 14, Demand: 18.100000001490116
+
+Army Report 6:30
+Win Air: true [ 10.807996 ]
+Air Ground: true [ 5.879479 ]
+Air All: true [ 4.616042 ]
+Army Power: 3150.037
+Enemy Power: 1900.0206
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {36.683773 51.051315}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 48
+Next Expansion: {67.5 55.5}
+Best Expansion: {67.5 55.5}
+Should Expand: false
+Expand Saving: false
+Air Superiority: true
+Alloc = 18 MiB	TotalAlloc = 2921 MiB	Sys = 41 MiB	NumGC = 251
+
+8792    6:32    Supply:69/86          Minerals:300     Vespene:79      [4367056900] Nexus        Chronoboosting Nexus [4367056900]
+8870    6:35    Supply:69/86          Minerals:410     Vespene:103     [4370726920] Robotics Factory Training Immortal
+8872    6:36    Supply:73/86          Minerals:70      Vespene:3       Economy                   Building Pylon [X:40, Y:44]
+8888    6:36    Supply:75/86          Minerals:0       Vespene:3       [4368367617] WarpGate     Warping Zealot
+8926    6:38    Supply:76/86          Minerals:0       Vespene:11      [4367056900] Nexus        Training Probe
+8966    6:40    Supply:77/86          Minerals:0       Vespene:23      [4348968961] Nexus        Training Probe
+9036    6:43    Supply:77/86          Minerals:40      Vespene:43      Economy                   Building Assimilator
+9108    6:46    Supply:79/86          Minerals:0       Vespene:9       [4367843329] WarpGate     Warping Stalker
+9138    6:47    Supply:80/86          Minerals:0       Vespene:21      [4367056900] Nexus        Training Probe
+9208    6:51    Supply:80/86          Minerals:0       Vespene:41      Economy                   Building Pylon [X:41, Y:75]
+9240    6:52    Supply:81/86          Minerals:10      Vespene:49      [4348968961] Nexus        Training Probe
+9324    6:56    Supply:83/94          Minerals:5       Vespene:19      [4357619713] WarpGate     Warping Stalker
+9360    6:57    Supply:84/94          Minerals:0       Vespene:31      [4367056900] Nexus        Training Probe
+Intel Report 7:00
+
+Enemy Unit Report  7:00
+Marine: 10/10
+SiegeTank: 1/1
+Hellion: 1/1
+WidowMineBurrowed: 2/2
+Marauder: 2/2
+SCV: 21/22
+Bunker: 1/1
+
+Enemy Building Report  7:00
+OrbitalCommand: 2
+Barracks: 1
+Bunker: 1
+FactoryTechLab: 1
+SupplyDepot: 4
+Refinery: 1
+Factory: 1
+
+Ideal Counters Report  7:00
+Observer: Demand Score, 20[0%] Needed: 2, Existing: 0, Demand: 1.399999976158142
+Stalker: Demand Score, -3375[31999%] Needed: -15, Existing: 16, Demand: 0.05000000074505806
+
+Live Counters Report  7:00
+Observer: Demand Score, 20[0%] Needed: 2, Existing: 0, Demand: 1.399999976158142
+Stalker: Demand Score, 922[79%] Needed: 4.100000001490116, Existing: 16, Demand: 20.100000001490116
+Immortal: Demand Score, 0[100%] Needed: 0, Existing: 1, Demand: 1
+Zealot: Demand Score, 0[100%] Needed: 0, Existing: 1, Demand: 1
+
+Army Report 7:00
+Win Air: true [ 10.909731 ]
+Air Ground: true [ 7.4693484 ]
+Air All: true [ 6.6299725 ]
+Army Power: 3700.04
+Enemy Power: 2000.0208
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {36.683773 51.051315}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 50
+Next Expansion: {67.5 55.5}
+Best Expansion: {67.5 55.5}
+Should Expand: false
+Expand Saving: false
+Air Superiority: true
+Alloc = 24 MiB	TotalAlloc = 3242 MiB	Sys = 41 MiB	NumGC = 278
+
+9436    7:01    Supply:86/94          Minerals:5       Vespene:17      [4368367617] WarpGate     Warping Stalker
+9498    7:04    Supply:86/94          Minerals:5       Vespene:41      Economy                   Building Pylon [X:44, Y:66]
+9530    7:05    Supply:87/94          Minerals:0       Vespene:53      [4348968961] Nexus        Training Probe
+9622    7:09    Supply:89/94          Minerals:10      Vespene:27      [4367843329] WarpGate     Warping Stalker
+9650    7:10    Supply:90/102         Minerals:0       Vespene:43      [4367056900] Nexus        Training Probe
+Recalculating Distances - Neutral unit destroyed: LabMineralField750 at {35 39.5}
+Recalculating Distances - Neutral unit destroyed: LabMineralField750 at {37 35.5}
+Max Enemy Power 2250.021 Army Power 4625.042 Used Enemy Power 2002.5187
+Nexus Count 2 Enemy Townhalls 2
+9916    7:22    Supply:90/102         Minerals:0       Vespene:163     Economy                   Expanding
+9926    7:23    Supply:90/102         Minerals:25      Vespene:175     [4370726920] Robotics Factory Training Observer
+9956    7:24    Supply:91/110         Minerals:30      Vespene:112     [4348968961] Nexus        Chronoboosting Forge [4353949698]
+10002   7:26    Supply:93/110         Minerals:0       Vespene:132     [4357619713] WarpGate     Warping Zealot
+Intel Report 7:30
+
+Enemy Unit Report  7:30
+SCV: 21/22
+Bunker: 1/1
+Marine: 13/13
+SiegeTank: 1/1
+Hellion: 1/1
+WidowMineBurrowed: 2/2
+Marauder: 5/5
+
+Enemy Building Report  7:30
+OrbitalCommand: 2
+SupplyDepotLowered: 1
+FactoryTechLab: 1
+Factory: 1
+Refinery: 1
+Barracks: 1
+SupplyDepot: 3
+Bunker: 1
+
+Ideal Counters Report  7:30
+Observer: Demand Score, 10[71%] Needed: 1, Existing: 1, Demand: 1.399999976158142
+Stalker: Demand Score, -3825[35999%] Needed: -17, Existing: 18, Demand: 0.05000000074505806
+
+Live Counters Report  7:30
+Immortal: Demand Score, 712[40%] Needed: 1.5, Existing: 1, Demand: 2.5
+Observer: Demand Score, 10[71%] Needed: 1, Existing: 1, Demand: 1.399999976158142
+Stalker: Demand Score, 1485[73%] Needed: 6.600000001490116, Existing: 18, Demand: 24.600000001490116
+Zealot: Demand Score, -50[120%] Needed: -0.5, Existing: 3, Demand: 2.5
+
+Army Report 7:30
+Win Air: true [ 10.127682 ]
+Air Ground: true [ 6.098148 ]
+Air All: true [ 5.4673834 ]
+Army Power: 4725.043
+Enemy Power: 2750.0208
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {36.683773 51.051315}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 56
+Next Expansion: {67.5 55.5}
+Best Expansion: {67.5 55.5}
+Should Expand: true
+Expand Saving: false
+Air Superiority: true
+Alloc = 23 MiB	TotalAlloc = 3595 MiB	Sys = 41 MiB	NumGC = 309
+
+10094   7:30    Supply:95/110         Minerals:0       Vespene:130     [4368367617] WarpGate     Warping Stalker
+Next Expansion Trigger: Update Friend Owned
+
+Updating Defensive Point
+Getting Position Behind ramp {81.5 60} {85 64}
+10132   7:32    Supply:96/110         Minerals:5       Vespene:146     [4367056900] Nexus        Training Probe
+10156   7:33    Supply:97/110         Minerals:0       Vespene:158     [4367056900] Nexus        Training Probe
+Recalculating Distances - Neutral unit destroyed: LabMineralField750 at {36 36.5}
+10214   7:35    Supply:97/110         Minerals:70      Vespene:182     [4367056900] Nexus        Chronoboosting Nexus [4367056900]
+10234   7:36    Supply:97/110         Minerals:100     Vespene:194     Commander Manager          Building Shield Battery [X:40, Y:66]
+10234   7:36    Supply:97/110         Minerals:0       Vespene:194     Economy                   Building Pylon [X:71, Y:53]
+Can't Afford Build Order Build_ShieldBattery
+10318   7:40    Supply:97/110         Minerals:100     Vespene:238     Commander Manager          Building Shield Battery [X:40, Y:66]
+10358   7:42    Supply:98/110         Minerals:0       Vespene:254     [4367056900] Nexus        Training Probe
+10406   7:44    Supply:99/110         Minerals:20      Vespene:274     [4348968961] Nexus        Training Probe
+10474   7:47    Supply:99/110         Minerals:120     Vespene:306     Twilight Council          Training Charge
+10542   7:50    Supply:100/110         Minerals:55      Vespene:238     [4367056900] Nexus        Training Probe
+Recalculating Distances - Neutral unit destroyed: LabMineralField750 at {42 33.5}
+10680   7:56    Supply:101/118         Minerals:175     Vespene:290     [4348968961] Nexus        Training Probe
+10750   7:59    Supply:101/118         Minerals:250     Vespene:330     Terran Contain Defense    Training Warp Prism
+Intel Report 8:00
+
+Enemy Unit Report  8:00
+WidowMineBurrowed: 2/2
+Marauder: 6/6
+SCV: 21/22
+Bunker: 1/1
+Marine: 14/14
+SiegeTank: 1/1
+Hellion: 1/1
+
+Enemy Building Report  8:00
+FactoryTechLab: 1
+SupplyDepot: 4
+Factory: 1
+Refinery: 1
+Barracks: 1
+Bunker: 1
+OrbitalCommand: 2
+
+Ideal Counters Report  8:00
+Immortal: Demand Score, 475[66%] Needed: 1, Existing: 1, Demand: 1.5
+Zealot: Demand Score, 100[66%] Needed: 1, Existing: 2, Demand: 3
+Observer: Demand Score, 10[71%] Needed: 1, Existing: 1, Demand: 1.399999976158142
+Stalker: Demand Score, -4050[37999%] Needed: -18, Existing: 19, Demand: 0.05000000074505806
+
+Live Counters Report  8:00
+Immortal: Demand Score, 950[33%] Needed: 2, Existing: 1, Demand: 3
+Zealot: Demand Score, 100[66%] Needed: 1, Existing: 2, Demand: 3
+Observer: Demand Score, 10[71%] Needed: 1, Existing: 1, Demand: 1.399999976158142
+Stalker: Demand Score, 1597[72%] Needed: 7.100000001490116, Existing: 19, Demand: 26.100000001490116
+
+Army Report 8:00
+Win Air: true [ 10.15303 ]
+Air Ground: true [ 6.044667 ]
+Air All: true [ 5.828129 ]
+Army Power: 4960.047
+Enemy Power: 3000.0208
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {77 55}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 58
+Next Expansion: {43.5 96.5}
+Best Expansion: {43.5 96.5}
+Should Expand: true
+Expand Saving: false
+Air Superiority: true
+Alloc = 22 MiB	TotalAlloc = 3982 MiB	Sys = 41 MiB	NumGC = 342
+
+10790   8:01    Supply:104/118         Minerals:0       Vespene:350     [4367056900] Nexus        Training Probe
+10862   8:04    Supply:104/118         Minerals:0       Vespene:382     Economy                   Building Pylon [X:41, Y:64]
+10928   8:07    Supply:106/118         Minerals:0       Vespene:414     [4368367617] WarpGate     Warping Zealot
+Error(Removing Build Order): unit_tag:4310171650 ability_id:881 result:CantBuildLocationInvalid 
+10980   8:10    Supply:106/118         Minerals:50      Vespene:438     Economy                   Building Pylon [X:41, Y:64]
+10980   8:10    Supply:107/118         Minerals:0       Vespene:438     [4348968961] Nexus        Training Probe
+Error(Removing Build Order): unit_tag:4310171650 ability_id:881 result:CantBuildLocationInvalid 
+11062   8:13    Supply:107/118         Minerals:115     Vespene:466     Economy                   Building Pylon [X:41, Y:64]
+11064   8:13    Supply:108/118         Minerals:70      Vespene:466     [4367056900] Nexus        Training Probe
+11108   8:15    Supply:110/118         Minerals:0       Vespene:436     [4367843329] WarpGate     Warping Stalker
+11196   8:19    Supply:110/118         Minerals:5       Vespene:472     Economy                   Building Pylon [X:71, Y:57]
+11292   8:24    Supply:110/118         Minerals:120     Vespene:512     Combat                    Dead Enemy: Hellion [4401922049]
+11318   8:25    Supply:110/118         Minerals:5       Vespene:374     Production                Building Robotics Bay [X:41, Y:46.5]
+11324   8:25    Supply:110/118         Minerals:10      Vespene:374     Combat                    Dead Enemy: Marine [4369678337]
+11364   8:27    Supply:111/118         Minerals:0       Vespene:386     [4367056900] Nexus        Training Probe
+11378   8:27    Supply:111/118         Minerals:25      Vespene:398     [4348968961] Nexus        Chronoboosting TwilightCouncil [4365746177]
+11410   8:29    Supply:112/118         Minerals:0       Vespene:406     [4367056900] Nexus        Training Probe
+Intel Report 8:30
+
+Enemy Unit Report  8:30
+Hellion: 1/2
+WidowMineBurrowed: 2/2
+Marauder: 7/7
+SCV: 31/31
+Bunker: 1/1
+Marine: 17/17
+SiegeTank: 2/2
+
+Enemy Building Report  8:30
+Barracks: 1
+SupplyDepotLowered: 1
+CommandCenter: 1
+FactoryTechLab: 1
+Factory: 1
+SupplyDepot: 3
+Refinery: 3
+Bunker: 1
+OrbitalCommand: 2
+
+Ideal Counters Report  8:30
+Colossus: Demand Score, 1400[0%] Needed: 2, Existing: 0, Demand: 1.3600000143051147
+Immortal: Demand Score, 475[57%] Needed: 1, Existing: 1, Demand: 1.75
+Observer: Demand Score, 10[71%] Needed: 1, Existing: 1, Demand: 1.399999976158142
+Zealot: Demand Score, 100[85%] Needed: 1, Existing: 3, Demand: 3.5
+Stalker: Demand Score, -2925[317%] Needed: -13, Existing: 20, Demand: 6.300000000745058
+
+Live Counters Report  8:30
+Immortal: Demand Score, 1187[28%] Needed: 2.5, Existing: 1, Demand: 3.5
+Stalker: Demand Score, 3285[57%] Needed: 14.600000001490116, Existing: 20, Demand: 34.600000001490116
+Observer: Demand Score, 10[71%] Needed: 1, Existing: 1, Demand: 1.399999976158142
+Zealot: Demand Score, 50[85%] Needed: 0.5, Existing: 3, Demand: 3.5
+
+Army Report 8:30
+Win Air: true [ 8.451033 ]
+Air Ground: true [ 3.7632527 ]
+Air All: true [ 4.0960298 ]
+Army Power: 5285.052
+Enemy Power: 3750.0317
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {77 55}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 76
+Next Expansion: {43.5 96.5}
+Best Expansion: {43.5 96.5}
+Should Expand: true
+Expand Saving: false
+Air Superiority: true
+Alloc = 23 MiB	TotalAlloc = 4419 MiB	Sys = 41 MiB	NumGC = 379
+
+11494   8:33    Supply:110/126         Minerals:120     Vespene:434     Combat                    Dead Friend: Stalker [4377804801]
+11496   8:33    Supply:112/126         Minerals:0       Vespene:384     [4368367617] WarpGate     Warping Stalker
+11512   8:33    Supply:112/126         Minerals:20      Vespene:400     Combat                    Dead Enemy: SCV [4354736129]
+Expansion Trigger Dead Enemy Structure
+11526   8:34    Supply:112/126         Minerals:25      Vespene:400     Combat                    Dead Enemy: Bunker [4361814020]
+Unknown Name 24
+No Cost Data for 24
+11528   8:34    Supply:110/126         Minerals:30      Vespene:400     Combat                    Dead Friend: Stalker [4382785538]
+11530   8:34    Supply:110/126         Minerals:35      Vespene:400     Combat                    Dead Enemy: SiegeTankSieged [4372037636]
+11532   8:34    Supply:108/126         Minerals:40      Vespene:400     Combat                    Dead Friend: Stalker [4361551875]
+11534   8:34    Supply:106/126         Minerals:40      Vespene:400     Combat                    Dead Friend: Stalker [4382523395]
+11534   8:34    Supply:106/126         Minerals:40      Vespene:400     Attack Mode Ended [Enemy: 3000.0361 Ours: 4610.0527 Time: -0.1484971] AttackCommander
+11536   8:35    Supply:108/126         Minerals:5       Vespene:304     [4357619713] WarpGate     Warping Sentry
+11546   8:35    Supply:108/126         Minerals:30      Vespene:316     Combat                    Dead Enemy: WidowMineBurrowed [4365221895]
+11560   8:36    Supply:108/126         Minerals:35      Vespene:316     Combat                    Dead Enemy: Marine [4408475650]
+11564   8:36    Supply:106/126         Minerals:40      Vespene:316     Combat                    Dead Friend: Stalker [4372561926]
+11572   8:36    Supply:104/126         Minerals:55      Vespene:328     Combat                    Dead Friend: Stalker [4398776321]
+11578   8:36    Supply:104/126         Minerals:60      Vespene:332     Combat                    Dead Enemy: SCV [4394319873]
+11600   8:37    Supply:102/126         Minerals:105     Vespene:332     Combat                    Dead Friend: Stalker [4383309825]
+11602   8:37    Supply:100/126         Minerals:105     Vespene:332     Combat                    Dead Friend: Stalker [4384882690]
+11604   8:38    Supply:98/126         Minerals:110     Vespene:332     Combat                    Dead Friend: Stalker [4378853378]
+11620   8:38    Supply:98/126         Minerals:125     Vespene:344     Combat                    Dead Enemy: Marine [4385931265]
+11622   8:38    Supply:100/126         Minerals:75      Vespene:244     [4367843329] WarpGate     Warping Sentry
+11638   8:39    Supply:101/126         Minerals:45      Vespene:256     [4348968961] Nexus        Training Probe
+11646   8:39    Supply:99/126         Minerals:65      Vespene:260     Combat                    Dead Friend: Zealot [4398252034]
+11748   8:44    Supply:99/149         Minerals:210     Vespene:304     Forge                     Researching Weapons 3
+11750   8:44    Supply:99/149         Minerals:10      Vespene:104     [4367056900] Nexus        Chronoboosting Forge [4353949698]
+11992   8:55    Supply:99/149         Minerals:405     Vespene:212     Commander Manager          Building Photon Cannon [X:71, Y:55]
+Max Enemy Power 3750.0376 Army Power 3625.0557 Used Enemy Power 3337.5334
+Nexus Count 3 Enemy Townhalls 3
+11992   8:55    Supply:99/149         Minerals:5       Vespene:212     Economy                   Expanding
+Can't Afford Build Order Build_PhotonCannon
+Intel Report 9:00
+
+Enemy Unit Report  9:00
+Bunker: 1/1
+Marine: 15/17
+SiegeTank: 1/2
+Hellion: 1/2
+WidowMineBurrowed: 1/2
+Marauder: 7/7
+SCV: 35/37
+
+Enemy Building Report  9:00
+Factory: 1
+Barracks: 1
+OrbitalCommand: 2
+FactoryTechLab: 1
+Refinery: 3
+Bunker: 1
+CommandCenter: 1
+SupplyDepot: 4
+
+Ideal Counters Report  9:00
+Colossus: Demand Score, 1400[0%] Needed: 2, Existing: 0, Demand: 1.3600000143051147
+Immortal: Demand Score, 475[57%] Needed: 1, Existing: 1, Demand: 1.75
+Zealot: Demand Score, 200[57%] Needed: 2, Existing: 2, Demand: 3.5
+Observer: Demand Score, 10[83%] Needed: 1, Existing: 1, Demand: 1.2000000476837158
+Stalker: Demand Score, -1125[190%] Needed: -5, Existing: 12, Demand: 6.300000000745058
+
+Live Counters Report  9:00
+Immortal: Demand Score, 475[57%] Needed: 1, Existing: 1, Demand: 1.75
+Stalker: Demand Score, 1350[69%] Needed: 6, Existing: 12, Demand: 17.300000000745058
+Observer: Demand Score, 10[83%] Needed: 1, Existing: 1, Demand: 1.2000000476837158
+Zealot: Demand Score, 0[114%] Needed: 0, Existing: 2, Demand: 1.75
+
+Army Report 9:00
+Win Air: false [ 4.319014 ]
+Air Ground: false [ -1.0697503 ]
+Air All: false [ -1.3008027 ]
+Army Power: 3625.0557
+Enemy Power: 3125.0356
+Attack Status: false
+Rally Point: {0 0}
+Defensive Point: {77 55}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 76
+Next Expansion: {43.5 96.5}
+Best Expansion: {43.5 96.5}
+Should Expand: true
+Expand Saving: false
+Air Superiority: true
+Alloc = 18 MiB	TotalAlloc = 4894 MiB	Sys = 41 MiB	NumGC = 418
+
+12130   9:01    Supply:99/149         Minerals:250     Vespene:276     [4370726920] Robotics Factory Training Immortal
+12198   9:04    Supply:105/149         Minerals:0       Vespene:158     [4357619713] WarpGate     Warping Stalker
+12262   9:07    Supply:107/149         Minerals:0       Vespene:136     [4368367617] WarpGate     Warping Stalker
+Next Expansion Trigger: Update Friend Owned
+
+Updating Defensive Point
+Getting Position Behind ramp {81.5 60} {85 64}
+12288   9:08    Supply:108/149         Minerals:0       Vespene:152     [4367056900] Nexus        Training Probe
+12316   9:09    Supply:109/149         Minerals:0       Vespene:164     [4399038465] Nexus        Training Probe
+12340   9:10    Supply:110/149         Minerals:0       Vespene:180     [4399038465] Nexus        Training Probe
+12422   9:14    Supply:110/149         Minerals:155     Vespene:212     Robotics Bay              Training Extended Thermal Lance
+12492   9:17    Supply:112/149         Minerals:35      Vespene:90      [4367843329] WarpGate     Warping Zealot
+12562   9:20    Supply:113/149         Minerals:130     Vespene:130     [4348968961] Nexus        Training Probe
+12590   9:22    Supply:114/149         Minerals:120     Vespene:138     [4367056900] Nexus        Training Probe
+12608   9:22    Supply:114/149         Minerals:160     Vespene:150     Twilight Council          Training Blink
+12636   9:24    Supply:115/149         Minerals:0       Vespene:16      [4399038465] Nexus        Training Probe
+12674   9:25    Supply:115/149         Minerals:0       Vespene:32      Economy                   Building Assimilator
+12722   9:27    Supply:117/149         Minerals:0       Vespene:48      [4357619713] WarpGate     Warping Zealot
+Intel Report 9:30
+
+Enemy Unit Report  9:30
+Marauder: 7/7
+SCV: 35/37
+Bunker: 1/1
+Marine: 15/17
+SiegeTank: 1/2
+Hellion: 1/2
+WidowMineBurrowed: 1/2
+
+Enemy Building Report  9:30
+Factory: 1
+Refinery: 3
+SupplyDepot: 4
+Barracks: 1
+OrbitalCommand: 2
+FactoryTechLab: 1
+Bunker: 1
+CommandCenter: 1
+
+Ideal Counters Report  9:30
+Colossus: Demand Score, 1400[0%] Needed: 2, Existing: 0, Demand: 1.3600000143051147
+Observer: Demand Score, 10[83%] Needed: 1, Existing: 1, Demand: 1.2000000476837158
+Immortal: Demand Score, 0[114%] Needed: 0, Existing: 2, Demand: 1.75
+Zealot: Demand Score, -100[142%] Needed: -1, Existing: 5, Demand: 3.5
+Stalker: Demand Score, -1575[222%] Needed: -7, Existing: 14, Demand: 6.300000000745058
+
+Live Counters Report  9:30
+Colossus: Demand Score, 1400[0%] Needed: 2, Existing: 0, Demand: 1.3600000143051147
+Observer: Demand Score, 10[83%] Needed: 1, Existing: 1, Demand: 1.2000000476837158
+Immortal: Demand Score, 0[114%] Needed: 0, Existing: 2, Demand: 1.75
+Stalker: Demand Score, -450[123%] Needed: -2, Existing: 14, Demand: 11.300000000745058
+Zealot: Demand Score, -100[142%] Needed: -1, Existing: 5, Demand: 3.5
+
+Army Report 9:30
+Win Air: false [ 7.0481467 ]
+Air Ground: false [ 3.0697918 ]
+Air All: false [ 2.8361597 ]
+Army Power: 4625.0586
+Enemy Power: 3125.0356
+Attack Status: false
+Rally Point: {0 0}
+Defensive Point: {78 56}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 76
+Next Expansion: {72.5 85.5}
+Best Expansion: {72.5 85.5}
+Should Expand: true
+Expand Saving: false
+Air Superiority: true
+Alloc = 15 MiB	TotalAlloc = 5370 MiB	Sys = 41 MiB	NumGC = 456
+
+12800   9:31    Supply:117/149         Minerals:140     Vespene:92      [4348968961] Nexus        Chronoboosting Forge [4353949698]
+12836   9:33    Supply:118/149         Minerals:170     Vespene:108     [4348968961] Nexus        Training Probe
+12864   9:34    Supply:119/149         Minerals:165     Vespene:120     [4367056900] Nexus        Training Probe
+12910   9:36    Supply:120/149         Minerals:200     Vespene:136     [4399038465] Nexus        Training Probe
+12958   9:38    Supply:120/149         Minerals:150     Vespene:64      Production                Building Robotics Facility [X:48.5, Y:44]
+13000   9:40    Supply:122/149         Minerals:110     Vespene:30      [4368367617] WarpGate     Warping Stalker
+13058   9:42    Supply:122/149         Minerals:210     Vespene:58      [4367056900] Nexus        Chronoboosting RoboticsBay [4369678338]
+13110   9:45    Supply:123/149         Minerals:255     Vespene:78      [4348968961] Nexus        Training Probe
+13136   9:46    Supply:123/149         Minerals:320     Vespene:94      [4399038465] Nexus        Chronoboosting TwilightCouncil [4365746177]
+13138   9:46    Supply:124/149         Minerals:275     Vespene:94      [4367056900] Nexus        Training Probe
+13184   9:48    Supply:125/149         Minerals:315     Vespene:110     [4399038465] Nexus        Training Probe
+13194   9:49    Supply:125/149         Minerals:255     Vespene:122     Economy                   Building Assimilator
+13268   9:52    Supply:125/149         Minerals:400     Vespene:154     Commander Manager          Building Photon Cannon [X:71, Y:55]
+13352   9:56    Supply:125/149         Minerals:400     Vespene:194     Commander Manager          Building Photon Cannon [X:42, Y:73]
+13376   9:57    Supply:125/149         Minerals:300     Vespene:210     [4370726920] Robotics Factory Training Colossus
+13406   9:58    Supply:132/149         Minerals:0       Vespene:26      [4348968961] Nexus        Training Probe
+13430   9:59    Supply:133/149         Minerals:0       Vespene:46      [4367056900] Nexus        Training Probe
+Intel Report 10:00
+
+Enemy Unit Report  10:00
+Marine: 16/17
+SiegeTank: 1/2
+Hellion: 1/2
+WidowMineBurrowed: 1/2
+Marauder: 7/7
+Battlecruiser: 1/1
+SCV: 38/38
+Bunker: 2/2
+
+Enemy Building Report  10:00
+FactoryTechLab: 1
+Bunker: 2
+CommandCenter: 1
+Factory: 1
+Refinery: 4
+SupplyDepot: 4
+Barracks: 1
+OrbitalCommand: 2
+
+Ideal Counters Report  10:00
+Colossus: Demand Score, 700[73%] Needed: 1, Existing: 1, Demand: 1.3600000143051147
+Observer: Demand Score, 10[83%] Needed: 1, Existing: 1, Demand: 1.2000000476837158
+Zealot: Demand Score, 0[114%] Needed: 0, Existing: 4, Demand: 3.5
+Immortal: Demand Score, 0[114%] Needed: 0, Existing: 2, Demand: 1.75
+Stalker: Demand Score, -1800[236%] Needed: -8, Existing: 15, Demand: 6.350000001490116
+
+Live Counters Report  10:00
+Colossus: Demand Score, 1204[36%] Needed: 1.7200000286102295, Existing: 1, Demand: 2.7200000286102295
+Stalker: Demand Score, 3082[52%] Needed: 13.700000002980232, Existing: 15, Demand: 28.700000002980232
+Immortal: Demand Score, 712[57%] Needed: 1.5, Existing: 2, Demand: 3.5
+Zealot: Demand Score, 300[57%] Needed: 3, Existing: 4, Demand: 7
+Observer: Demand Score, 10[83%] Needed: 1, Existing: 1, Demand: 1.2000000476837158
+
+Army Report 10:00
+Win Air: false [ 2.3924618 ]
+Air Ground: false [ 2.6802235 ]
+Air All: false [ 2.4893246 ]
+Army Power: 5125.0654
+Enemy Power: 4525.038
+Attack Status: false
+Rally Point: {0 0}
+Defensive Point: {78 56}
+Base Under Harass: true
+Base Under Attack: true
+Enemy Object Length: 83
+Next Expansion: {72.5 85.5}
+Best Expansion: {72.5 85.5}
+Should Expand: true
+Expand Saving: false
+Air Superiority: true
+Alloc = 14 MiB	TotalAlloc = 5872 MiB	Sys = 41 MiB	NumGC = 495
+
+13458   10:00   Supply:134/149         Minerals:5       Vespene:66      [4399038465] Nexus        Training Probe
+13512   10:03   Supply:134/149         Minerals:0       Vespene:86      Economy                   Building Pylon [X:47, Y:94]
+13524   10:03   Supply:133/149         Minerals:5       Vespene:98      Combat                    Dead Friend: Probe [4351066113]
+13586   10:06   Supply:132/149         Minerals:110     Vespene:122     Combat                    Dead Friend: Probe [4350803969]
+13596   10:06   Supply:134/149         Minerals:0       Vespene:72      [4368367617] WarpGate     Warping Stalker
+13694   10:11   Supply:136/149         Minerals:0       Vespene:54      [4367843329] WarpGate     Warping Stalker
+13704   10:11   Supply:135/149         Minerals:5       Vespene:58      Combat                    Dead Friend: Probe [4422107149]
+13732   10:13   Supply:136/149         Minerals:0       Vespene:66      [4399038465] Nexus        Training Probe
+13774   10:14   Supply:137/149         Minerals:0       Vespene:78      [4367056900] Nexus        Training Probe
+13804   10:16   Supply:138/149         Minerals:5       Vespene:102     [4367056900] Nexus        Training Probe
+13874 Extended Kite True, Unit: Stalker current DPS: 10000 KitePoint DPS: 10000 KitePoint: {0 0} Current Height 8 KitePoint Height: -15.875
+New DPS: 10000 New Height: -15.875 KitePoint: {0 0}
+13874 Blank kite point found true
+13876   10:19   Supply:138/149         Minerals:5       Vespene:126     Economy                   Building Pylon [X:65, Y:59]
+13876 Extended Kite True, Unit: Stalker current DPS: 10000 KitePoint DPS: 10000 KitePoint: {0 0} Current Height 8 KitePoint Height: -15.875
+New DPS: 10000 New Height: -15.875 KitePoint: {0 0}
+13876 Blank kite point found true
+13902   10:20   Supply:139/164         Minerals:0       Vespene:138     [4409524227] Nexus        Training Probe
+13958   10:23   Supply:141/172         Minerals:0       Vespene:170     [4357619713] WarpGate     Warping Zealot
+13982   10:24   Supply:141/172         Minerals:50      Vespene:182     Combat                    Dead Enemy: Marine [4381474817]
+13992   10:24   Supply:141/172         Minerals:65      Vespene:186     Combat                    Dead Enemy: Marine [4352901122]
+14004   10:25   Supply:139/172         Minerals:70      Vespene:190     Combat                    Dead Friend: Zealot [4411621378]
+14006   10:25   Supply:140/172         Minerals:25      Vespene:194     [4399038465] Nexus        Training Probe
+14022   10:25   Supply:140/172         Minerals:45      Vespene:202     Combat                    Dead Enemy: Marine [4382261249]
+14048   10:27   Supply:138/172         Minerals:115     Vespene:218     Combat                    Dead Friend: Zealot [4413980673]
+14048   10:27   Supply:139/172         Minerals:65      Vespene:218     [4348968961] Nexus        Training Probe
+14050   10:27   Supply:139/172         Minerals:65      Vespene:218     Combat                    Dead Enemy: Marauder [4406640642]
+14054   10:27   Supply:137/172         Minerals:70      Vespene:218     Combat                    Dead Friend: Zealot [4389076993]
+14078   10:28   Supply:138/172         Minerals:75      Vespene:234     [4367056900] Nexus        Training Probe
+14098   10:29   Supply:136/172         Minerals:125     Vespene:246     Combat                    Dead Friend: Zealot [4404281345]
+14110   10:29   Supply:138/172         Minerals:30      Vespene:250     [4368367617] WarpGate     Warping Zealot
+Intel Report 10:30
+
+Enemy Unit Report  10:30
+Battlecruiser: 1/1
+SCV: 38/38
+Bunker: 2/2
+Marine: 16/17
+SiegeTank: 1/2
+Hellion: 2/2
+WidowMineBurrowed: 1/2
+Marauder: 8/9
+
+Enemy Building Report  10:30
+Factory: 1
+Barracks: 1
+SupplyDepot: 4
+FactoryTechLab: 1
+Refinery: 4
+Bunker: 2
+OrbitalCommand: 2
+CommandCenter: 1
+
+Ideal Counters Report  10:30
+Zealot: Demand Score, 400[22%] Needed: 4, Existing: 1, Demand: 4.5
+Colossus: Demand Score, 700[73%] Needed: 1, Existing: 1, Demand: 1.3600000143051147
+Observer: Demand Score, 10[83%] Needed: 1, Existing: 1, Demand: 1.2000000476837158
+Immortal: Demand Score, 475[88%] Needed: 1, Existing: 2, Demand: 2.25
+Stalker: Demand Score, -2250[267%] Needed: -10, Existing: 17, Demand: 6.350000001490116
+
+Live Counters Report  10:30
+Zealot: Demand Score, 400[22%] Needed: 4, Existing: 1, Demand: 4.5
+Colossus: Demand Score, 700[73%] Needed: 1, Existing: 1, Demand: 1.3600000143051147
+Observer: Demand Score, 10[83%] Needed: 1, Existing: 1, Demand: 1.2000000476837158
+Immortal: Demand Score, 475[88%] Needed: 1, Existing: 2, Demand: 2.25
+Stalker: Demand Score, -450[118%] Needed: -2, Existing: 17, Demand: 14.350000001490116
+
+Army Report 10:30
+Win Air: false [ 3.6257281 ]
+Air Ground: false [ 1.1514931 ]
+Air All: false [ -1.9706755 ]
+Army Power: 5425.0693
+Enemy Power: 4825.038
+Attack Status: false
+Rally Point: {0 0}
+Defensive Point: {78 56}
+Base Under Harass: true
+Base Under Attack: true
+Enemy Object Length: 85
+Next Expansion: {72.5 85.5}
+Best Expansion: {72.5 85.5}
+Should Expand: false
+Expand Saving: false
+Air Superiority: true
+Alloc = 15 MiB	TotalAlloc = 6396 MiB	Sys = 41 MiB	NumGC = 537
+
+14174   10:32   Supply:134/172         Minerals:165     Vespene:290     Combat                    Dead Friend: Immortal [4397465601]
+14176   10:32   Supply:135/172         Minerals:120     Vespene:290     [4409524227] Nexus        Training Probe
+14224   10:35   Supply:135/172         Minerals:210     Vespene:322     [4348968961] Nexus        Chronoboosting RoboticsFacility [4370726920]
+14262   10:36   Supply:131/172         Minerals:310     Vespene:350     Combat                    Dead Friend: Immortal [4417388545]
+14302   10:38   Supply:131/172         Minerals:400     Vespene:374     Commander Manager          Building Photon Cannon [X:67, Y:59]
+Max Enemy Power 5025.0386 Army Power 4575.0703 Used Enemy Power 4472.284
+Nexus Count 4 Enemy Townhalls 3
+14302   10:38   Supply:131/172         Minerals:0       Vespene:374     Economy                   Expanding
+Can't Afford Build Order Build_PhotonCannon
+14316   10:39   Supply:131/180         Minerals:45      Vespene:386     Combat                    Dead Enemy: Marine [4420009985]
+14326   10:39   Supply:129/180         Minerals:60      Vespene:394     Combat                    Dead Friend: Zealot [4424204303]
+14332   10:39   Supply:129/180         Minerals:85      Vespene:394     Combat                    Dead Enemy: Marine [4393795586]
+14352   10:40   Supply:129/180         Minerals:135     Vespene:410     Combat                    Dead Enemy: Marine [4370989057]
+14354   10:40   Supply:127/180         Minerals:135     Vespene:410     Combat                    Dead Friend: Zealot [4298113026]
+14354   10:40   Supply:127/180         Minerals:135     Vespene:410     Combat                    Dead Enemy: Marine [4359454722]
+14376   10:41   Supply:127/180         Minerals:195     Vespene:422     Combat                    Dead Enemy: Marine [4411359234]
+14386   10:42   Supply:127/180         Minerals:220     Vespene:430     Combat                    Dead Enemy: Marine [4376231937]
+14396   10:42   Supply:127/180         Minerals:250     Vespene:434     [4314103810] Robotics Factory Training Immortal
+14404   10:43   Supply:131/180         Minerals:20      Vespene:342     Combat                    Dead Enemy: Marine [4420796417]
+14438   10:44   Supply:133/180         Minerals:0       Vespene:366     [4367843329] WarpGate     Warping Zealot
+14442   10:44   Supply:133/180         Minerals:25      Vespene:370     Combat                    Dead Enemy: Marauder [4388814849]
+14462   10:45   Supply:133/180         Minerals:70      Vespene:382     Combat                    Dead Enemy: Marauder [4385144833]
+14472   10:46   Supply:133/180         Minerals:95      Vespene:390     Combat                    Dead Enemy: Marauder [4416602113]
+Next Expansion Trigger: Update Friend Owned
+
+Updating Defensive Point
+Getting Position Behind ramp {79.5 79.5} {82.4 75.8}
+14480   10:46   Supply:133/180         Minerals:120     Vespene:398     [4367056900] Nexus        Chronoboosting RoboticsFacility [4314103810]
+14490   10:46   Supply:133/180         Minerals:5       Vespene:252     Production                Building Stargate [X:51.5, Y:42]
+14504   10:47   Supply:133/180         Minerals:45      Vespene:260     Combat                    Dead Enemy: Marine [4396679169]
+14520   10:48   Supply:133/180         Minerals:75      Vespene:272     Combat                    Dead Enemy: Marine [4402184193]
+14538   10:49   Supply:133/180         Minerals:130     Vespene:284     Combat                    Dead Enemy: Marauder [4393533442]
+14552   10:49   Supply:133/180         Minerals:165     Vespene:296     Combat                    Dead Enemy: Marauder [4397727745]
+14556   10:49   Supply:135/180         Minerals:80      Vespene:296     [4357619713] WarpGate     Warping Zealot
+14572   10:50   Supply:135/180         Minerals:120     Vespene:308     Combat                    Dead Enemy: Marauder [4400087041]
+14574   10:50   Supply:135/180         Minerals:125     Vespene:316     Combat                    Dead Enemy: Marauder [4410572801]
+14600   10:51   Supply:135/180         Minerals:205     Vespene:328     Combat                    Dead Enemy: Marauder [4374659077]
+14620   10:52   Supply:135/180         Minerals:255     Vespene:340     [4370726920] Robotics Factory Training Immortal
+14660   10:54   Supply:141/180         Minerals:5       Vespene:268     [4368367617] WarpGate     Warping Zealot
+Intel Report 11:00
+
+Enemy Unit Report  11:00
+SCV: 38/38
+Bunker: 2/2
+Marine: 7/17
+SiegeTank: 1/2
+Hellion: 2/2
+WidowMineBurrowed: 1/2
+Marauder: 0/9
+Battlecruiser: 2/2
+
+Enemy Building Report  11:00
+Factory: 1
+Refinery: 4
+Barracks: 1
+OrbitalCommand: 2
+SupplyDepot: 4
+FactoryTechLab: 1
+Bunker: 2
+CommandCenter: 1
+
+Ideal Counters Report  11:00
+Tempest: Demand Score, 1800[0%] Needed: 3, Existing: 0, Demand: 3
+Zealot: Demand Score, 200[66%] Needed: 2, Existing: 3, Demand: 4.5
+Colossus: Demand Score, 700[73%] Needed: 1, Existing: 1, Demand: 1.3600000143051147
+Observer: Demand Score, 10[83%] Needed: 1, Existing: 1, Demand: 1.2000000476837158
+Immortal: Demand Score, 475[88%] Needed: 1, Existing: 2, Demand: 2.25
+Stalker: Demand Score, -2250[267%] Needed: -10, Existing: 17, Demand: 6.350000001490116
+
+Live Counters Report  11:00
+Zealot: Demand Score, 200[66%] Needed: 2, Existing: 3, Demand: 4.5
+Colossus: Demand Score, 700[73%] Needed: 1, Existing: 1, Demand: 1.3600000143051147
+Observer: Demand Score, 10[83%] Needed: 1, Existing: 1, Demand: 1.2000000476837158
+Immortal: Demand Score, 475[88%] Needed: 1, Existing: 2, Demand: 2.25
+Stalker: Demand Score, 225[97%] Needed: 1, Existing: 17, Demand: 17.350000001490116
+
+Army Report 11:00
+Win Air: false [ 3.6262517 ]
+Air Ground: false [ 6.917099 ]
+Air All: false [ 5.1381025 ]
+Army Power: 5375.076
+Enemy Power: 3775.0386
+Attack Status: false
+Rally Point: {0 0}
+Defensive Point: {77 82}
+Base Under Harass: true
+Base Under Attack: true
+Enemy Object Length: 69
+Next Expansion: {44.5 123.5}
+Best Expansion: {44.5 123.5}
+Should Expand: true
+Expand Saving: false
+Air Superiority: true
+Alloc = 25 MiB	TotalAlloc = 6922 MiB	Sys = 41 MiB	NumGC = 578
+
+14826   11:01   Supply:141/180         Minerals:400     Vespene:356     Commander Manager          Building Photon Cannon [X:47, Y:96]
+14888   11:04   Supply:143/180         Minerals:275     Vespene:384     [4367843329] WarpGate     Warping Zealot
+14940   11:06   Supply:143/180         Minerals:400     Vespene:412     Commander Manager          Building Photon Cannon [X:67, Y:59]
+15006   11:09   Supply:145/180         Minerals:295     Vespene:444     [4357619713] WarpGate     Warping Zealot
+15054   11:12   Supply:145/180         Minerals:400     Vespene:460     Commander Manager          Building Photon Cannon [X:42, Y:66]
+15054   11:12   Supply:145/180         Minerals:400     Vespene:460     [4314103810] Robotics Factory Training Colossus
+15062   11:12   Supply:145/180         Minerals:265     Vespene:460     Attack Mode Started [Enemy: 3775.038 Ours: 6125.074 Time: 10.162405] AttackCommander
+15062   11:12   Supply:145/180         Minerals:265     Vespene:460     Forge                     Researching Armor 1
+15064   11:12   Supply:145/180         Minerals:170     Vespene:360     [4399038465] Nexus        Chronoboosting Forge [4353949698]
+15122   11:15   Supply:145/180         Minerals:300     Vespene:408     [4314103810] Robotics Factory Training Colossus
+15182   11:17   Supply:153/180         Minerals:5       Vespene:190     [4368367617] WarpGate     Warping Stalker
+15204   11:18   Supply:153/180         Minerals:55      Vespene:206     Combat                    Dead Enemy: Battlecruiser [4389076997]
+15236   11:20   Supply:153/180         Minerals:130     Vespene:230     Commander Manager         Late Game Started
+15280   11:22   Supply:151/180         Minerals:250     Vespene:246     Combat                    Dead Friend: Zealot [4396679174]
+15324   11:24   Supply:149/180         Minerals:350     Vespene:270     Combat                    Dead Friend: Zealot [4427874320]
+15338   11:24   Supply:151/180         Minerals:310     Vespene:282     [4367843329] WarpGate     Warping Zealot
+15416   11:28   Supply:149/180         Minerals:485     Vespene:322     Combat                    Dead Friend: Zealot [4402184199]
+Intel Report 11:30
+
+Enemy Unit Report  11:30
+Battlecruiser: 2/2
+PlanetaryFortress: 1/1
+Marine: 12/17
+WidowMineBurrowed: 2/2
+Marauder: 3/9
+Hellion: 2/2
+SCV: 43/43
+Bunker: 2/2
+SiegeTank: 2/2
+
+Enemy Building Report  11:30
+Planetary Fortress: Visible: true, Attackable: true Snapshot: true isUnitVisible: true 
+Barracks: 1
+OrbitalCommand: 2
+FactoryTechLab: 1
+Bunker: 2
+SupplyDepot: 4
+PlanetaryFortress: 1
+Factory: 1
+Refinery: 5
+
+Ideal Counters Report  11:30
+Tempest: Demand Score, 1800[0%] Needed: 3, Existing: 0, Demand: 3
+Zealot: Demand Score, 200[66%] Needed: 2, Existing: 3, Demand: 4.5
+Observer: Demand Score, 10[71%] Needed: 1, Existing: 1, Demand: 1.399999976158142
+Immortal: Demand Score, 475[88%] Needed: 1, Existing: 2, Demand: 2.25
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Stalker: Demand Score, -2475[283%] Needed: -11, Existing: 18, Demand: 6.350000001490116
+
+Live Counters Report  11:30
+Zealot: Demand Score, 200[66%] Needed: 2, Existing: 3, Demand: 4.5
+Observer: Demand Score, 10[71%] Needed: 1, Existing: 1, Demand: 1.399999976158142
+Immortal: Demand Score, 475[88%] Needed: 1, Existing: 2, Demand: 2.25
+Stalker: Demand Score, 0[103%] Needed: 0, Existing: 18, Demand: 17.350000001490116
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+
+Army Report 11:30
+Win Air: true [ 1.5836492 ]
+Air Ground: true [ 4.041991 ]
+Air All: true [ 1.8984795 ]
+Army Power: 6525.073
+Enemy Power: 6000.042
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {77 82}
+Base Under Harass: true
+Base Under Attack: true
+Enemy Object Length: 85
+Next Expansion: {44.5 123.5}
+Best Expansion: {44.5 123.5}
+Should Expand: true
+Expand Saving: false
+Air Superiority: true
+Alloc = 21 MiB	TotalAlloc = 7464 MiB	Sys = 41 MiB	NumGC = 623
+
+15456   11:30   Supply:151/180         Minerals:515     Vespene:350     [4357619713] WarpGate     Warping Zealot
+15478   11:30   Supply:151/180         Minerals:550     Vespene:362     [4370726920] Robotics Factory Training Immortal
+15482   11:31   Supply:155/180         Minerals:310     Vespene:266     Combat                    Dead Enemy: Marine [4382523397]
+15484   11:31   Supply:155/180         Minerals:315     Vespene:266     Combat                    Dead Enemy: Marine [4398514178]
+15510   11:32   Supply:155/180         Minerals:385     Vespene:278     Combat                    Dead Enemy: Marine [4388552705]
+15510   11:32   Supply:155/180         Minerals:385     Vespene:278     Combat                    Dead Enemy: Marine [4385144839]
+15514   11:32   Supply:155/180         Minerals:400     Vespene:282     [4409524227] Nexus        Chronoboosting Forge [4353949698]
+15516   11:32   Supply:155/180         Minerals:100     Vespene:86      Production                Building Fleet Beacon [X:38, Y:46.5]
+15536   11:33   Supply:155/180         Minerals:140     Vespene:102     Combat                    Dead Enemy: Marine [4428398620]
+15538   11:33   Supply:153/180         Minerals:145     Vespene:102     Combat                    Dead Friend: Zealot [4393795593]
+15540   11:33   Supply:153/180         Minerals:5       Vespene:102     Production                Building Forge [X:44, Y:46.5]
+15542   11:33   Supply:153/180         Minerals:5       Vespene:102     Combat                    Dead Enemy: Marine [4378066945]
+15574   11:35   Supply:153/180         Minerals:75      Vespene:126     Combat                    Dead Enemy: Marine [4374396930]
+15600   11:36   Supply:153/180         Minerals:155     Vespene:150     [4388814854] StarGate     Training Oracle
+15630   11:37   Supply:156/180         Minerals:0       Vespene:12      Economy                   Building Assimilator
+15634   11:37   Supply:154/180         Minerals:15      Vespene:16      Combat                    Dead Friend: Zealot [4428136464]
+15646   11:38   Supply:154/180         Minerals:45      Vespene:20      [4348968961] Nexus        Chronoboosting Stargate [4388814854]
+15658   11:39   Supply:152/180         Minerals:65      Vespene:24      Combat                    Dead Friend: Stalker [4380688391]
+15666   11:39   Supply:152/180         Minerals:80      Vespene:36      Combat                    Dead Enemy: Battlecruiser [4427087891]
+15696   11:40   Supply:154/180         Minerals:55      Vespene:52      [4368367617] WarpGate     Warping Zealot
+15782   11:44   Supply:154/180         Minerals:150     Vespene:108     Production                Building Gateway [X:73.5, Y:54.5]
+15788   11:44   Supply:156/180         Minerals:55      Vespene:112     [4367843329] WarpGate     Warping Zealot
+15884   11:49   Supply:156/180         Minerals:155     Vespene:76      Production                Building Robotics Facility [X:43.5, Y:75.5]
+15886   11:49   Supply:156/180         Minerals:160     Vespene:80      Combat                    Dead Enemy: Marine [4392747009]
+15890   11:49   Supply:156/180         Minerals:170     Vespene:80      Combat                    Dead Enemy: Marauder [4427612166]
+15906   11:50   Supply:158/180         Minerals:115     Vespene:96      [4357619713] WarpGate     Warping Zealot
+15918   11:50   Supply:158/180         Minerals:135     Vespene:100     Combat                    Dead Enemy: Marauder [4424204309]
+15926   11:50   Supply:156/180         Minerals:160     Vespene:112     Combat                    Dead Friend: Zealot [4429447176]
+15930   11:51   Supply:156/180         Minerals:185     Vespene:116     Combat                    Dead Enemy: Marauder [4409786375]
+15964   11:52   Supply:156/180         Minerals:265     Vespene:140     [4367056900] Nexus        Chronoboosting Forge [4353949698]
+16008   11:54   Supply:156/180         Minerals:390     Vespene:160     Combat                    Dead Enemy: SCV [4402446337]
+16010   11:54   Supply:152/180         Minerals:395     Vespene:160     Combat                    Dead Friend: Immortal [4428922883]
+16046   11:56   Supply:152/180         Minerals:505     Vespene:184     Commander Manager          Building Shield Battery [X:71, Y:51]
+Max Enemy Power 6000.0425 Army Power 6400.074 Used Enemy Power 5340.0376
+Nexus Count 5 Enemy Townhalls 4
+16072   11:57   Supply:152/195         Minerals:45      Vespene:208     Economy                   Expanding
+Intel Report 12:00
+
+Enemy Unit Report  12:00
+Marine: 4/17
+WidowMineBurrowed: 2/2
+Marauder: 0/9
+Battlecruiser: 1/2
+PlanetaryFortress: 1/1
+SCV: 43/44
+Bunker: 2/2
+SiegeTank: 3/3
+Hellion: 2/2
+
+Enemy Building Report  12:00
+Planetary Fortress: Visible: true, Attackable: true Snapshot: true isUnitVisible: true 
+SupplyDepot: 4
+Factory: 1
+CommandCenter: 1
+Refinery: 5
+Barracks: 1
+OrbitalCommand: 2
+FactoryTechLab: 1
+Bunker: 2
+PlanetaryFortress: 1
+
+Ideal Counters Report  12:00
+Tempest: Demand Score, 1800[0%] Needed: 3, Existing: 0, Demand: 3
+Immortal: Demand Score, 475[88%] Needed: 1, Existing: 2, Demand: 2.25
+Zealot: Demand Score, 100[88%] Needed: 1, Existing: 4, Demand: 4.5
+Oracle: Demand Score, 0[100%] Needed: 0, Existing: 1, Demand: 1
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Observer: Demand Score, 0[250%] Needed: 0, Existing: 1, Demand: 0.3999999761581421
+Stalker: Demand Score, -2250[267%] Needed: -10, Existing: 17, Demand: 6.350000001490116
+
+Live Counters Report  12:00
+Immortal: Demand Score, 475[88%] Needed: 1, Existing: 2, Demand: 2.25
+Zealot: Demand Score, 100[88%] Needed: 1, Existing: 4, Demand: 4.5
+Stalker: Demand Score, 450[90%] Needed: 2, Existing: 17, Demand: 18.850000001490116
+Oracle: Demand Score, 0[100%] Needed: 0, Existing: 1, Demand: 1
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Observer: Demand Score, 0[250%] Needed: 0, Existing: 1, Demand: 0.3999999761581421
+
+Army Report 12:00
+Win Air: true [ 12.37817 ]
+Air Ground: true [ 12.001232 ]
+Air All: true [ 11.387098 ]
+Army Power: 6400.073
+Enemy Power: 4400.043
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {77 82}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 75
+Next Expansion: {44.5 123.5}
+Best Expansion: {44.5 123.5}
+Should Expand: true
+Expand Saving: false
+Air Superiority: true
+Alloc = 20 MiB	TotalAlloc = 8014 MiB	Sys = 41 MiB	NumGC = 668
+
+16146   12:00   Supply:154/195         Minerals:150     Vespene:252     [4368367617] WarpGate     Warping Zealot
+16158   12:01   Supply:154/195         Minerals:190     Vespene:260     Combat                    Dead Enemy: SiegeTankSieged [4426825729]
+16226   12:04   Supply:152/195         Minerals:345     Vespene:308     Combat                    Dead Friend: Zealot [4402184200]
+Next Expansion Trigger: Update Friend Owned
+
+Updating Defensive Point
+Getting Position Behind ramp {60.76923 96.76923} {64.5 100.5}
+16238   12:04   Supply:154/195         Minerals:280     Vespene:308     [4367843329] WarpGate     Warping Zealot
+16258   12:05   Supply:154/195         Minerals:340     Vespene:328     Combat                    Dead Enemy: SCV [4413456385]
+16296   12:07   Supply:154/195         Minerals:410     Vespene:356     Forge                     Researching Shields 1
+16298   12:07   Supply:154/195         Minerals:265     Vespene:206     [4399038465] Nexus        Chronoboosting Forge [4382523403]
+16316   12:08   Supply:152/195         Minerals:325     Vespene:214     Combat                    Dead Friend: Zealot [4428398625]
+16324   12:08   Supply:152/195         Minerals:345     Vespene:222     [4314103810] Robotics Factory Training Immortal
+16356   12:10   Supply:158/195         Minerals:80      Vespene:134     [4357619713] WarpGate     Warping Zealot
+16490   12:16   Supply:156/195         Minerals:415     Vespene:222     Combat                    Dead Friend: Zealot [4430233613]
+16500   12:16   Supply:156/195         Minerals:435     Vespene:222     [4388814854] StarGate     Training Tempest
+16512   12:17   Supply:160/195         Minerals:205     Vespene:47      Combat                    Dead Enemy: Marauder [4429971463]
+16566   12:19   Supply:160/195         Minerals:350     Vespene:71      Combat                    Dead Enemy: Marine [4397465602]
+16596   12:20   Supply:162/195         Minerals:335     Vespene:87      [4368367617] WarpGate     Warping Zealot
+Casting Revelation 4426825731 16610
+16620   12:21   Supply:162/195         Minerals:375     Vespene:99      Combat                    Dead Enemy: Marine [4403232769]
+16622   12:22   Supply:160/195         Minerals:380     Vespene:103     Combat                    Dead Friend: Zealot [4380688393]
+16668   12:24   Supply:160/195         Minerals:500     Vespene:119     Commander Manager          Building Shield Battery [X:47, Y:92]
+16688   12:25   Supply:162/195         Minerals:340     Vespene:135     [4367843329] WarpGate     Warping Zealot
+16696   12:25   Supply:160/195         Minerals:355     Vespene:135     Combat                    Dead Friend: Zealot [4393795608]
+16720   12:26   Supply:160/195         Minerals:280     Vespene:1       Production                Building Stargate [X:43.5, Y:63.5]
+16748   12:27   Supply:160/195         Minerals:320     Vespene:5       [4409524227] Nexus        Chronoboosting Forge [4382523403]
+16786   12:29   Supply:159/195         Minerals:425     Vespene:37      Combat                    Dead Friend: Probe [4376494081]
+16786   12:29   Supply:160/195         Minerals:375     Vespene:37      [4367056900] Nexus        Training Probe
+16786   12:29   Supply:161/195         Minerals:325     Vespene:37      [4409524227] Nexus        Training Probe
+16786   12:29   Supply:162/195         Minerals:275     Vespene:37      [4417388555] Nexus        Training Probe
+16786   12:29   Supply:163/195         Minerals:225     Vespene:37      [4399038465] Nexus        Training Probe
+Error(Removing Build Order): unit_tag:4382261253 ability_id:895 result:CantBuildLocationInvalid 
+16788   12:29   Supply:159/195         Minerals:580     Vespene:212     Combat                    Dead Friend: Stargate [4388814854]
+16788   12:29   Supply:159/195         Minerals:580     Vespene:212     Commander Manager          Building Shield Battery [X:47, Y:92]
+Intel Report 12:30
+
+Enemy Unit Report  12:30
+Marine: 5/17
+WidowMineBurrowed: 2/2
+Marauder: 2/9
+Battlecruiser: 2/2
+PlanetaryFortress: 1/1
+SCV: 53/53
+Bunker: 2/2
+SiegeTank: 2/3
+Hellion: 2/2
+
+Enemy Building Report  12:30
+Planetary Fortress: Visible: true, Attackable: true Snapshot: false isUnitVisible: false 
+FactoryTechLab: 1
+Bunker: 2
+SupplyDepot: 4
+Refinery: 7
+CommandCenter: 1
+OrbitalCommand: 2
+Factory: 1
+Barracks: 1
+PlanetaryFortress: 1
+
+Ideal Counters Report  12:30
+Tempest: Demand Score, 1800[0%] Needed: 3, Existing: 0, Demand: 3
+Observer: Demand Score, 10[71%] Needed: 1, Existing: 1, Demand: 1.399999976158142
+Zealot: Demand Score, 100[88%] Needed: 1, Existing: 4, Demand: 4.5
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Stalker: Demand Score, -2250[267%] Needed: -10, Existing: 17, Demand: 6.350000001490116
+
+Live Counters Report  12:30
+Observer: Demand Score, 10[71%] Needed: 1, Existing: 1, Demand: 1.399999976158142
+Zealot: Demand Score, 100[88%] Needed: 1, Existing: 4, Demand: 4.5
+Stalker: Demand Score, 450[90%] Needed: 2, Existing: 17, Demand: 18.850000001490116
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+
+Army Report 12:30
+Win Air: true [ 6.2016196 ]
+Air Ground: true [ 10.030806 ]
+Air All: true [ 9.421348 ]
+Army Power: 8025.074
+Enemy Power: 5450.0527
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {56 92}
+Base Under Harass: true
+Base Under Attack: true
+Enemy Object Length: 91
+Next Expansion: {93.5 41.5}
+Best Expansion: {93.5 41.5}
+Should Expand: true
+Expand Saving: false
+Air Superiority: true
+Alloc = 24 MiB	TotalAlloc = 8581 MiB	Sys = 41 MiB	NumGC = 713
+
+16802   12:30   Supply:159/195         Minerals:490     Vespene:216     [4370726920] Robotics Factory Training Observer
+16806   12:30   Supply:162/195         Minerals:380     Vespene:141     [4357619713] WarpGate     Warping Zealot
+16810   12:30   Supply:162/195         Minerals:390     Vespene:141     Combat                    Dead Enemy: SCV [4424466436]
+16836   12:31   Supply:162/195         Minerals:465     Vespene:153     Combat                    Dead Enemy: Marine [4388552719]
+16848   12:32   Supply:162/195         Minerals:400     Vespene:157     Economy                   Building Assimilator
+16856   12:32   Supply:162/195         Minerals:415     Vespene:169     Combat                    Dead Enemy: Marauder [4428922884]
+16864   12:32   Supply:160/195         Minerals:455     Vespene:169     Combat                    Dead Friend: Zealot [4392747025]
+16868   12:33   Supply:160/195         Minerals:310     Vespene:169     Production                Building Gateway [X:49.5, Y:95.5]
+16868   12:33   Supply:160/195         Minerals:310     Vespene:169     [4374396938] Gateway      Morphing to Warpgate
+16870   12:33   Supply:160/195         Minerals:215     Vespene:169     Economy                   Building Replacement Pylon [X:69, Y:90]
+Removing Build Order, not building
+16918   12:35   Supply:160/195         Minerals:310     Vespene:205     Combat                    Dead Enemy: Marine [4416339969]
+16948   12:36   Supply:160/195         Minerals:385     Vespene:233     Combat                    Dead Enemy: Marine [4396679179]
+Casting Revelation 4426825731 16948
+Casting Revelation 4426825731 16962
+16966   12:37   Supply:160/195         Minerals:425     Vespene:249     Combat                    Dead Enemy: Marine [4427087893]
+Casting Revelation 4426825731 16974
+16978   12:37   Supply:160/195         Minerals:460     Vespene:257     Combat                    Dead Enemy: Marine [4425777153]
+Casting Revelation 4426825731 16980
+17000   12:38   Supply:160/195         Minerals:500     Vespene:277     Commander Manager          Building Photon Cannon [X:42, Y:44]
+17010   12:39   Supply:158/195         Minerals:385     Vespene:281     Combat                    Dead Friend: Zealot [4409786381]
+17030   12:40   Supply:160/195         Minerals:315     Vespene:255     [4374396938] WarpGate     Warping Stalker
+17044   12:40   Supply:160/195         Minerals:355     Vespene:259     Combat                    Dead Enemy: Marauder [4359454749]
+17046   12:40   Supply:162/195         Minerals:255     Vespene:259     [4368367617] WarpGate     Warping Zealot
+17068   12:41   Supply:162/195         Minerals:305     Vespene:275     [4348968961] Nexus        Chronoboosting RoboticsFacility [4370726920]
+17112   12:43   Supply:162/195         Minerals:420     Vespene:315     Forge                     Researching Armor 2
+17118   12:44   Supply:162/195         Minerals:285     Vespene:177     Combat                    Dead Enemy: SCV [4413456386]
+17138   12:45   Supply:164/195         Minerals:220     Vespene:131     [4367843329] WarpGate     Warping Stalker
+Expansion Trigger Dead Enemy Structure
+17164   12:46   Supply:164/195         Minerals:310     Vespene:155     Combat                    Dead Enemy: Refinery [4397727758]
+17172   12:46   Supply:162/195         Minerals:325     Vespene:155     Combat                    Dead Friend: Stalker [4393271298]
+17178   12:46   Supply:162/195         Minerals:330     Vespene:163     Combat                    Dead Enemy: SCV [4358144007]
+17194 Extended Kite True, Unit: Stalker current DPS: 10000 KitePoint DPS: 10000 KitePoint: {0 0} Current Height 8 KitePoint Height: -15.875
+New DPS: 10000 New Height: -15.875 KitePoint: {0 0}
+17194 Blank kite point found true
+17198 Extended Kite True, Unit: Stalker current DPS: 10000 KitePoint DPS: 10000 KitePoint: {0 0} Current Height 8 KitePoint Height: -15.875
+New DPS: 10000 New Height: -15.875 KitePoint: {0 0}
+17198 Blank kite point found true
+17206 Extended Kite True, Unit: Stalker current DPS: 10000 KitePoint DPS: 10000 KitePoint: {0 0} Current Height 8 KitePoint Height: -15.875
+New DPS: 10000 New Height: -15.875 KitePoint: {0 0}
+17206 Blank kite point found true
+17208   12:48   Supply:162/195         Minerals:415     Vespene:187     Combat                    Dead Enemy: SCV [4421582849]
+17242   12:49   Supply:162/195         Minerals:510     Vespene:211     Commander Manager          Building Shield Battery [X:63, Y:59]
+17256   12:50   Supply:164/195         Minerals:335     Vespene:181     [4357619713] WarpGate     Warping Stalker
+Casting Revelation 4426825731 17292
+17320   12:53   Supply:164/200         Minerals:505     Vespene:237     Commander Manager          Building Shield Battery [X:39, Y:42]
+17324   12:53   Supply:164/200         Minerals:425     Vespene:237     [4367056900] Nexus        Chronoboosting Forge [4382523403]
+17334   12:53   Supply:164/200         Minerals:430     Vespene:241     Combat                    Dead Enemy: SCV [4360765441]
+17392   12:56   Supply:160/200         Minerals:590     Vespene:293     Combat                    Dead Friend: Zealot [4403232772]
+17392   12:56   Supply:160/200         Minerals:590     Vespene:293     Combat                    Dead Friend: Zealot [4397465603]
+17402   12:56   Supply:160/200         Minerals:615     Vespene:297     [4399038465] Nexus        Chronoboosting Forge [4353949698]
+17436   12:58   Supply:160/200         Minerals:645     Vespene:325     Economy                   Building Assimilator
+17444   12:58   Supply:160/200         Minerals:660     Vespene:337     Combat                    Dead Enemy: Hellion [4375707649]
+17458   12:59   Supply:158/200         Minerals:700     Vespene:357     Combat                    Dead Friend: Zealot [4376494083]
+Intel Report 13:00
+
+Enemy Unit Report  13:00
+Hellion: 1/2
+SCV: 56/57
+Bunker: 2/2
+SiegeTank: 3/3
+Battlecruiser: 4/4
+PlanetaryFortress: 2/2
+WidowMine: 1/3
+Marine: 2/17
+WidowMineBurrowed: 4/4
+Marauder: 1/9
+
+Enemy Building Report  13:00
+Planetary Fortress: Visible: true, Attackable: true Snapshot: false isUnitVisible: true 
+Planetary Fortress: Visible: true, Attackable: true Snapshot: false isUnitVisible: false 
+Barracks: 2
+BarracksTechLab: 1
+PlanetaryFortress: 2
+SupplyDepotLowered: 9
+SupplyDepot: 7
+FactoryTechLab: 1
+EngineeringBay: 2
+Factory: 1
+Refinery: 7
+StarportTechLab: 4
+OrbitalCommand: 2
+FusionCore: 1
+Armory: 2
+Starport: 4
+Bunker: 2
+
+Ideal Counters Report  13:00
+Tempest: Demand Score, 3600[0%] Needed: 6, Existing: 0, Demand: 6
+Zealot: Demand Score, 400[22%] Needed: 4, Existing: 1, Demand: 4.5
+Observer: Demand Score, 0[100%] Needed: 0, Existing: 2, Demand: 2
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Stalker: Demand Score, -2700[299%] Needed: -12, Existing: 19, Demand: 6.350000001490116
+
+Live Counters Report  13:00
+Zealot: Demand Score, 400[22%] Needed: 4, Existing: 1, Demand: 4.5
+Stalker: Demand Score, 2475[63%] Needed: 11, Existing: 19, Demand: 29.850000001490116
+Observer: Demand Score, 0[100%] Needed: 0, Existing: 2, Demand: 2
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+
+Army Report 13:00
+Win Air: false [ -1.9613781 ]
+Air Ground: true [ 4.703767 ]
+Air All: true [ 1.5554495 ]
+Army Power: 8810.075
+Enemy Power: 8625.055
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {56 92}
+Base Under Harass: true
+Base Under Attack: true
+Enemy Object Length: 122
+Next Expansion: {93.5 41.5}
+Best Expansion: {93.5 41.5}
+Should Expand: true
+Expand Saving: false
+Air Superiority: true
+Alloc = 19 MiB	TotalAlloc = 9209 MiB	Sys = 41 MiB	NumGC = 764
+
+17496   13:01   Supply:158/200         Minerals:665     Vespene:393     Production                Building Gateway [X:66.5, Y:61.5]
+17496   13:01   Supply:160/200         Minerals:565     Vespene:393     [4368367617] WarpGate     Warping Zealot
+17544   13:03   Supply:162/200         Minerals:565     Vespene:395     [4374396938] WarpGate     Warping Stalker
+Recalculating Distances - Neutral unit destroyed: MineralField750 at {34 65.5}
+17652   13:08   Supply:164/200         Minerals:760     Vespene:515     [4367843329] WarpGate     Warping Zealot
+17762   13:12   Supply:164/200         Minerals:1050    Vespene:631     [4431020043] StarGate     Training Tempest
+17762   13:12   Supply:164/200         Minerals:1050    Vespene:631     Cybernetics Core          Researching Air Weapons 1
+17764   13:13   Supply:168/200         Minerals:570     Vespene:210     Production                Building Stargate [X:51.5, Y:42]
+17764   13:13   Supply:168/200         Minerals:570     Vespene:210     [4417388555] Nexus        Chronoboosting CyberneticsCore [4361027585]
+17770   13:13   Supply:170/200         Minerals:485     Vespene:214     [4357619713] WarpGate     Warping Zealot
+Casting Revelation 4426825731 17778
+17892   13:18   Supply:170/200         Minerals:790     Vespene:350     Combat                    Dead Enemy: Hellion [4419747841]
+Recalculating Distances - Neutral unit destroyed: MineralField750 at {33 70.5}
+Recalculating Distances - Neutral unit destroyed: MineralField750 at {33 68.5}
+17946   13:21   Supply:172/200         Minerals:840     Vespene:410     [4368367617] WarpGate     Warping Zealot
+17980   13:22   Supply:171/200         Minerals:930     Vespene:442     Combat                    Dead Friend: Probe [4384096257]
+17986   13:22   Supply:171/200         Minerals:950     Vespene:450     [4388552727] Gateway      Morphing to Warpgate
+Recalculating Distances - Neutral unit destroyed: MineralField750 at {34 73.5}
+18088   13:27   Supply:171/200         Minerals:1160    Vespene:542     Combat                    Dead Enemy: Marine [4432068621]
+Intel Report 13:30
+
+Enemy Unit Report  13:30
+Marine: 4/17
+WidowMineBurrowed: 4/4
+Marauder: 2/9
+Battlecruiser: 5/5
+PlanetaryFortress: 2/2
+WidowMine: 1/3
+SCV: 60/60
+Bunker: 2/2
+SiegeTank: 3/3
+Hellion: 1/2
+
+Enemy Building Report  13:30
+Planetary Fortress: Visible: true, Attackable: true Snapshot: false isUnitVisible: false 
+Planetary Fortress: Visible: true, Attackable: true Snapshot: true isUnitVisible: true 
+Refinery: 8
+Armory: 2
+StarportTechLab: 4
+Starport: 4
+Bunker: 2
+FusionCore: 1
+PlanetaryFortress: 2
+SupplyDepot: 13
+Factory: 1
+CommandCenter: 1
+FactoryTechLab: 1
+BarracksTechLab: 1
+EngineeringBay: 2
+SupplyDepotLowered: 3
+Barracks: 2
+OrbitalCommand: 2
+
+Ideal Counters Report  13:30
+Tempest: Demand Score, 4200[13%] Needed: 7, Existing: 1, Demand: 7.5
+Zealot: Demand Score, 0[111%] Needed: 0, Existing: 5, Demand: 4.5
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Observer: Demand Score, -10[200%] Needed: -1, Existing: 2, Demand: 1
+Stalker: Demand Score, -2925[314%] Needed: -13, Existing: 20, Demand: 6.350000001490116
+
+Live Counters Report  13:30
+Tempest: Demand Score, 4800[11%] Needed: 8, Existing: 1, Demand: 9
+Zealot: Demand Score, 0[111%] Needed: 0, Existing: 5, Demand: 4.5
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Stalker: Demand Score, -1125[134%] Needed: -5, Existing: 20, Demand: 14.850000001490116
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Observer: Demand Score, -10[200%] Needed: -1, Existing: 2, Demand: 1
+
+Army Report 13:30
+Win Air: false [ -4.929846 ]
+Air Ground: true [ 4.313855 ]
+Air All: true [ 1.408267 ]
+Army Power: 9435.074
+Enemy Power: 9925.06
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {56 92}
+Base Under Harass: true
+Base Under Attack: true
+Enemy Object Length: 132
+Next Expansion: {93.5 41.5}
+Best Expansion: {93.5 41.5}
+Should Expand: false
+Expand Saving: false
+Air Superiority: true
+Alloc = 14 MiB	TotalAlloc = 9933 MiB	Sys = 41 MiB	NumGC = 821
+
+18150   13:30   Supply:171/200         Minerals:1200    Vespene:606     Economy                   Building Assimilator
+18154   13:30   Supply:171/200         Minerals:1210    Vespene:606     [4409524227] Nexus        Chronoboosting Forge [4353949698]
+18156   13:30   Supply:171/200         Minerals:1220    Vespene:606     Combat                    Dead Enemy: Marine [4403232773]
+18248   13:34   Supply:171/200         Minerals:1390    Vespene:706     Combat                    Dead Enemy: SCV [4416864257]
+18310   13:37   Supply:169/200         Minerals:1535    Vespene:786     Combat                    Dead Friend: Zealot [4433641474]
+18310   13:37   Supply:171/200         Minerals:1435    Vespene:786     [4374396938] WarpGate     Warping Zealot
+18310   13:37   Supply:173/200         Minerals:1335    Vespene:786     [4388552727] WarpGate     Warping Zealot
+18310   13:37   Supply:175/200         Minerals:1235    Vespene:786     [4367843329] WarpGate     Warping Zealot
+18310   13:37   Supply:177/200         Minerals:1135    Vespene:786     [4357619713] WarpGate     Warping Zealot
+18346   13:39   Supply:169/200         Minerals:1520    Vespene:822     Combat                    Dead Friend: Zealot [4434427906]
+18346   13:39   Supply:169/200         Minerals:1520    Vespene:822     Forge                     Researching Shields 2
+18392   13:41   Supply:171/200         Minerals:1330    Vespene:666     [4388552727] WarpGate     Warping Zealot
+18392   13:41   Supply:173/200         Minerals:1230    Vespene:666     [4367843329] WarpGate     Warping Zealot
+18392   13:41   Supply:175/200         Minerals:1130    Vespene:666     [4357619713] WarpGate     Warping Zealot
+18416   13:42   Supply:171/200         Minerals:1390    Vespene:706     Combat                    Dead Enemy: SCV [4397989889]
+18490   13:45   Supply:169/200         Minerals:1585    Vespene:786     Combat                    Dead Friend: Zealot [4427087897]
+18490   13:45   Supply:171/200         Minerals:1485    Vespene:786     [4368367617] WarpGate     Warping Zealot
+18490   13:45   Supply:173/200         Minerals:1385    Vespene:786     [4367843329] WarpGate     Warping Zealot
+18490   13:45   Supply:175/200         Minerals:1285    Vespene:786     [4357619713] WarpGate     Warping Zealot
+18490   13:45   Supply:175/200         Minerals:1285    Vespene:786     [4348968961] Nexus        Chronoboosting CyberneticsCore [4361027585]
+18560   13:48   Supply:171/200         Minerals:1645    Vespene:870     Combat                    Dead Enemy: Marine [4380688394]
+18566   13:48   Supply:171/200         Minerals:1665    Vespene:886     Combat                    Dead Enemy: SiegeTankSieged [4432330754]
+18574   13:49   Supply:171/200         Minerals:1700    Vespene:898     Combat                    Dead Enemy: Marine [4435214348]
+18596   13:50   Supply:171/200         Minerals:1750    Vespene:914     Combat                    Dead Enemy: SCV [4425252880]
+18596   13:50   Supply:171/200         Minerals:1750    Vespene:914     Combat                    Dead Enemy: Marine [4436000775]
+18606 Heal Kiting Immortal Target: Marauder
+18608   13:50   Supply:171/200         Minerals:1770    Vespene:938     Combat                    Dead Enemy: Marauder [4425777154]
+18608   13:50   Supply:171/200         Minerals:1770    Vespene:938     Combat                    Dead Enemy: Marauder [4376494084]
+18626   13:51   Supply:171/200         Minerals:1825    Vespene:950     Combat                    Dead Enemy: SCV [4353425409]
+18638   13:52   Supply:171/200         Minerals:1860    Vespene:974     [4334026754] Gateway      Morphing to Warpgate
+18664   13:53   Supply:171/200         Minerals:1915    Vespene:1002    Fleet Beacon              Training Tectonic Destabilizers[mineral 1k]
+18700   13:54   Supply:171/200         Minerals:1865    Vespene:904     Combat                    Dead Enemy: SCV [4410310657]
+18722   13:55   Supply:169/200         Minerals:1925    Vespene:916     Combat                    Dead Friend: Zealot [4434952202]
+18722   13:55   Supply:171/200         Minerals:1825    Vespene:916     [4367843329] WarpGate     Warping Zealot
+18722   13:55   Supply:173/200         Minerals:1725    Vespene:916     [4357619713] WarpGate     Warping Zealot
+18724   13:55   Supply:171/200         Minerals:1825    Vespene:916     [4431020043] StarGate     Training Tempest
+18740   13:56   Supply:175/200         Minerals:1620    Vespene:773     Combat                    Dead Enemy: SCV [4354211841]
+18746   13:56   Supply:175/200         Minerals:1640    Vespene:781     [4367056900] Nexus        Chronoboosting Forge [4353949698]
+18760 Heal Kiting Immortal Target: SCV
+18762 Heal Kiting Immortal Target: SCV
+18764 Heal Kiting Immortal Target: SCV
+18766 Heal Kiting Immortal Target: SCV
+18768   13:57   Supply:175/200         Minerals:1705    Vespene:809     Combat                    Dead Enemy: SCV [4437573633]
+18798   13:59   Supply:175/200         Minerals:1780    Vespene:845     [4435476489] StarGate     Training Tempest
+18800   13:59   Supply:179/200         Minerals:1380    Vespene:524     Production                Building Stargate [X:46.5, Y:74.5]
+18802 Heal Kiting Immortal Target: Marine
+18812   13:59   Supply:179/200         Minerals:1410    Vespene:536     Combat                    Dead Enemy: Marine [4403232774]
+Intel Report 14:00
+
+Enemy Unit Report  14:00
+Battlecruiser: 5/5
+PlanetaryFortress: 2/2
+WidowMine: 1/3
+Marine: 0/17
+WidowMineBurrowed: 4/4
+Marauder: 1/9
+Hellion: 2/2
+SCV: 59/64
+Bunker: 2/2
+SiegeTank: 2/3
+
+Enemy Building Report  14:00
+Planetary Fortress: Visible: true, Attackable: true Snapshot: false isUnitVisible: false 
+Planetary Fortress: Visible: true, Attackable: true Snapshot: false isUnitVisible: false 
+FusionCore: 1
+Factory: 1
+FactoryTechLab: 1
+BarracksTechLab: 1
+EngineeringBay: 2
+StarportTechLab: 4
+CommandCenter: 1
+Barracks: 2
+OrbitalCommand: 2
+Refinery: 9
+RefineryRich: 1
+PlanetaryFortress: 2
+Starport: 4
+Armory: 2
+Bunker: 2
+SupplyDepotLowered: 3
+SupplyDepot: 13
+
+Ideal Counters Report  14:00
+Tempest: Demand Score, 3000[40%] Needed: 5, Existing: 3, Demand: 7.5
+Zealot: Demand Score, 0[111%] Needed: 0, Existing: 5, Demand: 4.5
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Observer: Demand Score, -10[200%] Needed: -1, Existing: 2, Demand: 1
+Stalker: Demand Score, -2925[314%] Needed: -13, Existing: 20, Demand: 6.350000001490116
+
+Live Counters Report  14:00
+Tempest: Demand Score, 3600[33%] Needed: 6, Existing: 3, Demand: 9
+Zealot: Demand Score, 0[111%] Needed: 0, Existing: 5, Demand: 4.5
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Stalker: Demand Score, -1125[134%] Needed: -5, Existing: 20, Demand: 14.850000001490116
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Observer: Demand Score, -10[200%] Needed: -1, Existing: 2, Demand: 1
+
+Army Report 14:00
+Win Air: false [ -1.9760313 ]
+Air Ground: true [ 5.799744 ]
+Air All: true [ 3.7114186 ]
+Army Power: 10385.072
+Enemy Power: 9225.059
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {56 92}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 130
+Next Expansion: {93.5 41.5}
+Best Expansion: {93.5 41.5}
+Should Expand: false
+Expand Saving: false
+Air Superiority: true
+Alloc = 19 MiB	TotalAlloc = 10761 MiB	Sys = 45 MiB	NumGC = 886
+
+18818   14:00   Supply:179/200         Minerals:1430    Vespene:536     Combat                    Dead Enemy: SCV [4407951370]
+18824   14:00   Supply:179/200         Minerals:1440    Vespene:540     [4399038465] Nexus        Chronoboosting Forge [4382523403]
+18856   14:01   Supply:179/200         Minerals:1520    Vespene:576     Combat                    Dead Enemy: SCV [4299685892]
+Expansion Trigger Dead Enemy Structure
+18878   14:02   Supply:179/200         Minerals:1590    Vespene:616     Combat                    Dead Enemy: Refinery [4329570312]
+18882   14:02   Supply:177/200         Minerals:1600    Vespene:616     Combat                    Dead Enemy: SCV [4408475652]
+18882   14:02   Supply:177/200         Minerals:1600    Vespene:616     Combat                    Dead Friend: Zealot [4419747842]
+18882   14:02   Supply:179/200         Minerals:1500    Vespene:616     [4334026754] WarpGate     Warping Zealot
+18882   14:02   Supply:181/200         Minerals:1400    Vespene:616     [4374396938] WarpGate     Warping Zealot
+18882   14:02   Supply:183/200         Minerals:1300    Vespene:616     [4388552727] WarpGate     Warping Zealot
+18882   14:02   Supply:185/200         Minerals:1200    Vespene:616     [4357619713] WarpGate     Warping Zealot
+Casting Revelation 4426825731 18918
+18932   14:05   Supply:177/200         Minerals:1605    Vespene:680     Combat                    Dead Friend: Zealot [4433641475]
+18932   14:05   Supply:177/200         Minerals:1605    Vespene:680     Attack Mode Ended [Enemy: 10325.06 Ours: 10285.073 Time: -0.28844738] AttackCommander
+18932   14:05   Supply:177/200         Minerals:1605    Vespene:680     [4417388555] Nexus        Chronoboosting Stargate [4435476489]
+18946   14:05   Supply:177/200         Minerals:1640    Vespene:696     Combat                    Dead Enemy: SCV [4433379332]
+18960   14:06   Supply:177/200         Minerals:1655    Vespene:704     Combat                    Dead Enemy: SCV [4392747037]
+18964   14:06   Supply:179/200         Minerals:1585    Vespene:712     [4374396938] WarpGate     Warping Zealot
+18964   14:06   Supply:181/200         Minerals:1485    Vespene:712     [4388552727] WarpGate     Warping Zealot
+18964   14:06   Supply:183/200         Minerals:1385    Vespene:712     [4368367617] WarpGate     Warping Zealot
+18964   14:06   Supply:185/200         Minerals:1285    Vespene:712     [4357619713] WarpGate     Warping Zealot
+18978   14:07   Supply:179/200         Minerals:1625    Vespene:724     Combat                    Dead Enemy: SCV [4376494087]
+19000   14:08   Supply:179/200         Minerals:1650    Vespene:744     Combat                    Dead Enemy: SCV [4434165762]
+19002   14:08   Supply:179/200         Minerals:1650    Vespene:744     Combat                    Dead Enemy: SCV [4430757921]
+19008   14:08   Supply:179/200         Minerals:1670    Vespene:756     Combat                    Dead Enemy: SCV [4389077000]
+19016   14:08   Supply:179/200         Minerals:1685    Vespene:760     Combat                    Dead Enemy: SCV [4397465605]
+Expansion Trigger Dead Enemy Structure
+19056   14:10   Supply:179/200         Minerals:1770    Vespene:800     Combat                    Dead Enemy: RefineryRich [4421582850]
+19080   14:11   Supply:175/200         Minerals:1830    Vespene:824     Combat                    Dead Friend: Immortal [4430495745]
+19080   14:11   Supply:175/200         Minerals:1830    Vespene:824     [4351066137] Robotics Factory Training Immortal
+19080   14:11   Supply:179/200         Minerals:1580    Vespene:724     [4370726920] Robotics Factory Training Immortal
+19080   14:11   Supply:183/200         Minerals:1330    Vespene:624     [4314103810] Robotics Factory Training Immortal
+19114   14:13   Supply:183/200         Minerals:1160    Vespene:556     Combat                    Dead Friend: Immortal [4397727762]
+19136   14:14   Supply:181/200         Minerals:1205    Vespene:584     Combat                    Dead Friend: Stalker [4416339977]
+19154   14:15   Supply:181/200         Minerals:1230    Vespene:600     [4348968961] Nexus        Energy Recharging Shield Battery [4432855046]
+19236   14:18   Supply:179/200         Minerals:1410    Vespene:688     Combat                    Dead Friend: Zealot [4437049351]
+19236   14:18   Supply:181/200         Minerals:1310    Vespene:688     [4388552727] WarpGate     Warping Zealot
+19236   14:18   Supply:183/200         Minerals:1210    Vespene:688     [4368367617] WarpGate     Warping Zealot
+19236   14:18   Supply:185/200         Minerals:1110    Vespene:688     [4367843329] WarpGate     Warping Zealot
+19236   14:18   Supply:187/200         Minerals:1010    Vespene:688     [4357619713] WarpGate     Warping Zealot
+19242   14:19   Supply:179/200         Minerals:1330    Vespene:696     Combat                    Dead Friend: Zealot [4436525061]
+19250   14:19   Supply:179/200         Minerals:1345    Vespene:696     [4402184201] Nexus        Chronoboosting CyberneticsCore [4361027585]
+19306   14:21   Supply:179/200         Minerals:1470    Vespene:768     Combat                    Dead Enemy: MULE [4436262915]
+19318   14:22   Supply:175/200         Minerals:1500    Vespene:768     Combat                    Dead Friend: WarpPrism [4365221896]
+19318   14:22   Supply:175/200         Minerals:1500    Vespene:768     Combat                    Dead Friend: Stalker [4391436289]
+19318   14:22   Supply:177/200         Minerals:1400    Vespene:768     [4368367617] WarpGate     Warping Zealot
+19318   14:22   Supply:179/200         Minerals:1300    Vespene:768     [4367843329] WarpGate     Warping Zealot
+19318   14:22   Supply:181/200         Minerals:1200    Vespene:768     [4357619713] WarpGate     Warping Zealot
+19326   14:22   Supply:177/200         Minerals:1410    Vespene:780     Combat                    Dead Enemy: Marauder [4430233622]
+19358   14:24   Supply:177/200         Minerals:1485    Vespene:820     Combat                    Dead Enemy: Marine [4380688400]
+Expansion Trigger Dead Enemy Structure
+19384   14:25   Supply:177/200         Minerals:1545    Vespene:844     Combat                    Dead Enemy: Refinery [4429971466]
+Intel Report 14:30
+
+Enemy Unit Report  14:30
+SCV: 62/64
+Bunker: 2/2
+SiegeTank: 2/3
+Hellion: 2/2
+PlanetaryFortress: 3/3
+WidowMine: 2/3
+Marine: 2/17
+WidowMineBurrowed: 4/4
+Marauder: 1/9
+Battlecruiser: 7/7
+
+Enemy Building Report  14:30
+Planetary Fortress: Visible: true, Attackable: true Snapshot: false isUnitVisible: true 
+Planetary Fortress: Visible: true, Attackable: true Snapshot: true isUnitVisible: true 
+Planetary Fortress: Visible: true, Attackable: true Snapshot: false isUnitVisible: false 
+Bunker: 2
+SupplyDepotLowered: 3
+PlanetaryFortress: 3
+BarracksTechLab: 1
+EngineeringBay: 2
+SupplyDepot: 13
+Refinery: 7
+Armory: 2
+Barracks: 2
+OrbitalCommand: 2
+Factory: 1
+FusionCore: 1
+StarportTechLab: 4
+Starport: 4
+FactoryTechLab: 1
+
+Ideal Counters Report  14:30
+Tempest: Demand Score, 4800[28%] Needed: 8, Existing: 3, Demand: 10.5
+Zealot: Demand Score, 0[111%] Needed: 0, Existing: 5, Demand: 4.5
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Observer: Demand Score, 0[166%] Needed: 0, Existing: 2, Demand: 1.2000000476837158
+Immortal: Demand Score, -475[177%] Needed: -1, Existing: 4, Demand: 2.25
+Stalker: Demand Score, -2475[283%] Needed: -11, Existing: 18, Demand: 6.350000001490116
+
+Live Counters Report  14:30
+Tempest: Demand Score, 5400[25%] Needed: 9, Existing: 3, Demand: 12
+Zealot: Demand Score, 0[111%] Needed: 0, Existing: 5, Demand: 4.5
+Stalker: Demand Score, -675[121%] Needed: -3, Existing: 18, Demand: 14.850000001490116
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Observer: Demand Score, 0[166%] Needed: 0, Existing: 2, Demand: 1.2000000476837158
+Immortal: Demand Score, -475[177%] Needed: -1, Existing: 4, Demand: 2.25
+
+Army Report 14:30
+Win Air: false [ -12.107912 ]
+Air Ground: false [ -1.7556581 ]
+Air All: false [ -4.307852 ]
+Army Power: 8635.07
+Enemy Power: 12300.061
+Attack Status: false
+Rally Point: {0 0}
+Defensive Point: {56 92}
+Base Under Harass: true
+Base Under Attack: true
+Enemy Object Length: 134
+Next Expansion: {93.5 41.5}
+Best Expansion: {93.5 41.5}
+Should Expand: false
+Expand Saving: false
+Air Superiority: true
+Alloc = 16 MiB	TotalAlloc = 11579 MiB	Sys = 45 MiB	NumGC = 950
+
+19500   14:30   Supply:177/200         Minerals:1825    Vespene:1000    Robotics Bay              Training Gravitic Booster
+19536   14:32   Supply:177/200         Minerals:1815    Vespene:948     [4435476489] StarGate     Training Tempest
+19570   14:33   Supply:179/200         Minerals:1645    Vespene:821     Combat                    Dead Friend: Stalker [4371513347]
+19576   14:33   Supply:179/200         Minerals:1665    Vespene:821     [4409524227] Nexus        Chronoboosting Forge [4382523403]
+19622   14:35   Supply:179/200         Minerals:1710    Vespene:873     Economy                   Building Assimilator
+19636   14:36   Supply:175/200         Minerals:1735    Vespene:901     Combat                    Dead Friend: Immortal [4424204311]
+19682   14:38   Supply:175/200         Minerals:1850    Vespene:949     Forge                     Researching Armor 3
+19686   14:38   Supply:175/200         Minerals:1660    Vespene:757     [4431020043] StarGate     Training Tempest
+Recalculating Distances - Neutral unit destroyed: BattleStationMineralField750 at {72 91.5}
+19740   14:41   Supply:179/200         Minerals:1545    Vespene:654     Combat                    Dead Enemy: Hellion [4435738631]
+19744   14:41   Supply:179/200         Minerals:1550    Vespene:658     Combat                    Dead Enemy: Battlecruiser [4393271299]
+19856   14:46   Supply:179/200         Minerals:1825    Vespene:810     [4329570314] StarGate     Training Tempest
+19858   14:46   Supply:183/200         Minerals:1435    Vespene:485     Production                Building Stargate [X:46.5, Y:71.5]
+19964   14:51   Supply:183/200         Minerals:1685    Vespene:629     Combat                    Dead Enemy: Battlecruiser [4436787213]
+19964   14:51   Supply:183/200         Minerals:1685    Vespene:629     Terran Contain Defense    Training Warp Prism
+19972   14:51   Supply:185/200         Minerals:1460    Vespene:637     Cybernetics Core          Researching Air Weapons 2
+20012   14:53   Supply:183/200         Minerals:1390    Vespene:510     Combat                    Dead Friend: Zealot [4403232775]
+20012   14:53   Supply:185/200         Minerals:1290    Vespene:510     [4388552727] WarpGate     Warping Zealot
+20012   14:53   Supply:187/200         Minerals:1190    Vespene:510     [4368367617] WarpGate     Warping Zealot
+20012   14:53   Supply:189/200         Minerals:1090    Vespene:510     [4367843329] WarpGate     Warping Zealot
+20012   14:53   Supply:191/200         Minerals:990     Vespene:510     [4357619713] WarpGate     Warping Zealot
+20012   14:53   Supply:193/200         Minerals:890     Vespene:510     [4334026754] WarpGate     Warping Zealot
+20012   14:53   Supply:195/200         Minerals:790     Vespene:510     [4374396938] WarpGate     Warping Zealot
+20028   14:54   Supply:183/200         Minerals:1320    Vespene:542     Combat                    Dead Friend: Zealot [4433641478]
+20094   14:57   Supply:185/200         Minerals:1390    Vespene:630     [4334026754] WarpGate     Warping Zealot
+20094   14:57   Supply:187/200         Minerals:1290    Vespene:630     [4374396938] WarpGate     Warping Zealot
+20094   14:57   Supply:189/200         Minerals:1190    Vespene:630     [4368367617] WarpGate     Warping Zealot
+20094   14:57   Supply:191/200         Minerals:1090    Vespene:630     [4367843329] WarpGate     Warping Zealot
+20094   14:57   Supply:193/200         Minerals:990     Vespene:630     [4357619713] WarpGate     Warping Zealot
+Intel Report 15:00
+
+Enemy Unit Report  15:00
+SCV: 68/68
+Bunker: 2/2
+SiegeTank: 3/3
+Hellion: 1/2
+Marine: 3/17
+WidowMineBurrowed: 5/5
+Marauder: 2/9
+Battlecruiser: 5/8
+PlanetaryFortress: 4/4
+WidowMine: 1/3
+
+Enemy Building Report  15:00
+Planetary Fortress: Visible: true, Attackable: true Snapshot: true isUnitVisible: true 
+Planetary Fortress: Visible: true, Attackable: true Snapshot: true isUnitVisible: true 
+Planetary Fortress: Visible: true, Attackable: true Snapshot: true isUnitVisible: true 
+Planetary Fortress: Visible: false, Attackable: true Snapshot: false isUnitVisible: true 
+BarracksTechLab: 1
+Bunker: 2
+EngineeringBay: 2
+StarportTechLab: 4
+Armory: 2
+OrbitalCommand: 2
+FactoryTechLab: 1
+SupplyDepot: 16
+Refinery: 7
+Starport: 4
+Barracks: 2
+PlanetaryFortress: 4
+FusionCore: 1
+Factory: 1
+
+Ideal Counters Report  15:00
+Tempest: Demand Score, 3600[50%] Needed: 6, Existing: 6, Demand: 12
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Zealot: Demand Score, -100[133%] Needed: -1, Existing: 6, Demand: 4.5
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Observer: Demand Score, 0[166%] Needed: 0, Existing: 2, Demand: 1.2000000476837158
+Stalker: Demand Score, -2250[267%] Needed: -10, Existing: 17, Demand: 6.350000001490116
+
+Live Counters Report  15:00
+Tempest: Demand Score, 4800[44%] Needed: 8, Existing: 6, Demand: 13.5
+Stalker: Demand Score, -225[107%] Needed: -1, Existing: 17, Demand: 15.850000001490116
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Zealot: Demand Score, -100[133%] Needed: -1, Existing: 6, Demand: 4.5
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Observer: Demand Score, 0[166%] Needed: 0, Existing: 2, Demand: 1.2000000476837158
+
+Army Report 15:00
+Win Air: false [ -4.9761696 ]
+Air Ground: false [ 1.9843049 ]
+Air All: false [ 1.195384 ]
+Army Power: 10560.07
+Enemy Power: 11700.066
+Attack Status: false
+Rally Point: {0 0}
+Defensive Point: {56 92}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 143
+Next Expansion: {93.5 41.5}
+Best Expansion: {93.5 41.5}
+Should Expand: false
+Expand Saving: false
+Air Superiority: true
+Alloc = 15 MiB	TotalAlloc = 12411 MiB	Sys = 45 MiB	NumGC = 1016
+
+20168   15:00   Supply:185/200         Minerals:1560    Vespene:726     [4367056900] Nexus        Chronoboosting Forge [4382523403]
+20246   15:03   Supply:185/200         Minerals:1760    Vespene:818     [4399038465] Nexus        Chronoboosting RoboticsBay [4369678338]
+20338   15:07   Supply:185/200         Minerals:1975    Vespene:946     [4417388555] Nexus        Chronoboosting Forge [4353949698]
+Max Enemy Power 14150.061 Army Power 10560.07 Used Enemy Power 12593.554
+Nexus Count 6 Enemy Townhalls 7
+20346   15:08   Supply:185/200         Minerals:1605    Vespene:958     Economy                   Expanding
+20498   15:15   Supply:185/200         Minerals:1965    Vespene:1170    [4435476489] StarGate     Training Tempest
+Next Expansion Trigger: Update Friend Owned
+
+Updating Defensive Point
+Getting Position Behind ramp {79.5 79.5} {82.4 75.8}
+20648   15:21   Supply:189/200         Minerals:2075    Vespene:1199    [4431020043] StarGate     Training Tempest
+20672   15:22   Supply:193/200         Minerals:1880    Vespene:1052    [4402184201] Nexus        Chronoboosting CyberneticsCore [4361027585]
+20766   15:27   Supply:193/200         Minerals:2100    Vespene:1184    Combat                    Dead Enemy: Hellion [4437311489]
+20818   15:29   Supply:193/200         Minerals:2230    Vespene:1260    [4329570314] StarGate     Training Tempest
+20820   15:29   Supply:197/200         Minerals:1980    Vespene:1093    Attack Mode Started Max Supply [Enemy: 11600.067 Ours: 12360.071 Time: 4.762505] AttackCommander
+Intel Report 15:30
+
+Enemy Unit Report  15:30
+Bunker: 2/2
+SiegeTank: 3/3
+Hellion: 0/2
+SCV: 68/68
+WidowMineBurrowed: 5/5
+Marauder: 2/9
+Battlecruiser: 5/8
+PlanetaryFortress: 4/4
+WidowMine: 1/3
+Marine: 3/17
+
+Enemy Building Report  15:30
+Planetary Fortress: Visible: true, Attackable: true Snapshot: true isUnitVisible: true 
+Planetary Fortress: Visible: true, Attackable: true Snapshot: true isUnitVisible: true 
+Planetary Fortress: Visible: false, Attackable: true Snapshot: false isUnitVisible: true 
+Planetary Fortress: Visible: true, Attackable: true Snapshot: true isUnitVisible: true 
+Starport: 4
+Armory: 2
+Barracks: 2
+BarracksTechLab: 1
+StarportTechLab: 4
+Factory: 1
+FusionCore: 1
+SupplyDepot: 16
+OrbitalCommand: 2
+FactoryTechLab: 1
+EngineeringBay: 2
+PlanetaryFortress: 4
+Refinery: 7
+Bunker: 2
+CommandCenter: 1
+
+Ideal Counters Report  15:30
+Tempest: Demand Score, 1800[75%] Needed: 3, Existing: 9, Demand: 12
+Zealot: Demand Score, 0[111%] Needed: 0, Existing: 5, Demand: 4.5
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Observer: Demand Score, 0[166%] Needed: 0, Existing: 2, Demand: 1.2000000476837158
+Stalker: Demand Score, -2250[267%] Needed: -10, Existing: 17, Demand: 6.350000001490116
+
+Live Counters Report  15:30
+Tempest: Demand Score, 3000[66%] Needed: 5, Existing: 9, Demand: 13.5
+Stalker: Demand Score, -225[107%] Needed: -1, Existing: 17, Demand: 15.850000001490116
+Zealot: Demand Score, 0[111%] Needed: 0, Existing: 5, Demand: 4.5
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Observer: Demand Score, 0[166%] Needed: 0, Existing: 2, Demand: 1.2000000476837158
+
+Army Report 15:30
+Win Air: false [ -0.5227318 ]
+Air Ground: false [ 5.3883753 ]
+Air All: false [ 4.762505 ]
+Army Power: 12360.071
+Enemy Power: 11600.067
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {75 84}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 143
+Next Expansion: {93.5 66.5}
+Best Expansion: {93.5 66.5}
+Should Expand: true
+Expand Saving: false
+Air Superiority: true
+Alloc = 18 MiB	TotalAlloc = 13260 MiB	Sys = 45 MiB	NumGC = 1081
+
+Recalculating Distances - Neutral unit destroyed: LabMineralField at {36 40.5}
+Recalculating Distances - Neutral unit destroyed: LabMineralField at {36 38.5}
+20916   15:33   Supply:197/200         Minerals:2235    Vespene:1217    Forge                     Researching Shields 3
+21000   15:37   Supply:197/200         Minerals:2155    Vespene:1075    [4409524227] Nexus        Chronoboosting Forge [4353949698]
+Recalculating Distances - Neutral unit destroyed: LabMineralField at {40 34.5}
+Max Enemy Power 14150.061 Army Power 12710.07 Used Enemy Power 12593.554
+Nexus Count 7 Enemy Townhalls 7
+21152   15:44   Supply:197/200         Minerals:2105    Vespene:1291    Economy                   Expanding
+21182   15:45   Supply:197/200         Minerals:2170    Vespene:1331    Combat                    Dead Enemy: Marine [4437573638]
+Casting Revelation 4426825731 21194
+21198   15:46   Supply:197/200         Minerals:2215    Vespene:1347    Combat                    Dead Enemy: SCV [4379115521]
+21234   15:47   Supply:197/200         Minerals:2290    Vespene:1399    Combat                    Dead Enemy: Marine [4436787216]
+Unseen PlanetaryFortress(8635482912) Snapshot Found, GameLoop: 21236 Last Seen 21194
+21238   15:48   Supply:197/200         Minerals:2315    Vespene:1411    Combat                    Dead Enemy: Marine [4438097924]
+21250   15:48   Supply:197/200         Minerals:2325    Vespene:1427    Combat                    Dead Enemy: SiegeTankSieged [4410572802]
+21264   15:49   Supply:197/200         Minerals:2345    Vespene:1435    Combat                    Dead Enemy: SCV [4387241985]
+21284   15:50   Supply:197/200         Minerals:2395    Vespene:1471    Combat                    Dead Enemy: SCV [4299685895]
+Expansion Trigger Dead Enemy Structure
+Expansion Trigger Dead Enemy Townhall
+21304   15:51   Supply:197/200         Minerals:2445    Vespene:1503    Combat                    Dead Enemy: CommandCenter [4437835784]
+Next Expansion Trigger: Update Friend Owned
+
+Updating Defensive Point
+Getting Position Behind ramp {79.5 79.5} {82.4 75.8}
+Next Expansion Trigger: Check Blocked
+21328   15:52   Supply:197/200         Minerals:2480    Vespene:1527    Combat                    Dead Enemy: SCV [4394844162]
+21334   15:52   Supply:197/200         Minerals:2495    Vespene:1535    [4348968961] Nexus        Chronoboosting CyberneticsCore [4361027585]
+21344   15:52   Supply:197/200         Minerals:2530    Vespene:1555    Combat                    Dead Enemy: Marine [4392747065]
+21344   15:52   Supply:197/200         Minerals:2530    Vespene:1555    Combat                    Dead Enemy: Marine [4354211842]
+21346   15:52   Supply:194/200         Minerals:2535    Vespene:1559    Combat                    Dead Friend: Oracle [4426825731]
+21346   15:52   Supply:194/200         Minerals:2535    Vespene:1559    [4393271306] StarGate     Training Oracle
+21354   15:53   Supply:197/200         Minerals:2405    Vespene:1421    Combat                    Dead Enemy: Marine [4313579522]
+21358   15:53   Supply:197/200         Minerals:2415    Vespene:1421    Combat                    Dead Enemy: SCV [4430495757]
+Recalculating Distances - Neutral unit destroyed: MineralField750 at {61 51.5}
+21376   15:54   Supply:197/200         Minerals:2440    Vespene:1449    Combat                    Dead Enemy: Marine [4432068650]
+21400   15:55   Supply:197/200         Minerals:2490    Vespene:1477    Combat                    Dead Enemy: Marauder [4376494092]
+21402   15:55   Supply:197/200         Minerals:2500    Vespene:1485    Combat                    Dead Enemy: Marine [4439932929]
+21416   15:56   Supply:193/200         Minerals:2545    Vespene:1505    Combat                    Dead Friend: Tempest [4339531778]
+21428   15:56   Supply:191/200         Minerals:2560    Vespene:1513    Combat                    Dead Enemy: Marauder [4297850920]
+21428   15:56   Supply:191/200         Minerals:2560    Vespene:1513    Combat                    Dead Friend: WarpPrism [4442292225]
+21430   15:56   Supply:191/200         Minerals:2570    Vespene:1513    Combat                    Dead Enemy: Marine [4430757925]
+21452   15:57   Supply:187/200         Minerals:2605    Vespene:1557    Combat                    Dead Friend: Tempest [4439670785]
+21452   15:57   Supply:187/200         Minerals:2455    Vespene:1407    Production                Building Stargate [X:46.5, Y:64.5]
+21460   15:58   Supply:187/200         Minerals:2490    Vespene:1407    [4435476489] StarGate     Training Tempest
+Expansion Trigger Dead Enemy Structure
+21466   15:58   Supply:191/200         Minerals:2250    Vespene:1240    Combat                    Dead Enemy: RefineryRich [4333240322]
+Recalculating Distances - Neutral unit destroyed: MineralField750 at {138 119.5}
+Next Expansion Trigger: Check Blocked 2
+Intel Report 16:00
+
+Enemy Unit Report  16:00
+SCV: 63/68
+Bunker: 2/2
+SiegeTank: 2/3
+Hellion: 1/2
+Marine: 0/17
+WidowMineBurrowed: 5/5
+Marauder: 0/9
+Battlecruiser: 8/8
+PlanetaryFortress: 3/4
+WidowMine: 1/3
+
+Enemy Building Report  16:00
+Planetary Fortress: Visible: true, Attackable: true Snapshot: false isUnitVisible: false 
+Planetary Fortress: Visible: true, Attackable: true Snapshot: true isUnitVisible: true 
+Planetary Fortress: Visible: true, Attackable: true Snapshot: false isUnitVisible: false 
+StarportTechLab: 4
+FusionCore: 1
+Barracks: 2
+EngineeringBay: 2
+OrbitalCommand: 2
+Refinery: 7
+SupplyDepot: 16
+Bunker: 2
+PlanetaryFortress: 3
+BarracksTechLab: 1
+Armory: 2
+Factory: 1
+FactoryTechLab: 1
+Starport: 4
+
+Ideal Counters Report  16:00
+Tempest: Demand Score, 2400[66%] Needed: 4, Existing: 8, Demand: 12
+Oracle: Demand Score, 0[100%] Needed: 0, Existing: 1, Demand: 1
+Zealot: Demand Score, 0[111%] Needed: 0, Existing: 5, Demand: 4.5
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Observer: Demand Score, 0[166%] Needed: 0, Existing: 2, Demand: 1.2000000476837158
+Stalker: Demand Score, -2250[267%] Needed: -10, Existing: 17, Demand: 6.350000001490116
+
+Live Counters Report  16:00
+Tempest: Demand Score, 3600[59%] Needed: 6, Existing: 8, Demand: 13.5
+Oracle: Demand Score, 0[100%] Needed: 0, Existing: 1, Demand: 1
+Stalker: Demand Score, -225[107%] Needed: -1, Existing: 17, Demand: 15.850000001490116
+Zealot: Demand Score, 0[111%] Needed: 0, Existing: 5, Demand: 4.5
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Observer: Demand Score, 0[166%] Needed: 0, Existing: 2, Demand: 1.2000000476837158
+
+Army Report 16:00
+Win Air: false [ -0.5227318 ]
+Air Ground: false [ 5.3883753 ]
+Air All: false [ 4.762505 ]
+Army Power: 11310.07
+Enemy Power: 12900.062
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {75 84}
+Base Under Harass: true
+Base Under Attack: false
+Enemy Object Length: 134
+Next Expansion: {120.5 36.5}
+Best Expansion: {120.5 36.5}
+Should Expand: true
+Expand Saving: false
+Air Superiority: true
+Alloc = 24 MiB	TotalAlloc = 14129 MiB	Sys = 45 MiB	NumGC = 1149
+
+21532   16:01   Supply:191/200         Minerals:2390    Vespene:1332    Combat                    Dead Enemy: WidowMineBurrowed [4407951373]
+21566   16:02   Supply:185/200         Minerals:2470    Vespene:1376    Combat                    Dead Friend: Colossus [4427350027]
+21566   16:02   Supply:185/200         Minerals:2470    Vespene:1376    [4314103810] Robotics Factory Training Colossus
+21566   16:02   Supply:191/200         Minerals:2170    Vespene:1176    [4351066137] Robotics Factory Training Colossus
+21592   16:03   Supply:197/200         Minerals:1920    Vespene:1016    [4367056900] Nexus        Chronoboosting Forge [4353949698]
+21612   16:04   Supply:195/200         Minerals:1970    Vespene:1052    Combat                    Dead Friend: Sentry [4398776326]
+21612   16:04   Supply:197/200         Minerals:1920    Vespene:952     [4367843329] WarpGate     Warping Sentry
+21612   16:04   Supply:199/200         Minerals:1870    Vespene:852     [4357619713] WarpGate     Warping Sentry
+21636   16:05   Supply:195/200         Minerals:1970    Vespene:980     Combat                    Dead Friend: Sentry [4335599619]
+21636   16:05   Supply:195/200         Minerals:1970    Vespene:980     [4431020043] StarGate     Training Tempest
+21652   16:06   Supply:199/200         Minerals:1745    Vespene:829     Combat                    Dead Enemy: SCV [4433379348]
+21668   16:07   Supply:199/200         Minerals:1780    Vespene:853     [4399038465] Nexus        Chronoboosting Forge [4382523403]
+Recalculating Distances - Neutral unit destroyed: MineralField750 at {62 50.5}
+21720   16:09   Supply:199/200         Minerals:1920    Vespene:921     Combat                    Dead Enemy: SCV [4384096260]
+21756   16:11   Supply:199/200         Minerals:1990    Vespene:965     Combat                    Dead Enemy: SCV [4401659905]
+21760   16:11   Supply:199/200         Minerals:2005    Vespene:965     [4417388555] Nexus        Chronoboosting Stargate [4435476489]
+21768   16:11   Supply:199/200         Minerals:2015    Vespene:985     Combat                    Dead Enemy: SCV [4397465614]
+21782   16:12   Supply:193/200         Minerals:2060    Vespene:1009    Combat                    Dead Friend: Colossus [4428398626]
+21782   16:12   Supply:195/200         Minerals:2010    Vespene:909     [4334026754] WarpGate     Warping Sentry
+21782   16:12   Supply:195/200         Minerals:2010    Vespene:909     [4329570314] StarGate     Training Tempest
+21782   16:12   Supply:197/200         Minerals:1960    Vespene:809     [4374396938] WarpGate     Warping Sentry
+21782   16:12   Supply:199/200         Minerals:1910    Vespene:709     [4388552727] WarpGate     Warping Sentry
+21802   16:13   Supply:199/200         Minerals:1805    Vespene:758     Combat                    Dead Enemy: SCV [4405592069]
+21812   16:13   Supply:199/200         Minerals:1820    Vespene:770     Combat                    Dead Enemy: SCV [4432330776]
+21826   16:14   Supply:197/200         Minerals:1865    Vespene:778     Combat                    Dead Friend: Stalker [4375183363]
+21834   16:14   Supply:197/200         Minerals:1885    Vespene:794     Combat                    Dead Enemy: Marauder [4438097932]
+21834   16:14   Supply:197/200         Minerals:1885    Vespene:794     Terran Contain Defense    Training Warp Prism
+21838   16:14   Supply:199/200         Minerals:1640    Vespene:802     Combat                    Dead Enemy: SCV [4373872647]
+21898   16:17   Supply:199/200         Minerals:1785    Vespene:890     Combat                    Dead Enemy: SCV [4383047681]
+Recalculating Distances - Neutral unit destroyed: MineralField750 at {60 54.5}
+21906   16:17   Supply:199/200         Minerals:1795    Vespene:898     Combat                    Dead Enemy: SCV [4436000781]
+21914   16:18   Supply:199/200         Minerals:1820    Vespene:910     Combat                    Dead Enemy: Marine [4436262926]
+21920 Extended Kite True, Unit: Stalker current DPS: 8 KitePoint DPS: 8 KitePoint: {123 106} Current Height 10 KitePoint Height: 10
+New DPS: 0 New Height: 9.75 KitePoint: {117 112}
+21922 Extended Kite True, Unit: Stalker current DPS: 8 KitePoint DPS: 8 KitePoint: {123 106} Current Height 10 KitePoint Height: 10
+New DPS: 0 New Height: 9.75 KitePoint: {117 112}
+21940   16:19   Supply:199/200         Minerals:1880    Vespene:942     Combat                    Dead Enemy: SCV [4385144860]
+Expansion Trigger Dead Enemy Structure
+Expansion Trigger Dead Enemy Townhall
+21958   16:20   Supply:199/200         Minerals:1905    Vespene:958     Combat                    Dead Enemy: CommandCenter [4373872648]
+21966   16:20   Supply:197/200         Minerals:1925    Vespene:978     Combat                    Dead Friend: Stalker [4379901953]
+21966   16:20   Supply:199/200         Minerals:1800    Vespene:928     [4368367617] WarpGate     Warping Stalker
+22088   16:26   Supply:199/200         Minerals:2080    Vespene:1082    Combat                    Dead Enemy: SCV [4380950533]
+22094   16:26   Supply:199/200         Minerals:2100    Vespene:1090    Combat                    Dead Enemy: SCV [4354473985]
+22094   16:26   Supply:199/200         Minerals:2100    Vespene:1090    [4402184201] Nexus        Chronoboosting CyberneticsCore [4361027585]
+22098   16:26   Supply:199/200         Minerals:2105    Vespene:1098    Combat                    Dead Enemy: Marine [4376494097]
+22100   16:26   Supply:199/200         Minerals:2105    Vespene:1102    Combat                    Dead Enemy: SCV [4389077013]
+22124   16:27   Supply:199/200         Minerals:2180    Vespene:1130    Combat                    Dead Enemy: SCV [4405592075]
+22166   16:29   Supply:199/200         Minerals:2275    Vespene:1186    Combat                    Dead Enemy: SCV [4376756225]
+Intel Report 16:30
+
+Enemy Unit Report  16:30
+SiegeTank: 2/3
+Hellion: 2/2
+SCV: 52/68
+Bunker: 2/2
+Marauder: 1/9
+Battlecruiser: 9/9
+PlanetaryFortress: 3/4
+WidowMine: 1/3
+Marine: 1/17
+WidowMineBurrowed: 6/6
+
+Enemy Building Report  16:30
+Planetary Fortress: Visible: true, Attackable: true Snapshot: false isUnitVisible: false 
+Planetary Fortress: Visible: true, Attackable: true Snapshot: false isUnitVisible: false 
+Planetary Fortress: Visible: true, Attackable: true Snapshot: false isUnitVisible: true 
+OrbitalCommand: 2
+Barracks: 2
+StarportTechLab: 4
+RefineryRich: 1
+SupplyDepot: 16
+BarracksTechLab: 1
+EngineeringBay: 2
+FusionCore: 1
+Refinery: 9
+Bunker: 2
+FactoryTechLab: 1
+Factory: 1
+Starport: 4
+PlanetaryFortress: 3
+Armory: 2
+
+Ideal Counters Report  16:30
+Tempest: Demand Score, 2400[74%] Needed: 4, Existing: 10, Demand: 13.5
+Oracle: Demand Score, 0[100%] Needed: 0, Existing: 1, Demand: 1
+Zealot: Demand Score, 0[111%] Needed: 0, Existing: 5, Demand: 4.5
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Observer: Demand Score, 0[142%] Needed: 0, Existing: 2, Demand: 1.4000000953674316
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Stalker: Demand Score, -2025[251%] Needed: -9, Existing: 16, Demand: 6.350000001490116
+
+Live Counters Report  16:30
+Tempest: Demand Score, 3000[66%] Needed: 5, Existing: 10, Demand: 15
+Stalker: Demand Score, 225[94%] Needed: 1, Existing: 16, Demand: 16.850000001490116
+Oracle: Demand Score, 0[100%] Needed: 0, Existing: 1, Demand: 1
+Zealot: Demand Score, 0[111%] Needed: 0, Existing: 5, Demand: 4.5
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Observer: Demand Score, 0[142%] Needed: 0, Existing: 2, Demand: 1.4000000953674316
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+
+Army Report 16:30
+Win Air: false [ -0.5227318 ]
+Air Ground: false [ 5.3883753 ]
+Air All: false [ 4.762505 ]
+Army Power: 10885.071
+Enemy Power: 14375.051
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {75 84}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 131
+Next Expansion: {120.5 36.5}
+Best Expansion: {120.5 36.5}
+Should Expand: true
+Expand Saving: false
+Air Superiority: true
+Alloc = 15 MiB	TotalAlloc = 14960 MiB	Sys = 45 MiB	NumGC = 1216
+
+Expansion Trigger Dead Enemy Structure
+Expansion Trigger Dead Enemy Townhall
+22208   16:31   Supply:199/200         Minerals:2350    Vespene:1238    Combat                    Dead Enemy: PlanetaryFortress [4374659078]
+Next Expansion Trigger: Check Blocked
+22250   16:33   Supply:199/200         Minerals:2460    Vespene:1294    Combat                    Dead Enemy: Marauder [4375183366]
+Max Enemy Power 14375.052 Army Power 11935.07 Used Enemy Power 12793.796
+Nexus Count 8 Enemy Townhalls 4
+22266   16:34   Supply:199/200         Minerals:2110    Vespene:1314    Economy                   Expanding
+22274   16:34   Supply:199/200         Minerals:2125    Vespene:1318    Combat                    Dead Enemy: Marine [4430495773]
+22334   16:37   Supply:199/200         Minerals:2260    Vespene:1402    Combat                    Dead Enemy: SCV [4438097934]
+22346   16:37   Supply:199/200         Minerals:2285    Vespene:1418    Combat                    Dead Enemy: SCV [4383047683]
+22356   16:38   Supply:199/200         Minerals:2290    Vespene:1422    Combat                    Dead Enemy: SCV [4419747857]
+22378   16:39   Supply:199/200         Minerals:2365    Vespene:1462    Combat                    Dead Enemy: SCV [4363386882]
+22380   16:39   Supply:199/200         Minerals:2370    Vespene:1462    Combat                    Dead Enemy: SCV [4396154881]
+22384   16:39   Supply:199/200         Minerals:2375    Vespene:1462    Combat                    Dead Enemy: WidowMineBurrowed [4304404509]
+22394   16:39   Supply:199/200         Minerals:2395    Vespene:1474    Combat                    Dead Enemy: SCV [4369154050]
+22406   16:40   Supply:199/200         Minerals:2405    Vespene:1486    Combat                    Dead Enemy: SCV [4373872652]
+22406 Extended Kite True, Unit: Stalker current DPS: 40 KitePoint DPS: 40 KitePoint: {120 92} Current Height 10 KitePoint Height: 10
+New DPS: 0 New Height: 9.25 KitePoint: {117 96}
+22412   16:40   Supply:199/200         Minerals:2435    Vespene:1502    Combat                    Dead Enemy: SCV [4304404511]
+Recalculating Distances - Neutral unit destroyed: MineralField750 at {67 48.5}
+22422   16:40   Supply:199/200         Minerals:2465    Vespene:1510    [4409524227] Nexus        Chronoboosting Forge [4382523403]
+22424   16:41   Supply:197/200         Minerals:2470    Vespene:1510    Combat                    Dead Friend: Stalker [4429709316]
+22424   16:41   Supply:199/200         Minerals:2345    Vespene:1460    [4367843329] WarpGate     Warping Stalker
+22436   16:41   Supply:199/200         Minerals:2360    Vespene:1480    Combat                    Dead Enemy: SCV [4432330782]
+22438   16:41   Supply:199/200         Minerals:2380    Vespene:1480    Combat                    Dead Enemy: SCV [4372299795]
+22448   16:42   Supply:199/200         Minerals:2395    Vespene:1492    Combat                    Dead Enemy: SCV [4352638977]
+22490   16:44   Supply:199/200         Minerals:2495    Vespene:1540    Combat                    Dead Enemy: SCV [4364697601]
+22560   16:47   Supply:197/200         Minerals:2655    Vespene:1636    Combat                    Dead Friend: Sentry [4410572814]
+22560   16:47   Supply:199/200         Minerals:2605    Vespene:1536    [4357619713] WarpGate     Warping Sentry
+Expansion Trigger Dead Enemy Structure
+Expansion Trigger Dead Enemy Townhall
+22576   16:47   Supply:199/200         Minerals:2650    Vespene:1560    Combat                    Dead Enemy: PlanetaryFortress [4378066962]
+Next Expansion Trigger: Check Blocked
+Next Expansion Trigger: Update Friend Owned
+
+Updating Defensive Point
+Getting Position Behind ramp {79.5 79.5} {82.4 75.8}
+22620   16:49   Supply:199/200         Minerals:2755    Vespene:1608    Combat                    Dead Enemy: SCV [4363911169]
+22622   16:49   Supply:199/200         Minerals:2765    Vespene:1608    Combat                    Dead Enemy: Marine [4436262934]
+22628   16:50   Supply:199/200         Minerals:2780    Vespene:1620    Combat                    Dead Enemy: SCV [4438097937]
+Recalculating Distances - Neutral unit destroyed: LabMineralField at {43 34.5}
+Casting Revelation 4379901965 22632
+22642   16:50   Supply:199/200         Minerals:2800    Vespene:1644    Combat                    Dead Enemy: SCV [4434952223]
+22688   16:52   Supply:196/200         Minerals:2905    Vespene:1692    Combat                    Dead Friend: Oracle [4379901965]
+22688   16:52   Supply:196/200         Minerals:2905    Vespene:1692    [4435476489] StarGate     Training Oracle
+22688   16:52   Supply:196/200         Minerals:2905    Vespene:1692    [4431020043] StarGate     Training Oracle
+22688   16:52   Supply:198/200         Minerals:2780    Vespene:1642    [4374396938] WarpGate     Warping Stalker
+22688   16:52   Supply:200/200         Minerals:2655    Vespene:1592    [4388552727] WarpGate     Warping Stalker
+22690   16:52   Supply:199/200         Minerals:2755    Vespene:1546    Combat                    Dead Enemy: Marauder [4405592090]
+22742   16:55   Supply:199/200         Minerals:2885    Vespene:1618    Cybernetics Core          Researching Air Weapons 3
+22748   16:55   Supply:199/200         Minerals:2645    Vespene:1372    Combat                    Dead Enemy: WidowMineBurrowed [4297588738]
+22756   16:55   Supply:199/200         Minerals:2660    Vespene:1384    [4348968961] Nexus        Chronoboosting CyberneticsCore [4361027585]
+22798   16:57   Supply:199/200         Minerals:2765    Vespene:1440    Combat                    Dead Enemy: WidowMineBurrowed [4430233651]
+22822   16:58   Supply:199/200         Minerals:2825    Vespene:1464    Combat                    Dead Enemy: SCV [4399300609]
+Intel Report 17:00
+
+Enemy Unit Report  17:00
+Marine: 0/17
+WidowMineBurrowed: 5/7
+Marauder: 0/9
+Battlecruiser: 10/10
+PlanetaryFortress: 3/4
+WidowMine: 1/3
+SCV: 57/68
+Bunker: 2/2
+SiegeTank: 3/3
+Hellion: 2/2
+
+Enemy Building Report  17:00
+Planetary Fortress: Visible: true, Attackable: true Snapshot: false isUnitVisible: false 
+Planetary Fortress: Visible: true, Attackable: true Snapshot: false isUnitVisible: false 
+Planetary Fortress: Visible: true, Attackable: true Snapshot: true isUnitVisible: true 
+Factory: 1
+Starport: 4
+PlanetaryFortress: 3
+StarportTechLab: 4
+FusionCore: 1
+SupplyDepot: 16
+Bunker: 2
+RefineryRich: 1
+Armory: 2
+EngineeringBay: 2
+BarracksTechLab: 1
+Refinery: 10
+OrbitalCommand: 2
+FactoryTechLab: 1
+Barracks: 2
+
+Ideal Counters Report  17:00
+Tempest: Demand Score, 3000[66%] Needed: 5, Existing: 10, Demand: 15
+Oracle: Demand Score, 0[100%] Needed: 0, Existing: 1, Demand: 1
+Zealot: Demand Score, 0[111%] Needed: 0, Existing: 5, Demand: 4.5
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Observer: Demand Score, 0[166%] Needed: 0, Existing: 2, Demand: 1.2000000476837158
+Stalker: Demand Score, -2025[251%] Needed: -9, Existing: 16, Demand: 6.350000001490116
+
+Live Counters Report  17:00
+Tempest: Demand Score, 4200[60%] Needed: 7, Existing: 10, Demand: 16.5
+Stalker: Demand Score, 450[89%] Needed: 2, Existing: 16, Demand: 17.850000001490116
+Oracle: Demand Score, 0[100%] Needed: 0, Existing: 1, Demand: 1
+Zealot: Demand Score, 0[111%] Needed: 0, Existing: 5, Demand: 4.5
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Observer: Demand Score, 0[166%] Needed: 0, Existing: 2, Demand: 1.2000000476837158
+
+Army Report 17:00
+Win Air: false [ -0.5227318 ]
+Air Ground: false [ 5.3883753 ]
+Air All: false [ 4.762505 ]
+Army Power: 14435.071
+Enemy Power: 15400.056
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {75 84}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 138
+Next Expansion: {77.5 137.5}
+Best Expansion: {77.5 137.5}
+Should Expand: true
+Expand Saving: false
+Air Superiority: true
+Alloc = 20 MiB	TotalAlloc = 15752 MiB	Sys = 45 MiB	NumGC = 1276
+
+22866   17:00   Supply:199/200         Minerals:2930    Vespene:1524    Combat                    Dead Enemy: SCV [4403494913]
+Expansion Trigger Dead Enemy Structure
+22872   17:01   Supply:199/200         Minerals:2960    Vespene:1536    Combat                    Dead Enemy: RefineryRich [4436787222]
+22878   17:01   Supply:199/200         Minerals:2985    Vespene:1536    Combat                    Dead Enemy: WidowMineBurrowed [4432330787]
+Next Expansion Trigger: Check Blocked 2
+Max Enemy Power 16025.047 Army Power 14435.072 Used Enemy Power 14262.291
+Nexus Count 9 Enemy Townhalls 5
+22904   17:02   Supply:199/200         Minerals:2635    Vespene:1580    Economy                   Expanding
+22922   17:03   Supply:199/200         Minerals:2675    Vespene:1592    Combat                    Dead Enemy: SCV [4390649857]
+22922   17:03   Supply:199/200         Minerals:2675    Vespene:1592    Combat                    Dead Enemy: SCV [4369940481]
+23000   17:06   Supply:199/200         Minerals:2865    Vespene:1692    Combat                    Dead Enemy: SCV [4380164097]
+23014   17:07   Supply:199/200         Minerals:2900    Vespene:1708    [4367056900] Nexus        Chronoboosting Forge [4382523403]
+23046   17:08   Supply:199/200         Minerals:2995    Vespene:1748    Combat                    Dead Enemy: SCV [4379639809]
+23048   17:08   Supply:199/200         Minerals:2995    Vespene:1752    Combat                    Dead Enemy: SCV [4413194241]
+23060   17:09   Supply:199/200         Minerals:3020    Vespene:1768    Combat                    Dead Enemy: SCV [4354998273]
+Expansion Trigger Dead Enemy Structure
+23090   17:10   Supply:199/200         Minerals:3090    Vespene:1808    Combat                    Dead Enemy: Refinery [4411359245]
+23090   17:10   Supply:199/200         Minerals:3090    Vespene:1808    [4399038465] Nexus        Chronoboosting Stargate [4435476489]
+23102   17:11   Supply:199/200         Minerals:3120    Vespene:1832    Combat                    Dead Enemy: SCV [4406902786]
+Next Expansion Trigger: Update Friend Owned
+
+Updating Defensive Point
+Getting Position Behind ramp {86.5 116.5} {82.72727 112.72727}
+23110   17:11   Supply:199/200         Minerals:3145    Vespene:1832    Combat                    Dead Enemy: SCV [4361551879]
+23124   17:12   Supply:195/200         Minerals:3170    Vespene:1856    Combat                    Dead Friend: Tempest [4425777165]
+23124   17:12   Supply:197/200         Minerals:3045    Vespene:1806    [4334026754] WarpGate     Warping Stalker
+23124   17:12   Supply:199/200         Minerals:2920    Vespene:1756    [4374396938] WarpGate     Warping Stalker
+23156   17:13   Supply:195/200         Minerals:3145    Vespene:1842    Combat                    Dead Friend: Stalker [4417126401]
+23156   17:13   Supply:195/200         Minerals:3145    Vespene:1842    [4393271306] StarGate     Training Tempest
+23156   17:13   Supply:197/200         Minerals:3020    Vespene:1792    [4368367617] WarpGate     Warping Stalker
+23156   17:13   Supply:199/200         Minerals:2895    Vespene:1742    [4367843329] WarpGate     Warping Stalker
+23158   17:13   Supply:199/200         Minerals:2770    Vespene:1621    Combat                    Dead Friend: Zealot [4433641479]
+23158   17:13   Supply:199/200         Minerals:2770    Vespene:1621    Combat                    Dead Enemy: SCV [4436525071]
+23168   17:14   Supply:199/200         Minerals:2785    Vespene:1637    Combat                    Dead Enemy: SCV [4383047690]
+23174   17:14   Supply:199/200         Minerals:2795    Vespene:1641    Combat                    Dead Enemy: SCV [4364173318]
+23184   17:15   Supply:199/200         Minerals:2820    Vespene:1653    [4417388555] Nexus        Chronoboosting Stargate [4393271306]
+23212   17:16   Supply:199/200         Minerals:2890    Vespene:1681    Combat                    Dead Enemy: SCV [4405592104]
+23230   17:17   Supply:199/200         Minerals:2950    Vespene:1709    Combat                    Dead Enemy: SCV [4353687553]
+23252   17:18   Supply:199/200         Minerals:2990    Vespene:1737    Combat                    Dead Enemy: SCV [4422893577]
+23254   17:18   Supply:199/200         Minerals:2995    Vespene:1741    Combat                    Dead Enemy: SCV [4390912001]
+23272   17:18   Supply:199/200         Minerals:3045    Vespene:1769    Combat                    Dead Enemy: SCV [4396941313]
+23316   17:20   Supply:197/200         Minerals:3165    Vespene:1817    Combat                    Dead Friend: Zealot [4315938821]
+23316   17:20   Supply:199/200         Minerals:3065    Vespene:1817    [4374396938] WarpGate     Warping Zealot
+23326   17:21   Supply:197/200         Minerals:3080    Vespene:1837    Combat                    Dead Friend: Stalker [4368629763]
+23326   17:21   Supply:199/200         Minerals:2955    Vespene:1787    [4388552727] WarpGate     Warping Stalker
+23336   17:21   Supply:199/200         Minerals:2985    Vespene:1799    Combat                    Dead Enemy: SCV [4434165765]
+23340   17:21   Supply:197/200         Minerals:2995    Vespene:1799    Combat                    Dead Friend: Zealot [4403232776]
+23340   17:21   Supply:199/200         Minerals:2895    Vespene:1799    [4367843329] WarpGate     Warping Zealot
+23356   17:22   Supply:195/200         Minerals:2935    Vespene:1823    Combat                    Dead Friend: Zealot [4391436290]
+23356   17:22   Supply:195/200         Minerals:2935    Vespene:1823    Combat                    Dead Enemy: SCV [4398252035]
+23356   17:22   Supply:195/200         Minerals:2935    Vespene:1823    Combat                    Dead Friend: Zealot [4421582857]
+23356   17:22   Supply:195/200         Minerals:2935    Vespene:1823    [4431020043] StarGate     Training Tempest
+23356   17:22   Supply:195/200         Minerals:2935    Vespene:1823    [4329570314] StarGate     Training Tempest
+23356   17:22   Supply:195/200         Minerals:2935    Vespene:1823    [4392747069] StarGate     Training Tempest
+23356   17:22   Supply:197/200         Minerals:2835    Vespene:1823    [4357619713] WarpGate     Warping Zealot
+23386   17:24   Supply:199/200         Minerals:2775    Vespene:1684    Combat                    Dead Enemy: SCV [4408475666]
+23436   17:26   Supply:199/200         Minerals:2895    Vespene:1748    Combat                    Dead Enemy: SCV [4370202627]
+23448   17:26   Supply:199/200         Minerals:2930    Vespene:1760    Combat                    Dead Enemy: SCV [4413980675]
+23462   17:27   Supply:199/200         Minerals:2960    Vespene:1780    Combat                    Dead Enemy: WidowMineBurrowed [4415291393]
+23472   17:27   Supply:199/200         Minerals:2970    Vespene:1792    Combat                    Dead Enemy: SCV [4382785542]
+Expansion Trigger Dead Enemy Structure
+23498   17:29   Supply:199/200         Minerals:3065    Vespene:1832    Combat                    Dead Enemy: MissileTurret [4363911190]
+23504   17:29   Supply:199/200         Minerals:3080    Vespene:1836    Combat                    Dead Enemy: SCV [4353425413]
+23516   17:29   Supply:199/200         Minerals:3090    Vespene:1848    [4402184201] Nexus        Chronoboosting CyberneticsCore [4361027585]
+Intel Report 17:30
+
+Enemy Unit Report  17:30
+SCV: 42/68
+Bunker: 2/2
+SiegeTank: 3/3
+Hellion: 2/2
+MissileTurret: 1/2
+Marine: 1/17
+WidowMineBurrowed: 4/7
+Marauder: 0/9
+Battlecruiser: 13/13
+PlanetaryFortress: 3/4
+WidowMine: 0/3
+
+Enemy Building Report  17:30
+Planetary Fortress: Visible: true, Attackable: true Snapshot: false isUnitVisible: false 
+Planetary Fortress: Visible: true, Attackable: true Snapshot: true isUnitVisible: true 
+Planetary Fortress: Visible: true, Attackable: true Snapshot: true isUnitVisible: true 
+MissileTurret: 1
+StarportTechLab: 4
+BarracksTechLab: 1
+Factory: 1
+Starport: 4
+PlanetaryFortress: 3
+EngineeringBay: 2
+FusionCore: 1
+Barracks: 2
+Bunker: 2
+OrbitalCommand: 2
+Armory: 2
+SupplyDepot: 16
+FactoryTechLab: 1
+Refinery: 9
+
+Ideal Counters Report  17:30
+Zealot: Demand Score, 300[44%] Needed: 3, Existing: 2, Demand: 4.5
+Tempest: Demand Score, 5400[56%] Needed: 9, Existing: 11, Demand: 19.5
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Observer: Demand Score, -10[250%] Needed: -1, Existing: 2, Demand: 0.7999999523162842
+Stalker: Demand Score, -2250[263%] Needed: -10, Existing: 17, Demand: 6.450000002980232
+
+Live Counters Report  17:30
+Zealot: Demand Score, 300[44%] Needed: 3, Existing: 2, Demand: 4.5
+Tempest: Demand Score, 6000[52%] Needed: 10, Existing: 11, Demand: 21
+Stalker: Demand Score, 225[94%] Needed: 1, Existing: 17, Demand: 17.950000002980232
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Observer: Demand Score, -10[250%] Needed: -1, Existing: 2, Demand: 0.7999999523162842
+
+Army Report 17:30
+Win Air: false [ -0.5227318 ]
+Air Ground: false [ 5.3883753 ]
+Air All: false [ 4.762505 ]
+Army Power: 14210.072
+Enemy Power: 18300.045
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {90 120}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 124
+Next Expansion: {104.5 107.5}
+Best Expansion: {104.5 107.5}
+Should Expand: true
+Expand Saving: false
+Air Superiority: true
+Alloc = 22 MiB	TotalAlloc = 16600 MiB	Sys = 45 MiB	NumGC = 1344
+
+23526   17:30   Supply:199/200         Minerals:3115    Vespene:1864    Combat                    Dead Enemy: SCV [4439146497]
+23554   17:31   Supply:199/200         Minerals:3205    Vespene:1900    Combat                    Dead Enemy: SCV [4380950539]
+23554   17:31   Supply:199/200         Minerals:3205    Vespene:1900    [4438360068] Nexus        Chronoboosting Stargate [4431020043]
+23562   17:31   Supply:199/200         Minerals:3220    Vespene:1916    Combat                    Dead Enemy: SCV [4410572818]
+23594   17:33   Supply:199/200         Minerals:3300    Vespene:1948    Combat                    Dead Enemy: SCV [4380688404]
+23616   17:34   Supply:199/200         Minerals:3360    Vespene:1976    Combat                    Dead Enemy: SCV [4417650690]
+23630   17:34   Supply:199/200         Minerals:3385    Vespene:2000    Combat                    Dead Enemy: SCV [4394844194]
+23658   17:36   Supply:199/200         Minerals:3470    Vespene:2028    Combat                    Dead Enemy: SCV [4384620545]
+23684   17:37   Supply:199/200         Minerals:3540    Vespene:2060    Combat                    Dead Enemy: SCV [4375445505]
+Expansion Trigger Dead Enemy Structure
+23742   17:39   Supply:199/200         Minerals:3680    Vespene:2132    Combat                    Dead Enemy: Refinery [4331667493]
+23744   17:40   Supply:199/200         Minerals:3690    Vespene:2132    Combat                    Dead Enemy: WidowMineBurrowed [4411359265]
+Next Expansion Trigger: Check Blocked 2
+Casting Revelation 4353687559 23774
+23798   17:42   Supply:199/200         Minerals:3840    Vespene:2206    Combat                    Dead Enemy: SiegeTankSieged [4407164945]
+23802   17:42   Supply:199/200         Minerals:3845    Vespene:2206    Combat                    Dead Enemy: SCV [4368629765]
+23838   17:44   Supply:197/200         Minerals:3940    Vespene:2246    Combat                    Dead Enemy: SCV [4410572820]
+23838   17:44   Supply:197/200         Minerals:3940    Vespene:2246    Combat                    Dead Friend: Stalker [4324851714]
+23838   17:44   Supply:199/200         Minerals:3840    Vespene:2246    [4368367617] WarpGate     Warping Zealot
+23854   17:44   Supply:197/200         Minerals:3880    Vespene:2266    Combat                    Dead Friend: Stalker [4408999941]
+23854   17:44   Supply:197/200         Minerals:3880    Vespene:2266    Combat                    Dead Enemy: SCV [4439408649]
+23854   17:44   Supply:199/200         Minerals:3755    Vespene:2216    [4334026754] WarpGate     Warping Stalker
+23856   17:45   Supply:199/200         Minerals:3765    Vespene:2216    Combat                    Dead Enemy: Marine [4438097940]
+23870   17:45   Supply:199/200         Minerals:3795    Vespene:2232    Combat                    Dead Enemy: SCV [4367581185]
+23888   17:46   Supply:197/200         Minerals:3840    Vespene:2256    Combat                    Dead Friend: Stalker [4350803970]
+23888   17:46   Supply:199/200         Minerals:3740    Vespene:2256    [4367843329] WarpGate     Warping Zealot
+Expansion Trigger Dead Enemy Structure
+Expansion Trigger Dead Enemy Townhall
+23904   17:47   Supply:199/200         Minerals:3790    Vespene:2268    Combat                    Dead Enemy: PlanetaryFortress [4391698433]
+23906   17:47   Supply:199/200         Minerals:3790    Vespene:2272    Combat                    Dead Enemy: SCV [4438884354]
+23912   17:47   Supply:199/200         Minerals:3800    Vespene:2280    Combat                    Dead Enemy: WidowMineBurrowed [4360765443]
+23916   17:47   Supply:199/200         Minerals:3815    Vespene:2284    Combat                    Dead Enemy: Marine [4413980678]
+Next Expansion Trigger: Check Blocked
+Expansion Trigger Dead Enemy Structure
+23922   17:47   Supply:199/200         Minerals:3825    Vespene:2292    Combat                    Dead Enemy: Refinery [4409262081]
+23952   17:49   Supply:197/200         Minerals:3910    Vespene:2324    Combat                    Dead Friend: Sentry [4428398627]
+23952   17:49   Supply:199/200         Minerals:3860    Vespene:2224    [4388552727] WarpGate     Warping Sentry
+Expansion Trigger Dead Enemy Structure
+23958   17:49   Supply:199/200         Minerals:3875    Vespene:2244    Combat                    Dead Enemy: Refinery [4407689218]
+Next Expansion Trigger: Check Blocked 2
+Expansion Trigger Dead Enemy Structure
+23964   17:49   Supply:199/200         Minerals:3890    Vespene:2244    Combat                    Dead Enemy: Refinery [4371513356]
+23966   17:49   Supply:199/200         Minerals:3900    Vespene:2244    [4409524227] Nexus        Chronoboosting CyberneticsCore [4361027585]
+23978   17:50   Supply:199/200         Minerals:3920    Vespene:2260    Combat                    Dead Enemy: Marine [4396941314]
+23986   17:50   Supply:197/200         Minerals:3945    Vespene:2268    Combat                    Dead Friend: Sentry [4372299799]
+23986   17:50   Supply:199/200         Minerals:3820    Vespene:2218    [4357619713] WarpGate     Warping Stalker
+Recalculating Distances - Neutral unit destroyed: MineralField750 at {38 91.5}
+Recalculating Distances - Neutral unit destroyed: MineralField750 at {37 92.5}
+Expansion Trigger Dead Enemy Structure
+24070   17:54   Supply:199/200         Minerals:4035    Vespene:2310    Combat                    Dead Enemy: MissileTurret [4403494921]
+24080   17:55   Supply:197/200         Minerals:4055    Vespene:2326    Combat                    Dead Friend: Stalker [4413456393]
+24080   17:55   Supply:199/200         Minerals:4005    Vespene:2226    [4374396938] WarpGate     Warping Sentry
+24100   17:55   Supply:197/200         Minerals:4060    Vespene:2246    Combat                    Dead Friend: Stalker [4402970626]
+24118   17:56   Supply:197/200         Minerals:4115    Vespene:2270    Combat                    Dead Enemy: SCV [4383047702]
+24156   17:58   Supply:197/200         Minerals:4210    Vespene:2318    Combat                    Dead Enemy: SCV [4374659079]
+24168   17:58   Supply:197/200         Minerals:4240    Vespene:2322    Combat                    Dead Enemy: Marauder [4390649860]
+24176   17:59   Supply:197/200         Minerals:4245    Vespene:2334    Combat                    Dead Enemy: SCV [4380950543]
+Intel Report 18:00
+
+Enemy Unit Report  18:00
+WidowMineBurrowed: 3/7
+Marauder: 0/9
+Battlecruiser: 14/14
+PlanetaryFortress: 2/4
+WidowMine: 1/3
+Marine: 1/17
+Bunker: 2/2
+SiegeTank: 2/3
+Hellion: 2/2
+MissileTurret: 1/2
+SCV: 43/68
+
+Enemy Building Report  18:00
+Planetary Fortress: Visible: true, Attackable: true Snapshot: false isUnitVisible: false 
+Planetary Fortress: Visible: true, Attackable: true Snapshot: true isUnitVisible: true 
+MissileTurret: 1
+Barracks: 2
+SupplyDepot: 13
+PlanetaryFortress: 2
+FactoryTechLab: 1
+BarracksTechLab: 1
+StarportTechLab: 4
+SupplyDepotLowered: 3
+OrbitalCommand: 2
+Refinery: 7
+Armory: 2
+FusionCore: 1
+Factory: 1
+Bunker: 2
+Starport: 4
+EngineeringBay: 2
+
+Ideal Counters Report  18:00
+Tempest: Demand Score, 6000[52%] Needed: 10, Existing: 11, Demand: 21
+Zealot: Demand Score, 100[88%] Needed: 1, Existing: 4, Demand: 4.5
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Stalker: Demand Score, -1575[217%] Needed: -7, Existing: 14, Demand: 6.450000002980232
+Observer: Demand Score, -10[250%] Needed: -1, Existing: 2, Demand: 0.7999999523162842
+
+Live Counters Report  18:00
+Tempest: Demand Score, 7200[48%] Needed: 12, Existing: 11, Demand: 22.5
+Stalker: Demand Score, 900[77%] Needed: 4, Existing: 14, Demand: 17.950000002980232
+Zealot: Demand Score, 100[88%] Needed: 1, Existing: 4, Demand: 4.5
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Observer: Demand Score, -10[250%] Needed: -1, Existing: 2, Demand: 0.7999999523162842
+
+Army Report 18:00
+Win Air: false [ -0.5227318 ]
+Air Ground: false [ 5.3883753 ]
+Air All: false [ 4.762505 ]
+Army Power: 14935.073
+Enemy Power: 18050.043
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {90 120}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 122
+Next Expansion: {104.5 107.5}
+Best Expansion: {104.5 107.5}
+Should Expand: true
+Expand Saving: false
+Air Superiority: true
+Alloc = 14 MiB	TotalAlloc = 17321 MiB	Sys = 45 MiB	NumGC = 1402
+
+Expansion Trigger Dead Enemy Structure
+24194   18:00   Supply:197/200         Minerals:4300    Vespene:2358    Combat                    Dead Enemy: SupplyDepotLowered [4359716865]
+Max Enemy Power 18625.049 Army Power 14935.074 Used Enemy Power 16576.293
+Nexus Count 10 Enemy Townhalls 4
+24204   18:00   Supply:197/200         Minerals:3910    Vespene:2362    Economy                   Expanding
+24246   18:02   Supply:197/200         Minerals:4020    Vespene:2414    Combat                    Dead Enemy: WidowMineBurrowed [4384620560]
+24262   18:03   Supply:193/200         Minerals:4060    Vespene:2434    Combat                    Dead Friend: Tempest [4396154884]
+24262   18:03   Supply:193/200         Minerals:4060    Vespene:2434    [4435476489] StarGate     Training Tempest
+24262   18:03   Supply:193/200         Minerals:4060    Vespene:2434    [4431020043] StarGate     Training Tempest
+24262   18:03   Supply:193/200         Minerals:4060    Vespene:2434    [4329570314] StarGate     Training Tempest
+24262   18:03   Supply:193/200         Minerals:4060    Vespene:2434    [4393271306] StarGate     Training Tempest
+24262   18:03   Supply:193/200         Minerals:4060    Vespene:2434    [4392747069] StarGate     Training Tempest
+24264   18:03   Supply:197/200         Minerals:3820    Vespene:2259    [4348968961] Nexus        Chronoboosting Stargate [4435476489]
+24288   18:04   Supply:199/200         Minerals:3745    Vespene:2245    [4368367617] WarpGate     Warping Stalker
+24338   18:06   Supply:199/200         Minerals:3885    Vespene:2289    Combat                    Dead Enemy: SCV [4426039308]
+24416   18:10   Supply:199/200         Minerals:4095    Vespene:2385    [4440195083] Nexus        Chronoboosting CyberneticsCore [4361027585]
+Expansion Trigger Dead Enemy Structure
+24434   18:10   Supply:199/200         Minerals:4135    Vespene:2401    Combat                    Dead Enemy: Bunker [4394319875]
+Unknown Name 24
+No Cost Data for 24
+24452   18:11   Supply:199/200         Minerals:4195    Vespene:2425    Combat                    Dead Enemy: SCV [4422107159]
+Next Expansion Trigger: Update Friend Owned
+
+Updating Defensive Point
+Getting Position Behind ramp {117.5 93.5} {113.8 96.4}
+24516   18:14   Supply:199/200         Minerals:4375    Vespene:2497    Combat                    Dead Enemy: SCV [4388028417]
+24594   18:17   Supply:199/200         Minerals:4575    Vespene:2589    Combat                    Dead Enemy: SCV [4397465627]
+24598   18:18   Supply:199/200         Minerals:4585    Vespene:2589    Combat                    Dead Enemy: SCV [4411621379]
+24618   18:19   Supply:199/200         Minerals:4650    Vespene:2625    Combat                    Dead Enemy: SCV [4423942151]
+24654   18:20   Supply:199/200         Minerals:4735    Vespene:2665    Combat                    Dead Enemy: SCV [4419747858]
+Expansion Trigger Dead Enemy Structure
+24666   18:21   Supply:199/200         Minerals:4785    Vespene:2669    Combat                    Dead Enemy: Refinery [4298113028]
+24674   18:21   Supply:199/200         Minerals:4800    Vespene:2681    Combat                    Dead Enemy: SCV [4388290561]
+Max Enemy Power 18625.049 Army Power 14210.073 Used Enemy Power 16576.293
+Nexus Count 11 Enemy Townhalls 4
+24702   18:22   Supply:199/200         Minerals:4465    Vespene:2713    Economy                   Expanding
+24714   18:23   Supply:199/200         Minerals:4510    Vespene:2725    [4367056900] Nexus        Chronoboosting Stargate [4435476489]
+24722   18:23   Supply:197/200         Minerals:4530    Vespene:2741    Combat                    Dead Friend: Zealot [4350803971]
+24722   18:23   Supply:199/200         Minerals:4430    Vespene:2741    [4367843329] WarpGate     Warping Zealot
+24730   18:24   Supply:199/200         Minerals:4450    Vespene:2745    Combat                    Dead Enemy: SCV [4357095425]
+24774   18:25   Supply:199/200         Minerals:4560    Vespene:2797    Combat                    Dead Enemy: SCV [4418699265]
+24778   18:26   Supply:199/200         Minerals:4570    Vespene:2801    Combat                    Dead Enemy: SCV [4354998274]
+24780   18:26   Supply:199/200         Minerals:4580    Vespene:2801    Combat                    Dead Enemy: SCV [4407427087]
+24796   18:26   Supply:199/200         Minerals:4615    Vespene:2817    Combat                    Dead Enemy: SCV [4353163265]
+24810   18:27   Supply:199/200         Minerals:4645    Vespene:2833    Combat                    Dead Enemy: SiegeTankSieged [4429971477]
+24836   18:28   Supply:199/200         Minerals:4725    Vespene:2869    Combat                    Dead Enemy: WidowMineBurrowed [4411883521]
+24836   18:28   Supply:199/200         Minerals:4725    Vespene:2869    Combat                    Dead Enemy: SCV [4380426248]
+24836   18:28   Supply:199/200         Minerals:4725    Vespene:2869    Combat                    Dead Enemy: SCV [4315152409]
+24838   18:28   Supply:199/200         Minerals:4730    Vespene:2873    Combat                    Dead Enemy: SCV [4369154063]
+Expansion Trigger Dead Enemy Structure
+24856   18:29   Supply:199/200         Minerals:4780    Vespene:2889    Combat                    Dead Enemy: SupplyDepotLowered [4365484033]
+24858   18:29   Supply:199/200         Minerals:4790    Vespene:2889    Combat                    Dead Enemy: SCV [4380688421]
+24860   18:29   Supply:195/200         Minerals:4795    Vespene:2889    Combat                    Dead Friend: Zealot [4413194258]
+24860   18:29   Supply:195/200         Minerals:4795    Vespene:2889    Combat                    Dead Friend: Zealot [4410572821]
+24860   18:29   Supply:195/200         Minerals:4795    Vespene:2889    [4431020043] StarGate     Training Tempest
+24860   18:29   Supply:195/200         Minerals:4795    Vespene:2889    [4329570314] StarGate     Training Tempest
+24860   18:29   Supply:197/200         Minerals:4695    Vespene:2889    [4374396938] WarpGate     Warping Zealot
+24860   18:29   Supply:199/200         Minerals:4595    Vespene:2889    [4388552727] WarpGate     Warping Zealot
+24862   18:29   Supply:199/200         Minerals:4550    Vespene:2714    [4417388555] Nexus        Chronoboosting Stargate [4431020043]
+Intel Report 18:30
+
+Enemy Unit Report  18:30
+Bunker: 1/2
+SiegeTank: 1/3
+Hellion: 2/2
+MissileTurret: 1/2
+SCV: 30/68
+WidowMineBurrowed: 2/7
+Marauder: 0/9
+Battlecruiser: 14/14
+PlanetaryFortress: 2/4
+WidowMine: 0/3
+Marine: 1/17
+
+Enemy Building Report  18:30
+Planetary Fortress: Visible: true, Attackable: true Snapshot: true isUnitVisible: true 
+Planetary Fortress: Visible: true, Attackable: true Snapshot: false isUnitVisible: false 
+MissileTurret: 1
+StarportTechLab: 4
+FactoryTechLab: 1
+BarracksTechLab: 1
+FusionCore: 1
+SupplyDepotLowered: 1
+EngineeringBay: 2
+Starport: 4
+OrbitalCommand: 2
+Barracks: 2
+Refinery: 6
+SupplyDepot: 13
+PlanetaryFortress: 2
+Bunker: 1
+Armory: 2
+Factory: 1
+
+Ideal Counters Report  18:30
+Zealot: Demand Score, 300[44%] Needed: 3, Existing: 2, Demand: 4.5
+Tempest: Demand Score, 5400[57%] Needed: 9, Existing: 12, Demand: 21
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Stalker: Demand Score, -1800[232%] Needed: -8, Existing: 15, Demand: 6.450000002980232
+Observer: Demand Score, -10[500%] Needed: -1, Existing: 2, Demand: 0.3999999761581421
+
+Live Counters Report  18:30
+Zealot: Demand Score, 300[44%] Needed: 3, Existing: 2, Demand: 4.5
+Tempest: Demand Score, 6600[53%] Needed: 11, Existing: 12, Demand: 22.5
+Stalker: Demand Score, 675[83%] Needed: 3, Existing: 15, Demand: 17.950000002980232
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Observer: Demand Score, -10[500%] Needed: -1, Existing: 2, Demand: 0.3999999761581421
+
+Army Report 18:30
+Win Air: false [ -0.5227318 ]
+Air Ground: false [ 5.3883753 ]
+Air All: false [ 4.762505 ]
+Army Power: 14360.073
+Enemy Power: 17050.03
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {122 89}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 102
+Next Expansion: {104.5 132.5}
+Best Expansion: {104.5 132.5}
+Should Expand: true
+Expand Saving: false
+Air Superiority: true
+Alloc = 15 MiB	TotalAlloc = 18072 MiB	Sys = 45 MiB	NumGC = 1459
+
+24866   18:30   Supply:199/200         Minerals:4560    Vespene:2722    Combat                    Dead Enemy: SCV [4405592112]
+24880   18:30   Supply:195/200         Minerals:4595    Vespene:2742    Combat                    Dead Friend: Tempest [4297850928]
+24880   18:30   Supply:195/200         Minerals:4595    Vespene:2742    Combat                    Dead Enemy: SiegeTankSieged [4390125569]
+24880   18:30   Supply:195/200         Minerals:4595    Vespene:2742    [4392747069] StarGate     Training Tempest
+24880   18:30   Supply:197/200         Minerals:4495    Vespene:2742    [4357619713] WarpGate     Warping Zealot
+24880   18:30   Supply:199/200         Minerals:4395    Vespene:2742    [4334026754] WarpGate     Warping Zealot
+24882   18:30   Supply:199/200         Minerals:4345    Vespene:2579    [4399038465] Nexus        Chronoboosting Stargate [4392747069]
+24890   18:31   Supply:199/200         Minerals:4365    Vespene:2579    Combat                    Dead Enemy: SCV [4420534273]
+24912   18:32   Supply:199/200         Minerals:4425    Vespene:2607    Combat                    Dead Enemy: WidowMineBurrowed [4364959749]
+24916   18:32   Supply:199/200         Minerals:4440    Vespene:2619    Combat                    Dead Enemy: SCV [4356308993]
+24926   18:32   Supply:199/200         Minerals:4475    Vespene:2619    Combat                    Dead Enemy: SCV [4382785547]
+24930   18:32   Supply:199/200         Minerals:4480    Vespene:2623    Combat                    Dead Enemy: SCV [4373872660]
+24934   18:33   Supply:199/200         Minerals:4490    Vespene:2627    Combat                    Dead Enemy: SCV [4418961409]
+24946   18:33   Supply:199/200         Minerals:4530    Vespene:2639    Combat                    Dead Enemy: SCV [4421844993]
+24964   18:34   Supply:199/200         Minerals:4580    Vespene:2663    Combat                    Dead Enemy: SCV [4417650692]
+24968   18:34   Supply:198/200         Minerals:4585    Vespene:2671    Combat                    Dead Friend: Observer [4393795625]
+24968   18:34   Supply:200/200         Minerals:4485    Vespene:2671    [4357619713] WarpGate     Warping Zealot
+Expansion Trigger Dead Enemy Structure
+24972   18:34   Supply:200/200         Minerals:4505    Vespene:2675    Combat                    Dead Enemy: Bunker [4412669953]
+Unknown Name 24
+No Cost Data for 24
+24976   18:35   Supply:200/200         Minerals:4515    Vespene:2679    Combat                    Dead Enemy: SCV [4384358401]
+24986   18:35   Supply:198/200         Minerals:4530    Vespene:2691    Combat                    Dead Enemy: SCV [4411097090]
+24986   18:35   Supply:198/200         Minerals:4530    Vespene:2691    Combat                    Dead Friend: Zealot [4315938824]
+24986   18:35   Supply:200/200         Minerals:4430    Vespene:2691    [4334026754] WarpGate     Warping Zealot
+25000   18:36   Supply:200/200         Minerals:4465    Vespene:2703    Combat                    Dead Enemy: Hellion [4432068656]
+25008   18:36   Supply:200/200         Minerals:4485    Vespene:2715    Combat                    Dead Enemy: SCV [4319084546]
+25018   18:36   Supply:200/200         Minerals:4515    Vespene:2731    Combat                    Dead Enemy: Hellion [4438622210]
+25032   18:37   Supply:200/200         Minerals:4550    Vespene:2739    Combat                    Dead Enemy: SCV [4398776354]
+25038   18:37   Supply:200/200         Minerals:4570    Vespene:2747    Combat                    Dead Enemy: SCV [4424728577]
+25062   18:38   Supply:200/200         Minerals:4650    Vespene:2775    Combat                    Dead Enemy: SCV [4414504961]
+25064   18:38   Supply:200/200         Minerals:4650    Vespene:2775    Combat                    Dead Enemy: SCV [4378329089]
+25088   18:40   Supply:200/200         Minerals:4700    Vespene:2807    Combat                    Dead Enemy: SCV [4331405314]
+25090   18:40   Supply:200/200         Minerals:4705    Vespene:2807    Combat                    Dead Enemy: SCV [4401922058]
+25100   18:40   Supply:200/200         Minerals:4740    Vespene:2823    Combat                    Dead Enemy: SCV [4415815681]
+25110   18:40   Supply:200/200         Minerals:4760    Vespene:2831    Combat                    Dead Enemy: SCV [4386193410]
+25112   18:41   Supply:200/200         Minerals:4760    Vespene:2831    Combat                    Dead Enemy: SCV [4404805633]
+Next Expansion Trigger: Update Friend Owned
+
+Updating Defensive Point
+Getting Position Behind ramp {116 113} {112.22222 109.22222}
+25122   18:41   Supply:200/200         Minerals:4800    Vespene:2843    Combat                    Dead Enemy: SCV [4425252888]
+25126   18:41   Supply:200/200         Minerals:4810    Vespene:2847    Combat                    Dead Enemy: SCV [4363386899]
+25132   18:41   Supply:200/200         Minerals:4815    Vespene:2859    Combat                    Dead Enemy: SCV [4334813187]
+Expansion Trigger Dead Enemy Structure
+25202   18:45   Supply:200/200         Minerals:5015    Vespene:2939    Combat                    Dead Enemy: MissileTurret [4436262937]
+25230   18:46   Supply:200/200         Minerals:5090    Vespene:2967    Combat                    Dead Enemy: SCV [4381999106]
+25248   18:47   Supply:200/200         Minerals:5135    Vespene:2999    Combat                    Dead Enemy: SCV [4377280513]
+Next Expansion Trigger: Check Blocked
+Expansion Trigger Dead Enemy Structure
+25266   18:47   Supply:200/200         Minerals:5190    Vespene:3011    Combat                    Dead Enemy: SupplyDepot [4363124738]
+25272   18:48   Supply:200/200         Minerals:5215    Vespene:3015    Combat                    Dead Enemy: SCV [4378066966]
+Recalculating Distances - Neutral unit destroyed: MineralField at {34 71.5}
+25312   18:50   Supply:200/200         Minerals:5310    Vespene:3071    [4409524227] Nexus        Chronoboosting Stargate [4431020043]
+Expansion Trigger Dead Enemy Structure
+Expansion Trigger Dead Enemy Townhall
+25322   18:50   Supply:200/200         Minerals:5350    Vespene:3071    Combat                    Dead Enemy: OrbitalCommandFlying [4368105474]
+25332   18:50   Supply:200/200         Minerals:5360    Vespene:3087    [4438360068] Nexus        Chronoboosting Stargate [4392747069]
+25336   18:51   Supply:196/200         Minerals:5385    Vespene:3095    Combat                    Dead Friend: Stalker [4303355911]
+25336   18:51   Supply:196/200         Minerals:5385    Vespene:3095    Combat                    Dead Friend: Sentry [4403494922]
+25336   18:51   Supply:198/200         Minerals:5335    Vespene:2995    [4368367617] WarpGate     Warping Sentry
+25336   18:51   Supply:200/200         Minerals:5285    Vespene:2895    [4367843329] WarpGate     Warping Sentry
+25338   18:51   Supply:200/200         Minerals:5240    Vespene:2995    [4388552727] WarpGate     Warping Zealot
+Expansion Trigger Dead Enemy Structure
+25340   18:51   Supply:200/200         Minerals:5245    Vespene:2999    Combat                    Dead Enemy: Refinery [4395630593]
+Expansion Trigger Dead Enemy Structure
+25396   18:53   Supply:200/200         Minerals:5405    Vespene:3059    Combat                    Dead Enemy: Refinery [4379377665]
+Next Expansion Trigger: Check Blocked 2
+Expansion Trigger Dead Enemy Structure
+Expansion Trigger Dead Enemy Townhall
+25430   18:55   Supply:200/200         Minerals:5490    Vespene:3103    Combat                    Dead Enemy: PlanetaryFortress [4429447190]
+Next Expansion Trigger: Check Blocked
+Expansion Trigger Dead Enemy Structure
+Expansion Trigger Dead Enemy Townhall
+25444   18:55   Supply:200/200         Minerals:5520    Vespene:3123    Combat                    Dead Enemy: PlanetaryFortress [4372037643]
+25460   18:56   Supply:200/200         Minerals:5560    Vespene:3127    Combat                    Dead Enemy: Battlecruiser [4434690058]
+Expansion Trigger Dead Enemy Structure
+25490   18:57   Supply:200/200         Minerals:5645    Vespene:3167    Combat                    Dead Enemy: Refinery [4434427919]
+25536   19:00   Supply:200/200         Minerals:5765    Vespene:3219    Combat                    Dead Enemy: MULE [4363386900]
+Intel Report 19:00
+
+Enemy Unit Report  19:00
+Marauder: 0/9
+Battlecruiser: 13/14
+PlanetaryFortress: 0/4
+WidowMine: 0/3
+Marine: 1/17
+WidowMineBurrowed: 1/7
+SiegeTank: 0/3
+Hellion: 0/2
+MissileTurret: 1/2
+SCV: 5/68
+Bunker: 0/2
+
+Enemy Building Report  19:00
+SupplyDepot: 10
+FusionCore: 1
+Starport: 5
+Armory: 2
+BarracksTechLab: 1
+Refinery: 3
+StarportTechLab: 5
+EngineeringBay: 2
+MissileTurret: 1
+Barracks: 2
+Factory: 1
+OrbitalCommand: 1
+SupplyDepotLowered: 4
+FactoryTechLab: 1
+
+Ideal Counters Report  19:00
+Tempest: Demand Score, 5400[57%] Needed: 9, Existing: 12, Demand: 21
+Zealot: Demand Score, 100[88%] Needed: 1, Existing: 4, Demand: 4.5
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Stalker: Demand Score, -1575[217%] Needed: -7, Existing: 14, Demand: 6.450000002980232
+Observer: Demand Score, 0[499%] Needed: 0, Existing: 1, Demand: 0.20000004768371582
+
+Live Counters Report  19:00
+Tempest: Demand Score, 6600[53%] Needed: 11, Existing: 12, Demand: 22.5
+Stalker: Demand Score, 900[77%] Needed: 4, Existing: 14, Demand: 17.950000002980232
+Zealot: Demand Score, 100[88%] Needed: 1, Existing: 4, Demand: 4.5
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Observer: Demand Score, 0[499%] Needed: 0, Existing: 1, Demand: 0.20000004768371582
+
+Army Report 19:00
+Win Air: false [ -0.5227318 ]
+Air Ground: false [ 5.3883753 ]
+Air All: false [ 4.762505 ]
+Army Power: 15525.072
+Enemy Power: 13275.005
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {120 117}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 68
+Next Expansion: {125.5 88.5}
+Best Expansion: {153.5 50.5}
+Should Expand: true
+Expand Saving: false
+Air Superiority: true
+Alloc = 22 MiB	TotalAlloc = 18692 MiB	Sys = 45 MiB	NumGC = 1508
+
+25546   19:00   Supply:200/200         Minerals:5790    Vespene:3235    Combat                    Dead Enemy: SCV [4413456399]
+25558   19:00   Supply:200/200         Minerals:5835    Vespene:3243    Combat                    Dead Enemy: Battlecruiser [4333240352]
+Expansion Trigger Dead Enemy Structure
+25596   19:02   Supply:200/200         Minerals:5920    Vespene:3291    Combat                    Dead Enemy: Refinery [4427087905]
+Next Expansion Trigger: Check Blocked 2
+25630   19:04   Supply:200/200         Minerals:6015    Vespene:3331    Combat                    Dead Enemy: MULE [4405592115]
+Recalculating Distances - Neutral unit destroyed: MineralField750 at {36 95.5}
+Recalculating Distances - Neutral unit destroyed: MineralField at {34 67.5}
+25760   19:10   Supply:200/200         Minerals:6365    Vespene:3479    Combat                    Dead Enemy: Battlecruiser [4364697615]
+Recalculating Distances - Neutral unit destroyed: MineralField750 at {43 89.5}
+25804   19:11   Supply:200/200         Minerals:6475    Vespene:3527    Combat                    Dead Enemy: Battlecruiser [4416339988]
+25848   19:13   Supply:200/200         Minerals:6595    Vespene:3579    Combat                    Dead Enemy: Battlecruiser [4440457217]
+25848   19:13   Supply:200/200         Minerals:6595    Vespene:3579    Cybernetics Core          Researching Air Armor 1
+25850   19:14   Supply:200/200         Minerals:6500    Vespene:3483    [4430495788] Nexus        Chronoboosting CyberneticsCore [4361027585]
+25904   19:16   Supply:200/200         Minerals:6620    Vespene:3543    Combat                    Dead Enemy: Battlecruiser [4427612176]
+25908   19:16   Supply:200/200         Minerals:6630    Vespene:3555    Combat                    Dead Enemy: Marine [4378066990]
+25946 Extended Kite True, Unit: Stalker current DPS: 8 KitePoint DPS: 10000 KitePoint: {0 0} Current Height 11.5 KitePoint Height: -15.875
+New DPS: 0 New Height: 12 KitePoint: {158 118}
+25956   19:18   Supply:200/200         Minerals:6760    Vespene:3603    Combat                    Dead Enemy: Battlecruiser [4385144873]
+25976   19:19   Supply:200/200         Minerals:6820    Vespene:3627    Combat                    Dead Enemy: SCV [4355522561]
+Casting Revelation 4353687559 26000
+26002   19:20   Supply:200/200         Minerals:6885    Vespene:3655    Combat                    Dead Enemy: Battlecruiser [4384882691]
+26034   19:22   Supply:198/200         Minerals:6960    Vespene:3691    Combat                    Dead Friend: Stalker [4433903618]
+26034   19:22   Supply:200/200         Minerals:6835    Vespene:3641    [4334026754] WarpGate     Warping Stalker
+26054   19:23   Supply:200/200         Minerals:6885    Vespene:3661    Combat                    Dead Enemy: Battlecruiser [4304404523]
+26078   19:24   Supply:200/200         Minerals:6960    Vespene:3693    Combat                    Dead Enemy: Battlecruiser [4375445508]
+26078   19:24   Supply:200/200         Minerals:6960    Vespene:3693    Combat                    Dead Enemy: Battlecruiser [4437049366]
+26084   19:24   Supply:198/200         Minerals:6980    Vespene:3697    Combat                    Dead Enemy: SCV [4410834945]
+26084   19:24   Supply:198/200         Minerals:6980    Vespene:3697    Combat                    Dead Friend: Stalker [4375969793]
+26084   19:24   Supply:200/200         Minerals:6855    Vespene:3647    [4368367617] WarpGate     Warping Stalker
+26096   19:25   Supply:200/200         Minerals:6880    Vespene:3663    Combat                    Dead Enemy: SCV [4434690064]
+Max Enemy Power 18625.049 Army Power 15175.072 Used Enemy Power 16576.293
+Nexus Count 12 Enemy Townhalls 1
+26100   19:25   Supply:200/200         Minerals:6485    Vespene:3667    Economy                   Expanding
+26102   19:25   Supply:200/200         Minerals:6495    Vespene:3667    Combat                    Dead Enemy: Battlecruiser [4297588749]
+Expansion Trigger Dead Enemy Structure
+26112   19:25   Supply:200/200         Minerals:6515    Vespene:3683    Combat                    Dead Enemy: BarracksTechLab [4377018370]
+No position in checkKillable Marine
+26128   19:26   Supply:198/200         Minerals:6550    Vespene:3699    Combat                    Dead Friend: Zealot [4425252905]
+26128   19:26   Supply:200/200         Minerals:6450    Vespene:3699    [4374396938] WarpGate     Warping Zealot
+Expansion Trigger Dead Enemy Structure
+26158   19:27   Supply:200/200         Minerals:6540    Vespene:3739    Combat                    Dead Enemy: FactoryTechLab [4366532609]
+26160   19:27   Supply:200/200         Minerals:6540    Vespene:3739    Combat                    Dead Enemy: Battlecruiser [4397989907]
+26206   19:29   Supply:199/200         Minerals:6660    Vespene:3795    Combat                    Dead Friend: Observer [4400349185]
+26206   19:29   Supply:199/200         Minerals:6660    Vespene:3795    [4314103810] Robotics Factory Training Observer
+Intel Report 19:30
+
+Enemy Unit Report  19:30
+WidowMine: 0/3
+Marine: 0/17
+WidowMineBurrowed: 1/7
+Marauder: 0/9
+Battlecruiser: 1/14
+PlanetaryFortress: 0/4
+SCV: 0/68
+Bunker: 0/2
+SiegeTank: 0/3
+Hellion: 0/2
+MissileTurret: 1/2
+
+Enemy Building Report  19:30
+Barracks: 2
+EngineeringBay: 2
+Refinery: 2
+Factory: 1
+Armory: 2
+Starport: 5
+StarportTechLab: 6
+OrbitalCommand: 1
+FusionCore: 1
+MissileTurret: 1
+SupplyDepotLowered: 13
+SupplyDepot: 1
+
+Ideal Counters Report  19:30
+Observer: Demand Score, 10[0%] Needed: 1, Existing: 0, Demand: 0.20000004768371582
+Tempest: Demand Score, 5400[57%] Needed: 9, Existing: 12, Demand: 21
+Zealot: Demand Score, 0[111%] Needed: 0, Existing: 5, Demand: 4.5
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Stalker: Demand Score, -1575[217%] Needed: -7, Existing: 14, Demand: 6.450000002980232
+
+Live Counters Report  19:30
+Observer: Demand Score, 10[0%] Needed: 1, Existing: 0, Demand: 0.20000004768371582
+Tempest: Demand Score, 6600[53%] Needed: 11, Existing: 12, Demand: 22.5
+Stalker: Demand Score, 900[77%] Needed: 4, Existing: 14, Demand: 17.950000002980232
+Zealot: Demand Score, 0[111%] Needed: 0, Existing: 5, Demand: 4.5
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+
+Army Report 19:30
+Win Air: false [ -0.5227318 ]
+Air Ground: false [ 5.3883753 ]
+Air All: false [ 4.762505 ]
+Army Power: 15515.073
+Enemy Power: 1225
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {120 117}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 39
+Next Expansion: {153.5 50.5}
+Best Expansion: {153.5 50.5}
+Should Expand: true
+Expand Saving: false
+Air Superiority: true
+Alloc = 19 MiB	TotalAlloc = 19229 MiB	Sys = 45 MiB	NumGC = 1550
+
+Expansion Trigger Dead Enemy Structure
+26214   19:30   Supply:200/200         Minerals:6650    Vespene:3720    Combat                    Dead Enemy: MissileTurret [4389077020]
+26218   19:30   Supply:200/200         Minerals:6660    Vespene:3724    Combat                    Dead Enemy: Battlecruiser [4424466441]
+26236   19:31   Supply:200/200         Minerals:6710    Vespene:3756    Combat                    Dead Enemy: WidowMineBurrowed [4427874321]
+Next Expansion Trigger: Check Blocked
+Expansion Trigger Dead Enemy Structure
+26286   19:33   Supply:200/200         Minerals:6855    Vespene:3808    Combat                    Dead Enemy: StarportTechLab [4397727766]
+26300   19:34   Supply:200/200         Minerals:6875    Vespene:3820    [4440195083] Nexus        Chronoboosting CyberneticsCore [4361027585]
+Expansion Trigger Dead Enemy Structure
+Expansion Trigger Dead Enemy Townhall
+26306   19:34   Supply:200/200         Minerals:6895    Vespene:3832    Combat                    Dead Enemy: OrbitalCommandFlying [4352376833]
+Expansion Trigger Dead Enemy Structure
+26322   19:35   Supply:200/200         Minerals:6935    Vespene:3848    Combat                    Dead Enemy: SupplyDepotLowered [4371775489]
+Expansion Trigger Dead Enemy Structure
+26344   19:36   Supply:200/200         Minerals:7005    Vespene:3872    Combat                    Dead Enemy: Armory [4408737798]
+Expansion Trigger Dead Enemy Structure
+26382   19:37   Supply:200/200         Minerals:7115    Vespene:3916    Combat                    Dead Enemy: StarportTechLab [4416602124]
+Expansion Trigger Dead Enemy Structure
+26386   19:37   Supply:200/200         Minerals:7120    Vespene:3920    Combat                    Dead Enemy: Barracks [4357357569]
+Expansion Trigger Dead Enemy Structure
+26420   19:39   Supply:200/200         Minerals:7195    Vespene:3964    Combat                    Dead Enemy: FusionCore [4386455554]
+Expansion Trigger Dead Enemy Structure
+26424   19:39   Supply:200/200         Minerals:7215    Vespene:3968    Combat                    Dead Enemy: StarportTechLab [4425515014]
+Expansion Trigger Dead Enemy Structure
+26454   19:40   Supply:200/200         Minerals:7295    Vespene:4000    Combat                    Dead Enemy: StarportTechLab [4433117189]
+Next Expansion Trigger: Update Friend Owned
+
+Updating Defensive Point
+Getting Position Behind ramp {116 113} {112.22222 109.22222}
+Expansion Trigger Dead Enemy Structure
+26474   19:41   Supply:200/200         Minerals:7360    Vespene:4024    Combat                    Dead Enemy: Armory [4395106305]
+Expansion Trigger Dead Enemy Structure
+26484   19:42   Supply:200/200         Minerals:7380    Vespene:4032    Combat                    Dead Enemy: StarportTechLab [4391960577]
+Expansion Trigger Dead Enemy Structure
+26504   19:43   Supply:200/200         Minerals:7430    Vespene:4060    Combat                    Dead Enemy: StarportTechLab [4415029249]
+Expansion Trigger Dead Enemy Structure
+26516   19:43   Supply:200/200         Minerals:7465    Vespene:4068    Combat                    Dead Enemy: SupplyDepotLowered [4399562753]
+Expansion Trigger Dead Enemy Structure
+26542   19:44   Supply:200/200         Minerals:7540    Vespene:4100    Combat                    Dead Enemy: SupplyDepotLowered [4383309826]
+Expansion Trigger Dead Enemy Structure
+26550   19:45   Supply:200/200         Minerals:7550    Vespene:4108    Combat                    Dead Enemy: Refinery [4358668289]
+Expansion Trigger Dead Enemy Structure
+26564   19:45   Supply:200/200         Minerals:7595    Vespene:4124    Combat                    Dead Enemy: SupplyDepotLowered [4392222721]
+Expansion Trigger Dead Enemy Structure
+26590   19:47   Supply:200/200         Minerals:7670    Vespene:4156    Combat                    Dead Enemy: SupplyDepotLowered [4405854210]
+Expansion Trigger Dead Enemy Structure
+26610   19:47   Supply:200/200         Minerals:7720    Vespene:4176    Combat                    Dead Enemy: SupplyDepotLowered [4355784705]
+Expansion Trigger Dead Enemy Structure
+26648   19:49   Supply:200/200         Minerals:7825    Vespene:4216    Combat                    Dead Enemy: Barracks [4366270468]
+Expansion Trigger Dead Enemy Structure
+26652   19:49   Supply:200/200         Minerals:7830    Vespene:4228    Combat                    Dead Enemy: SupplyDepotLowered [4415553537]
+Expansion Trigger Dead Enemy Structure
+26694   19:51   Supply:200/200         Minerals:7955    Vespene:4272    Combat                    Dead Enemy: SupplyDepotLowered [4386717698]
+Max Enemy Power 18625.049 Army Power 15525.074 Used Enemy Power 16576.293
+Nexus Count 13 Enemy Townhalls 0
+26714   19:52   Supply:200/200         Minerals:7600    Vespene:4296    Economy                   Expanding
+Expansion Trigger Dead Enemy Structure
+26730   19:53   Supply:200/200         Minerals:7640    Vespene:4318    Combat                    Dead Enemy: SupplyDepotLowered [4397203457]
+Expansion Trigger Dead Enemy Structure
+26746   19:54   Supply:200/200         Minerals:7690    Vespene:4326    Combat                    Dead Enemy: Starport [4377804807]
+26750   19:54   Supply:200/200         Minerals:7695    Vespene:4334    [4417388555] Nexus        Chronoboosting CyberneticsCore [4361027585]
+Expansion Trigger Dead Enemy Structure
+26760   19:54   Supply:200/200         Minerals:7720    Vespene:4346    Combat                    Dead Enemy: SupplyDepotLowered [4420009996]
+Expansion Trigger Dead Enemy Structure
+26772   19:55   Supply:200/200         Minerals:7755    Vespene:4350    Combat                    Dead Enemy: Factory [4362338305]
+Expansion Trigger Dead Enemy Structure
+26802   19:56   Supply:200/200         Minerals:7840    Vespene:4382    Combat                    Dead Enemy: Starport [4374921220]
+Expansion Trigger Dead Enemy Structure
+26816   19:57   Supply:200/200         Minerals:7870    Vespene:4394    Combat                    Dead Enemy: EngineeringBay [4398514188]
+Expansion Trigger Dead Enemy Structure
+26834   19:57   Supply:200/200         Minerals:7920    Vespene:4406    Combat                    Dead Enemy: SupplyDepotLowered [4383834113]
+Expansion Trigger Dead Enemy Structure
+26850   19:58   Supply:200/200         Minerals:7975    Vespene:4426    Combat                    Dead Enemy: SupplyDepotLowered [4423680024]
+Expansion Trigger Dead Enemy Structure
+26858   19:59   Supply:200/200         Minerals:7995    Vespene:4434    Combat                    Dead Enemy: SupplyDepotLowered [4410048514]
+Intel Report 20:00
+
+Enemy Unit Report  20:00
+Marine: 0/17
+WidowMineBurrowed: 0/7
+Marauder: 0/9
+Battlecruiser: 0/14
+PlanetaryFortress: 0/4
+WidowMine: 0/3
+SCV: 0/68
+Bunker: 0/2
+SiegeTank: 0/3
+Hellion: 0/2
+MissileTurret: 0/2
+
+Enemy Building Report  20:00
+Starport: 4
+Refinery: 1
+SupplyDepotLowered: 1
+EngineeringBay: 1
+
+Ideal Counters Report  20:00
+Tempest: Demand Score, 5400[57%] Needed: 9, Existing: 12, Demand: 21
+Zealot: Demand Score, 100[88%] Needed: 1, Existing: 4, Demand: 4.5
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+Stalker: Demand Score, -1575[217%] Needed: -7, Existing: 14, Demand: 6.450000002980232
+
+Live Counters Report  20:00
+Tempest: Demand Score, 6600[53%] Needed: 11, Existing: 12, Demand: 22.5
+Stalker: Demand Score, 900[77%] Needed: 4, Existing: 14, Demand: 17.950000002980232
+Zealot: Demand Score, 100[88%] Needed: 1, Existing: 4, Demand: 4.5
+Immortal: Demand Score, 0[133%] Needed: 0, Existing: 3, Demand: 2.25
+Colossus: Demand Score, 0[147%] Needed: 0, Existing: 2, Demand: 1.3600000143051147
+
+Army Report 20:00
+Win Air: false [ -0.5227318 ]
+Air Ground: false [ 5.3883753 ]
+Air All: false [ 4.762505 ]
+Army Power: 15525.073
+Enemy Power: 0
+Attack Status: true
+Rally Point: {0 0}
+Defensive Point: {120 117}
+Base Under Harass: false
+Base Under Attack: false
+Enemy Object Length: 7
+Next Expansion: {125.5 88.5}
+Best Expansion: {125.5 88.5}
+Should Expand: true
+Expand Saving: false
+Air Superiority: true
+Alloc = 15 MiB	TotalAlloc = 19647 MiB	Sys = 45 MiB	NumGC = 1584
+
+Expansion Trigger Dead Enemy Structure
+26892   20:00   Supply:200/200         Minerals:8105    Vespene:4466    Combat                    Dead Enemy: SupplyDepotLowered [4422631426]
+Expansion Trigger Dead Enemy Structure
+26920   20:01   Supply:200/200         Minerals:8160    Vespene:4486    Combat                    Dead Enemy: Refinery [4370464770]
+Next Expansion Trigger: Check Blocked 2
+Expansion Trigger Dead Enemy Structure
+26964   20:03   Supply:200/200         Minerals:8290    Vespene:4526    Combat                    Dead Enemy: Starport [4309909508]
+Expansion Trigger Dead Enemy Structure
+27012   20:05   Supply:200/200         Minerals:8415    Vespene:4566    Combat                    Dead Enemy: EngineeringBay [4401135617]
+Expansion Trigger Dead Enemy Structure
+27050   20:07   Supply:200/200         Minerals:8540    Vespene:4606    Combat                    Dead Enemy: Starport [4431282177]
+Next Expansion Trigger: Update Friend Owned
+
+Updating Defensive Point
+Getting Position Behind ramp {116 113} {112.22222 109.22222}
+Expansion Trigger Dead Enemy Structure
+27070   20:08   Supply:200/200         Minerals:8580    Vespene:4618    Combat                    Dead Enemy: Starport [4418174977]
+Save Victory
+Result:  Victory 1 player_id:1 result:Victory 
+Result:  Defeat 2 player_id:2 result:Defeat 
+[27108] 2025/10/31 21:45:16 read tcp 127.0.0.1:51266->127.0.0.1:10001: read: connection reset by peer
+[27108] 2025/10/31 21:45:16 write tcp 127.0.0.1:51266->127.0.0.1:10001: write: broken pipe
+[27108] 2025/10/31 21:45:16 write tcp 127.0.0.1:51266->127.0.0.1:10001: write: broken pipe
+[27108] 2025/10/31 21:45:16 write tcp 127.0.0.1:51266->127.0.0.1:10001: write: broken pipe
+[27108] 2025/10/31 21:45:16 write tcp 127.0.0.1:51266->127.0.0.1:10001: write: broken pipe
+[27108] 2025/10/31 21:45:16 write tcp 127.0.0.1:51266->127.0.0.1:10001: write: broken pipe
+[27108] 2025/10/31 21:45:16 write tcp 127.0.0.1:51266->127.0.0.1:10001: write: broken pipe
+[27108] 2025/10/31 21:45:16 Victory
