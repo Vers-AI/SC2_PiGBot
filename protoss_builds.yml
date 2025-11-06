@@ -66,6 +66,7 @@ Builds:
             - 40 IMMORTAL
             - 40 CHRONO @  ROBOTICSFACILITY
             - 48 STALKER *3 @ NAT
+            - 48 EXPAND
             - 50 ROBOTICSBAY
             - 50 ROBOTICSFACILITY
     B2GM_PVZ_Standard_Build:
@@ -101,6 +102,7 @@ Builds:
             - 36 IMMORTAL
             - 36 CHRONO @  ROBOTICSFACILITY
             - 48 STALKER *3 @ NAT
+            - 48 EXPAND
             - 50 ROBOTICSBAY
             - 50 ROBOTICSFACILITY 
             
@@ -139,6 +141,7 @@ Builds:
             - 50 ROBOTICSFACILITY
             - 50 TEMPLARARCHIVE #temporary until production controller is fixed
             - 50 EXTENDEDTHERMALLANCE
+            - 50 EXPAND
             - 50 GATEWAY
             - 50 GATEWAY
             
