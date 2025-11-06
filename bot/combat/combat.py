@@ -5,7 +5,7 @@ from sc2.units import Units
 from sc2.unit import Unit
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.ability_id import AbilityId
-from ares.consts import LOSS_MARGINAL_OR_WORSE, TIE_OR_BETTER, UnitTreeQueryType, EngagementResult, VICTORY_DECISIVE_OR_BETTER, VICTORY_MARGINAL_OR_BETTER, LOSS_OVERWHELMING_OR_WORSE
+from ares.consts import LOSS_MARGINAL_OR_WORSE, TIE_OR_BETTER, UnitTreeQueryType, EngagementResult, VICTORY_DECISIVE_OR_BETTER, VICTORY_MARGINAL_OR_BETTER, LOSS_OVERWHELMING_OR_WORSE, LOSS_DECISIVE_OR_WORSE, WORKER_TYPES
 
 from ares.behaviors.combat import CombatManeuver
 from ares.behaviors.combat.individual import (
@@ -104,10 +104,14 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                 lambda u: cy_distance_to_squared(u.position, squad_position) < SQUAD_NEARBY_FRIENDLY_RANGE_SQ
             )
             
+            # Filter enemy units to focus on actual combat units for more conservative simulation
+            combat_enemies = all_close.filter(
+                lambda u: u.type_id not in WORKER_TYPES and not u.is_structure
+            )
+            
             squad_fight_result = bot.mediator.can_win_fight(
                 own_units=own_nearby,
-                enemy_units=all_close,
-                timing_adjust=True,
+                enemy_units=combat_enemies,
             )
             
             # Initialize squad tracking if first encounter
@@ -424,9 +428,14 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
                 return nearest_base.position if nearest_base else bot.start_location
         # For normal mode, re-evaluate fight result after minimum duration
         else:
-            fight_result = bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=True, good_positioning=True, workers_do_no_damage=True)
-            # Only disengage if situation is dire (overwhelming loss)
-            if fight_result in LOSS_OVERWHELMING_OR_WORSE:
+            # Filter enemy units to exclude workers and structures for more conservative combat simulation
+            combat_enemy_units = [
+                u for u in bot.mediator.get_cached_enemy_army
+                if u.type_id not in WORKER_TYPES and not u.is_structure
+            ]
+            fight_result = bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=combat_enemy_units)
+            # Disengage if situation looks bad (decisive loss or worse)
+            if fight_result in LOSS_DECISIVE_OR_WORSE:
                 bot._commenced_attack = False
                 nearest_base = bot.townhalls.closest_to(main_army.center)
                 return nearest_base.position if nearest_base else bot.start_location
@@ -434,7 +443,12 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
                 return attack_target
     else:
         # Not currently attacking: evaluate if we should initiate attack
-        fight_result = bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=bot.enemy_army, timing_adjust=True, good_positioning=True, workers_do_no_damage=True)
+        # Filter enemy units to exclude workers and structures for more conservative combat simulation
+        combat_enemy_units = [
+            u for u in bot.mediator.get_cached_enemy_army
+            if u.type_id not in WORKER_TYPES and not u.is_structure
+        ]
+        fight_result = bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=combat_enemy_units)
         
         # Initiate attack with decisive advantage regardless of defensive flags
         if fight_result in VICTORY_DECISIVE_OR_BETTER:
@@ -706,6 +720,10 @@ def select_defensive_anchor(bot, main_army: Units) -> Point2:
             # Position back from main towards start location (safe fallback)
             main_ramp = bot.main_base_ramp.top_center
             new_anchor = main_ramp.towards(bot.start_location, 3)
+    
+    # Ensure we always have a valid anchor (final fallback)
+    if new_anchor is None:
+        new_anchor = bot.start_location
     
     # Update anchor if it changed
     if new_anchor != bot._current_defensive_anchor:
