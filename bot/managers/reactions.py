@@ -286,7 +286,7 @@ def early_threat_sensor(bot):
         bot._cannon_rush_response = True
     
     elif (
-        get_enemy_ling_rushed_v2(bot)  # New distance-tiered ling rush detection
+        (get_enemy_ling_rushed_v2(bot) if bot.enemy_race.name == "Zerg" else False)  # Only check ling rush against Zerg
         or (bot.mediator.get_enemy_marauder_rush and bot.time < 150.0)
         or bot.mediator.get_enemy_marine_rush
         or bot.mediator.get_is_proxy_zealot
