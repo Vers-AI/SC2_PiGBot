@@ -117,6 +117,7 @@ tags:
 - [ ] Extract build order + APM
 - [ ] Compare build execution vs human timing
 - [ ] Store replay summaries alongside JSON logs
+- [x] Add Tags for replays
 
 ### Misc / TODO
 - [x] Change Gamestate from text → INT
@@ -137,9 +138,8 @@ tags:
 - [x] Cap workers at a set limit (80; 8 on gold base)
 - [x] Add upgrades logic
 - [ ] Inner/outer radius for unit grouping; break when 30% engaged
-- [ ] Add Logs for every 30 seconds
-- [ ] Put debug in game
-- [ ] Add Tags for replays
+- [x] Add Logs for every 30 seconds
+- [x] Put debug in game
 - [x] Fix Gatekeeper off in non‑PvZ
 
 ### Gatekeeper System (PvZ Wall Logic) ✅
