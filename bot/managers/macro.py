@@ -374,6 +374,19 @@ def get_desired_gateway_count(bot) -> int:
         return 3
 
 
+def get_desired_forge_count(bot) -> int:
+    """
+    Returns desired forge count based on bases and game state.
+    Build 1 after first expansion, second in late game.
+    """
+    if len(bot.townhalls.ready) >= 4:  # 4+ bases
+        return 2
+    elif len(bot.townhalls.ready) >= 2:  # 2+ bases
+        return 1
+    else:
+        return 0
+
+
 def select_army_composition(bot, main_army: Units) -> dict:
     """
     Determines which army composition to use based on the current army state and enemy race.
@@ -464,6 +477,14 @@ async def handle_macro(
     
     if current_gates < desired_gates and bot.can_afford(UnitTypeId.GATEWAY):
         bot.register_behavior(BuildStructure(production_location, UnitTypeId.GATEWAY))
+    
+    # Scale forges to desired count (0→1→2)
+    desired_forges = get_desired_forge_count(bot)
+    current_forges = (bot.structures(UnitTypeId.FORGE).amount + 
+                     bot.already_pending(UnitTypeId.FORGE))
+    
+    if current_forges < desired_forges and bot.can_afford(UnitTypeId.FORGE):
+        bot.register_behavior(BuildStructure(production_location, UnitTypeId.FORGE))
     
     # Build macro plan
     macro_plan: MacroPlan = MacroPlan()
