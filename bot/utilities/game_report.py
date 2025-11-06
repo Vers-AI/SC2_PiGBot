@@ -61,7 +61,6 @@ def print_periodic_intel_report(bot, iteration: int) -> None:
     print(f"    Attack Commenced: {bot._commenced_attack}")
     print(f"    Under Attack: {bot._under_attack}")
     print(f"    Cheese Response: {bot._used_cheese_response}")
-    print(f"    One Base Response: {bot._used_one_base_response}")
     print(f"    Game State: {bot.game_state} ({'Early' if bot.game_state == 0 else 'Mid' if bot.game_state == 1 else 'Late'})")
     
     # Fight simulation
@@ -144,11 +143,6 @@ def get_replay_tags_to_send(bot) -> list[str]:
     if bot._cannon_rush_response and 'CannonRush' not in bot._replay_tags_sent:
         tags.append("CannonRush")
         bot._replay_tags_sent.add('CannonRush')
-    
-    # Tag one base all-in
-    if bot._used_one_base_response and 'AllIn' not in bot._replay_tags_sent:
-        tags.append("All_In")
-        bot._replay_tags_sent.add('AllIn')
     
     return tags
 

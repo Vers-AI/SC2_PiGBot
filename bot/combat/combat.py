@@ -382,10 +382,10 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
     assert isinstance(enemy_threat_level, int), "assess_threat without return_details should return int"
 
     enemy_army = bot.enemy_army
-    # Early game safety - don't attack during cheese or one-base reactions
-    is_early_defensive_mode = bot._used_cheese_response or bot._used_one_base_response
-    # Only clear early defensive mode when the one-base reaction is completed
-    if (is_early_defensive_mode and bot._one_base_reaction_completed) or bot.game_state == 1:  # mid game
+    # Early game safety - don't attack during cheese reactions
+    is_early_defensive_mode = bot._used_cheese_response
+    # Only clear early defensive mode when the cheese reaction is completed
+    if (is_early_defensive_mode and bot._cheese_reaction_completed) or bot.game_state == 1:  # mid game
         is_early_defensive_mode = False
     
     # Debug visualization (controlled by bot.debug flag)

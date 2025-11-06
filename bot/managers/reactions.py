@@ -262,13 +262,6 @@ def cheese_reaction(bot):
 
     
 
-def one_base_reaction(bot):
-    bot.build_order_runner.switch_opening("One_Base_Reaction_Build")
-
-    # Set the flags for 1 base reaction
-    bot._used_one_base_response = True
-    if bot.build_order_runner.build_completed:
-        bot._one_base_reaction_completed = True
 
 
 def early_threat_sensor(bot):
@@ -297,61 +290,6 @@ def early_threat_sensor(bot):
     ):
         bot._used_cheese_response = True
     
-    # Scouting for Enemy 1 base build 
-    elif 2.5 * 60 < bot.time < 3.5 * 60 and not (bot.mediator.get_enemy_expanded or bot._used_one_base_response):
-        # Get enemy natural location
-        enemy_natural = bot.mediator.get_enemy_nat
-        grid: np.ndarray = bot.mediator.get_ground_grid
-        bot._not_worker_rush = True
-
-        # Assign BUILD_RUNNER_SCOUT units to SCOUTING role
-        if build_runner_scout_units := bot.mediator.get_units_from_role(
-            role=UnitRole.BUILD_RUNNER_SCOUT, unit_type=bot.worker_type
-        ):
-            bot.mediator.batch_assign_role(
-                tags=build_runner_scout_units.tags, role=UnitRole.SCOUTING
-            )
-        
-        # Get scout units with SCOUTING role
-        scout_units: Units = bot.mediator.get_units_from_role(
-            role=UnitRole.SCOUTING, 
-            unit_type=bot.worker_type
-        )
-
-
-        # Check if scout units exist
-        if scout_units: 
-            # Check if enemy natural is visible
-            if bot.is_visible(enemy_natural):
-                # Check if enemy has expanded
-                if not bot.mediator.get_enemy_expanded:
-                    # No expansion detected, trigger one base reaction
-                    one_base_reaction(bot)
-                    
-                    # switch roles back to gathering
-                    for scout in scout_units:
-                        bot.mediator.switch_roles(
-                            from_role=UnitRole.SCOUTING, to_role=UnitRole.GATHERING
-                        )
-                else:
-                    # Enemy has expanded, continue scouting or other logic
-                    pass
-            else:
-                # Enemy natural not visible, path scout to natural
-                for scout in scout_units:
-                    bot.register_behavior(
-                        PathUnitToTarget(
-                            unit=scout, 
-                            grid=grid,
-                            target=enemy_natural
-                        )
-                    )
-        else:
-            # If no scout units, grab one worker to scout
-            if worker := bot.mediator.select_worker(
-                target_position=bot.mediator.get_enemy_nat, force_close=True
-            ):
-                bot.mediator.assign_role(tag=worker.tag, role=UnitRole.SCOUTING)
 
 
 # ===== THREAT ASSESSMENT FUNCTIONS =====

@@ -173,18 +173,6 @@ Builds:
             - 27 GATEWAY @ nat_wall 
             
 
-    One_Base_Reaction_Build:
-        # One base reaction Build order
-        ConstantWorkerProductionTill: 44
-        AutoSupplyAtSupply: 0
-        OpeningBuildOrder:
-            - 14 PYLON
-            - 16 GATEWAY @ nat_wall
-            - 16 CHRONO @ GATEWAY
-            - 20 STALKER *3
-            - 20 SHIELDBATTERY @ nat_wall
-            - 24 SHIELDBATTERY 
-            - 24 PYLON @ nat_wall
 
     Cheese_Reaction_Build:
         # Chesese reaction Build order

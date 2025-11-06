@@ -28,7 +28,7 @@ from sc2.data import Race
 # Modular imports for separated concerns
 from bot.managers.macro import handle_macro, get_optimal_gas_workers, get_freeflow_mode
 from bot.managers.structure_manager import use_chronoboost
-from bot.managers.reactions import defend_cannon_rush, defend_worker_rush, early_threat_sensor, cheese_reaction, one_base_reaction, threat_detection
+from bot.managers.reactions import defend_cannon_rush, defend_worker_rush, early_threat_sensor, cheese_reaction, threat_detection
 from bot.combat import (
     control_main_army,
     warp_prism_follower,
@@ -43,7 +43,7 @@ from bot.managers.reactions import (
     early_threat_sensor,
     cheese_reaction,
     defend_cannon_rush,
-    one_base_reaction
+    defend_worker_rush,
 )
 #debugs
 from bot.utilities.use_disruptor_nova import UseDisruptorNova
@@ -95,11 +95,9 @@ class PiG_Bot(AresBot):
         # Flags for in-game logic
         self._commenced_attack = False
         self._used_cheese_response = False
-        self._used_one_base_response = False
         self._rush_time_seconds = 0.0  # Rush time calculated in on_start
         self._under_attack = False
         self._cheese_reaction_completed = False
-        self._one_base_reaction_completed = False
         self._not_worker_rush = True
         self._cannon_rush_response = False
         self._is_building = False
@@ -246,8 +244,6 @@ class PiG_Bot(AresBot):
                 else:
                     # Handle other cheese responses
                     cheese_reaction(self)
-            elif self._used_one_base_response:
-                one_base_reaction(self)
         else:
             # Macro calls (only run if build order is complete)
             await handle_macro(
