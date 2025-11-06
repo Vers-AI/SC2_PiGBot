@@ -128,6 +128,10 @@ class PiG_Bot(AresBot):
         
         # Gas worker management
         self._gas_worker_toggle = True  # Toggle for gas mining on/off
+        
+        # Strategic anchor positioning (for smart army placement)
+        self._current_defensive_anchor = None  # Current anchor position
+        self._anchor_change_time = 0.0  # Last time anchor was changed (for cooldown)
 
 
 

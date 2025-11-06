@@ -460,9 +460,8 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
                 major_threat_info["response_type"] == "combat_response"):
                 return Point2(enemy_center)
         
-        # Default: stay at rally point or nearest base
-        nearest_base = bot.townhalls.closest_to(main_army.center) if bot.townhalls else None
-        return nearest_base.position if nearest_base else bot.start_location
+        # Default: use strategic anchor positioning (smart defensive placement)
+        return select_defensive_anchor(bot, main_army)
 
 
 def attack_target(bot, main_army_position: Point2) -> Point2:
@@ -652,6 +651,75 @@ def control_base_defenders(bot, defender_units: Units, threat_position: Point2) 
                         defending_maneuver.add(AMove(unit=unit, target=threat_position))
             
             bot.register_behavior(defending_maneuver)
+
+
+def select_defensive_anchor(bot, main_army: Units) -> Point2:
+    """
+    Selects the best strategic anchor position for army placement when not attacking.
+    Uses predefined anchors with 15-second cooldown to prevent oscillation.
+    
+    Priority cascade:
+    1. Mid/late game OR 2+ bases: Position at base closest to enemy
+    2. Gatekeeper exists: Position behind gatekeeper (avoids bunching)
+    3. Structures at natural: Position forward of natural
+    4. Fallback: Position back from main ramp
+    """
+    ANCHOR_CHANGE_COOLDOWN = 15.0  # Seconds between anchor changes
+    NATURAL_STRUCTURE_RADIUS = 400.0  # 20 units radius for structure check
+    
+    # Check if we're still in cooldown (prevent rapid switching)
+    if bot._current_defensive_anchor is not None:
+        if bot.time < bot._anchor_change_time + ANCHOR_CHANGE_COOLDOWN:
+            return bot._current_defensive_anchor
+    
+    # Determine new anchor position
+    new_anchor = None
+    
+    # PHASE 1: Mid/late game OR successful early expansion (>= 2 ready townhalls)
+    if bot.game_state >= 1 or len(bot.townhalls.ready) >= 2:
+        # Multi-base coverage mode: position at base closest to enemy
+        if bot.townhalls.ready:
+            enemy_start = bot.enemy_start_locations[0]
+            closest_base = bot.townhalls.ready.closest_to(enemy_start)
+            # Offset 3 units towards enemy start for forward positioning
+            new_anchor = closest_base.position.towards(enemy_start, 3)
+    
+    # PHASE 2: Early game single-base positioning
+    else:
+        # Check for gatekeeper position (best choke control)
+        if hasattr(bot, 'gatekeeping_pos') and bot.gatekeeping_pos is not None:
+            # Position 4 units behind gatekeeper towards natural (avoid bunching at choke)
+            new_anchor = bot.gatekeeping_pos.towards(bot.natural_expansion, 4)
+        
+        # Check for any structures at natural (shows operational investment)
+        elif bot.structures:
+            structures_at_natural = bot.structures.filter(lambda s:
+                cy_distance_to_squared(s.position, bot.natural_expansion) < NATURAL_STRUCTURE_RADIUS
+            )
+            if structures_at_natural:
+                # Position forward of natural towards enemy
+                enemy_start = bot.enemy_start_locations[0]
+                new_anchor = bot.natural_expansion.towards(enemy_start, 3)
+        
+        # Fallback: safe position back from main ramp
+        if new_anchor is None:
+            # Position back from main towards start location (safe fallback)
+            main_ramp = bot.main_base_ramp.top_center
+            new_anchor = main_ramp.towards(bot.start_location, 3)
+    
+    # Update anchor if it changed
+    if new_anchor != bot._current_defensive_anchor:
+        bot._current_defensive_anchor = new_anchor
+        bot._anchor_change_time = bot.time
+        
+        # Sync rally_point to anchor (single source of truth)
+        bot.rally_point = new_anchor
+        
+        # Update all gateway rally points to new anchor
+        for gateway in bot.structures(UnitTypeId.GATEWAY).ready:
+            gateway(AbilityId.RALLY_BUILDING, new_anchor)
+    
+    return new_anchor
 
 
 def manage_defensive_unit_roles(bot) -> None:
