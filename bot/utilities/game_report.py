@@ -45,10 +45,8 @@ def print_periodic_intel_report(bot, iteration: int) -> None:
         bot: Bot instance
         iteration: Current game iteration
     """
-    # Only report every 30 game seconds (22.4 steps per second)
-    # Start at 30 seconds, not at iteration 0
-    report_interval = 30 * 22.4
-    if iteration == 0 or iteration % int(report_interval) != 0:
+    # Report every 30 game seconds, starting at 30 seconds
+    if bot.time < 30 or (bot.time - 30) % 30 != 0:
         return
     
     game_time_minutes = int(bot.time // 60)
