@@ -388,8 +388,11 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
         enemy_supply = sum(bot.calculate_supply_cost(u.type_id) for u in bot.enemy_army)
         if own_supply < enemy_supply * SIEGE_TANK_SUPPLY_ADVANTAGE_REQUIRED:
             bot._commenced_attack = False
-            nearest_base = bot.townhalls.closest_to(main_army.center)
-            return nearest_base.position if nearest_base else bot.start_location
+            if bot.townhalls:
+                nearest_base = bot.townhalls.closest_to(main_army.center)
+                return nearest_base.position
+            else:
+                return bot.start_location
     
     # Evaluate current attack state with engagement hysteresis
     if bot._commenced_attack:
@@ -414,8 +417,11 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
             else:
                 # No nearby enemies - safe to retreat
                 bot._commenced_attack = False
-                nearest_base = bot.townhalls.closest_to(main_army.center)
-                return nearest_base.position if nearest_base else bot.start_location
+                if bot.townhalls:
+                    nearest_base = bot.townhalls.closest_to(main_army.center)
+                    return nearest_base.position
+                else:
+                    return bot.start_location
         # For normal mode, re-evaluate fight result after minimum duration
         else:
             # Filter enemy units to exclude workers and structures for more conservative combat simulation
@@ -427,8 +433,11 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
             # Disengage if situation looks bad (decisive loss or worse)
             if fight_result in LOSS_DECISIVE_OR_WORSE:
                 bot._commenced_attack = False
-                nearest_base = bot.townhalls.closest_to(main_army.center)
-                return nearest_base.position if nearest_base else bot.start_location
+                if bot.townhalls:
+                    nearest_base = bot.townhalls.closest_to(main_army.center)
+                    return nearest_base.position
+                else:
+                    return bot.start_location
             else:
                 return attack_target
     else:
