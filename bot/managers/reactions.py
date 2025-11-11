@@ -599,13 +599,13 @@ def threat_detection(bot, main_army: Units) -> None:
             assert isinstance(threat_info, dict), "assess_threat with return_details=True should return dict"
             current_threat_level = threat_info["threat_level"]  # For original hysteresis thresholds
             
-            # Preserve original hysteresis thresholds for bot._under_attack flag
-            if bot.time < 3 * 60 and bot._used_cheese_response:
-                high_threshold = 2
-                low_threshold = 1
-            else:
-                high_threshold = 5
-                low_threshold = 2
+            # Preserve original hysteresis thresholds
+            #if bot.game_state == 0:
+            #    high_threshold = 2
+            #    low_threshold = 1
+            #else:
+            high_threshold = 10
+            low_threshold = 2
             
             # Update global threat status using original hysteresis thresholds
             if bot._under_attack:
@@ -616,7 +616,7 @@ def threat_detection(bot, main_army: Units) -> None:
                     bot._under_attack = True
             
             # Smart force allocation instead of all-or-nothing response
-            if bot._under_attack or threat_info["threat_level"] >= 3:
+            if current_threat_level > 0:
                 # Check if we already have enough defenders before allocating more
                 existing_defenders = bot.mediator.get_units_from_role(role=UnitRole.BASE_DEFENDER)
                 
