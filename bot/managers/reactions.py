@@ -605,7 +605,7 @@ def threat_detection(bot, main_army: Units) -> None:
             #    low_threshold = 1
             #else:
             high_threshold = 10
-            low_threshold = 2
+            low_threshold = 1
             
             # Update global threat status using original hysteresis thresholds
             if bot._under_attack:
