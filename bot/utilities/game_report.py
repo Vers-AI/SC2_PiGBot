@@ -144,6 +144,36 @@ def get_replay_tags_to_send(bot) -> list[str]:
         tags.append("CannonRush")
         bot._replay_tags_sent.add('CannonRush')
     
+    # Tag marine rush
+    if bot.mediator.get_enemy_marine_rush and 'MarineRush' not in bot._replay_tags_sent:
+        tags.append("MarineRush")
+        bot._replay_tags_sent.add('MarineRush')
+    
+    # Tag marauder rush
+    if bot.mediator.get_enemy_marauder_rush and 'MarauderRush' not in bot._replay_tags_sent:
+        tags.append("MarauderRush")
+        bot._replay_tags_sent.add('MarauderRush')
+    
+    # Tag proxy zealot
+    if bot.mediator.get_is_proxy_zealot and 'ProxyZealot' not in bot._replay_tags_sent:
+        tags.append("ProxyZealot")
+        bot._replay_tags_sent.add('ProxyZealot')
+    
+    # Tag four gate
+    if bot.mediator.get_enemy_four_gate and 'FourGate' not in bot._replay_tags_sent:
+        tags.append("FourGate")
+        bot._replay_tags_sent.add('FourGate')
+    
+    # Tag roach rush
+    if bot.mediator.get_enemy_roach_rushed and 'RoachRush' not in bot._replay_tags_sent:
+        tags.append("RoachRush")
+        bot._replay_tags_sent.add('RoachRush')
+    
+    # Tag ravager rush
+    if bot.mediator.get_enemy_ravager_rush and 'RavagerRush' not in bot._replay_tags_sent:
+        tags.append("RavagerRush")
+        bot._replay_tags_sent.add('RavagerRush')
+    
     return tags
 
 
