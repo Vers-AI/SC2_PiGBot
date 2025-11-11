@@ -98,39 +98,44 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
         )[0].filter(lambda u: not u.is_memory and not u.is_structure and u.type_id not in COMMON_UNIT_IGNORE_TYPES)
         
         if all_close:
-            # Squad-level combat simulation: Each squad independently evaluates if it can engage
-            # This prevents isolated squads from suiciding and allows tactical flexibility during multi-pronged attacks
-            own_nearby = main_army.filter(
-                lambda u: cy_distance_to_squared(u.position, squad_position) < SQUAD_NEARBY_FRIENDLY_RANGE_SQ
-            )
-            
-            # Filter enemy units to focus on actual combat units for more conservative simulation
-            combat_enemies = all_close.filter(
-                lambda u: u.type_id not in WORKER_TYPES and not u.is_structure
-            )
-            
-            squad_fight_result = bot.mediator.can_win_fight(
-                own_units=own_nearby,
-                enemy_units=combat_enemies,
-            )
-            
-            # Initialize squad tracking if first encounter
-            squad_id = squad.squad_id
-            if squad_id not in bot._squad_engagement_tracker:
-                bot._squad_engagement_tracker[squad_id] = {"can_engage": True}
-            
-            # Apply engagement hysteresis: different thresholds for starting vs stopping engagement
-            # This prevents squads from flip-flopping between aggressive and defensive behavior
-            if bot._squad_engagement_tracker[squad_id]["can_engage"]:
-                # Already engaging: only retreat if situation becomes dire
-                if squad_fight_result in LOSS_OVERWHELMING_OR_WORSE:
-                    bot._squad_engagement_tracker[squad_id]["can_engage"] = False
+            # Defensive mode override: when not attacking, always engage enemies near our bases
+            # This prevents retreating from winnable local fights due to unfavorable global situation
+            if not bot._commenced_attack:
+                can_engage = True
             else:
-                # Not engaging: require advantage before committing to fight
-                if squad_fight_result in VICTORY_MARGINAL_OR_BETTER:
-                    bot._squad_engagement_tracker[squad_id]["can_engage"] = True
-            
-            can_engage = bot._squad_engagement_tracker[squad_id]["can_engage"]
+                # Attacking mode: use localized combat simulation for tactical decisions
+                # Squad-level combat sim evaluates if THIS squad can win against THESE enemies
+                own_nearby = main_army.filter(
+                    lambda u: cy_distance_to_squared(u.position, squad_position) < SQUAD_NEARBY_FRIENDLY_RANGE_SQ
+                )
+                
+                # Filter enemy units to focus on actual combat units for more conservative simulation
+                combat_enemies = all_close.filter(
+                    lambda u: u.type_id not in WORKER_TYPES and not u.is_structure
+                )
+                
+                squad_fight_result = bot.mediator.can_win_fight(
+                    own_units=own_nearby,
+                    enemy_units=combat_enemies,
+                )
+                
+                # Initialize squad tracking if first encounter
+                squad_id = squad.squad_id
+                if squad_id not in bot._squad_engagement_tracker:
+                    bot._squad_engagement_tracker[squad_id] = {"can_engage": True}
+                
+                # Apply engagement hysteresis: different thresholds for starting vs stopping engagement
+                # This prevents squads from flip-flopping between aggressive and defensive behavior
+                if bot._squad_engagement_tracker[squad_id]["can_engage"]:
+                    # Already engaging: only retreat if situation becomes dire
+                    if squad_fight_result in LOSS_OVERWHELMING_OR_WORSE:
+                        bot._squad_engagement_tracker[squad_id]["can_engage"] = False
+                else:
+                    # Not engaging: require advantage before committing to fight
+                    if squad_fight_result in VICTORY_MARGINAL_OR_BETTER:
+                        bot._squad_engagement_tracker[squad_id]["can_engage"] = True
+                
+                can_engage = bot._squad_engagement_tracker[squad_id]["can_engage"]
             
             # Separate melee, ranged and spell casters
             # Spellcasters: ground units with energy (HT, Sentries) OR Disruptors (by ID)
@@ -169,7 +174,8 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     enemies=all_close,
                     priority_targets=priority_targets,
                     grid=grid,
-                    avoid_grid=avoid_grid
+                    avoid_grid=avoid_grid,
+                    aggressive=can_engage
                 )
                 bot.register_behavior(ranged_maneuver)
 
@@ -179,7 +185,8 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     unit=m_unit,
                     enemies=all_close,
                     priority_targets=priority_targets,
-                    fallback_position=enemy_target.position if enemy_target else move_to
+                    fallback_position=enemy_target.position if enemy_target else move_to,
+                    aggressive=can_engage
                 )
                 bot.register_behavior(melee_maneuver)
                 

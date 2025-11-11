@@ -27,14 +27,15 @@ def micro_ranged_unit(
     enemies: List[Unit],
     priority_targets: List[Unit],
     grid: np.ndarray,
-    avoid_grid: np.ndarray
+    avoid_grid: np.ndarray,
+    aggressive: bool = True
 ) -> CombatManeuver:
     """
     Create micro behaviors for a ranged unit.
     
     Implements priority targeting with stutter-step micro:
-    - Weapon on cooldown: safety check + kite back
-    - Weapon ready: prioritize high-value targets
+    - Aggressive: engage and advance when weapon ready
+    - Defensive: stay safe and kite regardless of weapon state
     
     Args:
         unit: The ranged unit to control
@@ -42,6 +43,7 @@ def micro_ranged_unit(
         priority_targets: High-priority targets (tanks, colossi, etc.)
         grid: Ground grid for pathfinding
         avoid_grid: Avoidance grid for safety checks
+        aggressive: Whether to fight aggressively or defensively
         
     Returns:
         CombatManeuver with appropriate behaviors added
@@ -49,6 +51,13 @@ def micro_ranged_unit(
     maneuver = CombatManeuver()
     closest_enemy = cy_closest_to(unit.position, enemies)
     
+    # Defensive mode: always prioritize safety and kiting
+    if not aggressive:
+        maneuver.add(KeepUnitSafe(unit, avoid_grid))
+        maneuver.add(StutterUnitBack(unit, target=closest_enemy, grid=grid))
+        return maneuver
+    
+    # Aggressive mode: standard stutter-step micro
     if not unit.weapon_ready:
         # Weapon on cooldown - explicit safety check then kite back
         maneuver.add(KeepUnitSafe(unit, avoid_grid))
@@ -70,39 +79,41 @@ def micro_melee_unit(
     unit: Unit,
     enemies: List[Unit],
     priority_targets: List[Unit],
-    fallback_position: Optional[Point2] = None
+    fallback_position: Optional[Point2] = None,
+    aggressive: bool = True
 ) -> CombatManeuver:
     """
     Create micro behaviors for a melee unit.
     
     Implements simple priority targeting:
-    - Attacks priority targets first if in range
-    - Falls back to any target in range
-    - Moves toward priority target or general position
+    - Aggressive: advance and attack targets
+    - Defensive: only attack targets already in range
     
     Args:
         unit: The melee unit to control
         enemies: All enemy units in range
         priority_targets: High-priority targets (tanks, colossi, etc.)
         fallback_position: Position to move to if no targets
+        aggressive: Whether to advance or hold position
         
     Returns:
         CombatManeuver with appropriate behaviors added
     """
     maneuver = CombatManeuver()
     
-    # Simple priority hierarchy for melee: Priority -> Any -> Move
+    # Attack targets in range (both aggressive and defensive)
     if in_attack_range_priority := cy_in_attack_range(unit, priority_targets):
         maneuver.add(ShootTargetInRange(unit=unit, targets=in_attack_range_priority))
     elif in_attack_range_any := cy_in_attack_range(unit, enemies):
         maneuver.add(ShootTargetInRange(unit=unit, targets=in_attack_range_any))
-    else:
-        # Move towards priority target or fallback position
+    elif aggressive:
+        # Aggressive mode: advance toward targets
         if priority_targets:
             closest_priority = cy_closest_to(unit.position, priority_targets)
             maneuver.add(AMove(unit=unit, target=closest_priority.position))
         elif fallback_position:
             maneuver.add(AMove(unit=unit, target=fallback_position))
+    # Defensive mode: don't advance, already handled attacks in range above
     
     return maneuver
 
