@@ -175,6 +175,17 @@ def _print_unit_roles(bot) -> None:
         
         print(f"    ATTACKING: {len(attacking)}")
         print(f"    DEFENDING: {len(defending)}")
+        
+        # Show defender unit composition if there are defenders
+        if defending:
+            defender_counts = {}
+            for unit in defending:
+                type_name = unit.type_id.name
+                defender_counts[type_name] = defender_counts.get(type_name, 0) + 1
+            
+            defender_list = ", ".join([f"{count}x{unit_type}" for unit_type, count in sorted(defender_counts.items())])
+            print(f"      └─ Defenders: {defender_list}")
+        
         print(f"    BASE_DEFENDER: {len(base_defenders)}")
         
         # Squad counts
