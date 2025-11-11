@@ -209,16 +209,9 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                             friendly_units=units,
                             avoid_grid=avoid_grid,
                             bot=bot,
-                            nova_manager=nova_manager
+                            nova_manager=nova_manager,
+                            squad_position=squad_position
                         )
-                    
-                    # Update Nova Manager ONCE per squad (not per disruptor)
-                    if nova_manager:
-                        try:
-                            nova_manager.update_units(disruptor_targets, units)
-                            nova_manager.update(disruptor_targets, units)
-                        except Exception as e:
-                            log_nova_error(e)
                 
                 # Handle other spellcasters (HTs, Sentries) - stay with army, stay safe
                 for caster in other_casters:
@@ -247,27 +240,17 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     
                 no_enemy_maneuver = CombatManeuver()
                 
-                # Disruptors follow ground army center at safe distance (excludes air units like warp prism/observers)
+                # Disruptors follow army target when no enemies nearby (like observers)
                 if unit.type_id == UnitTypeId.DISRUPTOR:
-                    # Calculate center of ground units only to avoid being pulled by air units
-                    ground_units = [u for u in units if not u.is_flying]
-                    if ground_units:
-                        ground_center, _ = cy_find_units_center_mass(ground_units, 10.0)
-                        distance_to_center = cy_distance_to(unit.position, ground_center)
-                        
-                        # If too far from ground army, move towards center
-                        if distance_to_center > DISRUPTOR_SQUAD_FOLLOW_DISTANCE:
-                            no_enemy_maneuver.add(PathUnitToTarget(
-                                unit=unit, grid=grid, target=Point2(ground_center), 
-                                success_at_distance=DISRUPTOR_SQUAD_TARGET_DISTANCE
-                            ))
-                    else:
-                        # Fallback to move_to if no ground units (shouldn't normally happen)
+                    distance_to_target = cy_distance_to(unit.position, move_to)
+                    
+                    # If far from target, move towards it
+                    if distance_to_target > DISRUPTOR_SQUAD_FOLLOW_DISTANCE:
                         no_enemy_maneuver.add(PathUnitToTarget(
                             unit=unit, grid=grid, target=move_to,
                             success_at_distance=DISRUPTOR_SQUAD_TARGET_DISTANCE
                         ))
-                    # Otherwise stay put (close enough to squad)
+                    # Otherwise stay put (close enough to target)
                     bot.register_behavior(no_enemy_maneuver)
                     continue  # Skip rest of movement logic for disruptors
                 

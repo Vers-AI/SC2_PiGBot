@@ -280,6 +280,15 @@ class PiG_Bot(AresBot):
             # Still run decision logic to set flags
             handle_attack_toggles(self, main_army, attack_target(self, main_army_position=self.main_army_position))
 
+        # Update active novas every frame (critical for trajectory correction)
+        if hasattr(self, 'nova_manager') and self.nova_manager:
+            try:
+                # Get all enemy units for nova targeting updates
+                enemy_units = self.enemy_units.filter(lambda u: not u.is_memory and not u.is_structure)
+                self.nova_manager.update(enemy_units, main_army if main_army else self.units)
+            except Exception as e:
+                print(f"ERROR updating nova_manager: {e}")
+        
         # Warp Prism following main army
         warp_prism_follower(self, warp_prism, main_army)
 

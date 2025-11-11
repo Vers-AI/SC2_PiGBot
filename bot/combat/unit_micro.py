@@ -19,7 +19,7 @@ from ares.behaviors.combat.individual import (
 
 from bot.constants import PRIORITY_TARGET_TYPES
 
-from cython_extensions import cy_closest_to, cy_in_attack_range
+from cython_extensions import cy_closest_to, cy_in_attack_range, cy_distance_to, cy_find_units_center_mass
 
 
 def micro_ranged_unit(
@@ -124,12 +124,14 @@ def micro_disruptor(
     friendly_units: List[Unit],
     avoid_grid: np.ndarray,
     bot,
-    nova_manager
+    nova_manager,
+    squad_position: Point2
 ) -> bool:
     """
-    Handle disruptor nova firing and fallback safety.
+    Handle disruptor nova firing and movement to stay with ground army.
     
-    Attempts to fire nova, falls back to KeepUnitSafe if not fired.
+    When enemies present: fires nova if able, otherwise stays with ground army center.
+    This prevents disruptors from sitting idle during combat.
     
     Args:
         disruptor: The Disruptor unit to control
@@ -138,28 +140,60 @@ def micro_disruptor(
         avoid_grid: Avoidance grid for safety
         bot: Bot instance (for use_disruptor_nova access)
         nova_manager: NovaManager instance for coordination
+        squad_position: Center of the ground army to follow
         
     Returns:
         True if nova fired or behavior registered, False otherwise
     """
     from sc2.ids.ability_id import AbilityId
+    from ares.behaviors.combat.individual import PathUnitToTarget
+    from bot.constants import DISRUPTOR_SQUAD_FOLLOW_DISTANCE, DISRUPTOR_SQUAD_TARGET_DISTANCE
     
+    maneuver = CombatManeuver()
+    
+    # Try to fire nova if ability is ready
     if AbilityId.EFFECT_PURIFICATIONNOVA in disruptor.abilities:
         try:
             result = bot.use_disruptor_nova.execute(
                 disruptor, enemies, friendly_units, nova_manager
             )
-            if not result:  # Nova didn't fire - keep safe
-                bot.register_behavior(KeepUnitSafe(disruptor, avoid_grid))
-            return True
+            if result:  # Nova fired successfully
+                bot.register_behavior(maneuver)  # Empty maneuver, nova controls itself
+                return True
         except Exception as e:
-            print(f"DEBUG ERROR in disruptor handling: {e}")
-            bot.register_behavior(KeepUnitSafe(disruptor, avoid_grid))
-            return True
+            print(f"DEBUG ERROR in disruptor nova firing: {e}")
+    
+    # Nova not fired or not ready - stay with ground army center
+    # Calculate ground unit center (exclude air units like warp prism/observers)
+    ground_units = [u for u in friendly_units if not u.is_flying]
+    if ground_units:
+        ground_center, _ = cy_find_units_center_mass(ground_units, 10.0)
+        distance_to_center = cy_distance_to(disruptor.position, ground_center)
+        
+        # If too far from ground army, move towards center
+        if distance_to_center > DISRUPTOR_SQUAD_FOLLOW_DISTANCE:
+            maneuver.add(PathUnitToTarget(
+                unit=disruptor,
+                grid=bot.mediator.get_ground_grid,
+                target=Point2(ground_center),
+                success_at_distance=DISRUPTOR_SQUAD_TARGET_DISTANCE
+            ))
+        # Otherwise stay put (close enough)
     else:
-        # Ability not ready - keep safe
-        bot.register_behavior(KeepUnitSafe(disruptor, avoid_grid))
-        return True
+        # Fallback: stay with squad position if no ground units
+        distance_to_squad = cy_distance_to(disruptor.position, squad_position)
+        if distance_to_squad > DISRUPTOR_SQUAD_FOLLOW_DISTANCE:
+            maneuver.add(PathUnitToTarget(
+                unit=disruptor,
+                grid=bot.mediator.get_ground_grid,
+                target=squad_position,
+                success_at_distance=DISRUPTOR_SQUAD_TARGET_DISTANCE
+            ))
+    
+    # Always add safety behavior
+    maneuver.add(KeepUnitSafe(disruptor, avoid_grid))
+    bot.register_behavior(maneuver)
+    return True
 
 
 def get_priority_targets(enemies: List[Unit]) -> List[Unit]:
