@@ -16,7 +16,7 @@ BuildChoices:
     Terran:
         BotName: TerranRace
         Cycle:
-            - B2GM_Standard_Build
+            - B2GM_PVT_Standard_Build
     Zerg:
         BotName: ZergRace
         Cycle:
@@ -30,10 +30,10 @@ BuildChoices:
     a_bot_opponent_id_from_aiarena:
         BotName: test
         Cycle:
-            - B2GM_Standard_Build
+            - B2GM_PVT_Standard_Build
 
 Builds:
-    B2GM_Standard_Build:
+    B2GM_PVT_Standard_Build:
         # Build constant worker production till this supply
         ConstantWorkerProductionTill: 44
         # After 0 supply turn AutoSupply on
@@ -56,16 +56,16 @@ Builds:
             - 26 ROBOTICSFACILITY
             - 27 STALKER
             - 27 CHRONO @ NEXUS #Chrono Gateway if PVP instead of NEXUS
-            - 28 GATEWAY @ nat_wall
+            - 28 GATEWAY
             - 28 GATEWAY 
             - 30 STALKER
             - 33 CHRONO @ NEXUS
-            - 34 PYLON @ nat_wall
+            - 34 PYLON
             - 34 OBSERVER
             - 35 GAS x2
             - 40 IMMORTAL
             - 40 CHRONO @  ROBOTICSFACILITY
-            - 48 STALKER *3 @ NAT
+            - 48 STALKER *3 
             - 48 EXPAND
             - 50 ROBOTICSBAY
             - 50 ROBOTICSFACILITY
