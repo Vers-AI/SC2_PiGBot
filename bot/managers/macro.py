@@ -104,10 +104,10 @@ def get_optimal_gas_workers(bot) -> int:
 # Army composition constants 
 STANDARD_ARMY_0 = {
     UnitTypeId.IMMORTAL: {"proportion": 0.15, "priority": 1},
-    UnitTypeId.COLOSSUS: {"proportion": 0.1, "priority": 4},
+    UnitTypeId.COLOSSUS: {"proportion": 0.15, "priority": 4},
     UnitTypeId.HIGHTEMPLAR: {"proportion": 0.4, "priority": 0},
     UnitTypeId.DISRUPTOR: {"proportion": 0.1, "priority": 3},
-    UnitTypeId.ZEALOT: {"proportion": 0.25, "priority": 5},
+    UnitTypeId.ZEALOT: {"proportion": 0.2, "priority": 2},
 }
 STANDARD_ARMY_1 = {
     UnitTypeId.IMMORTAL: {"proportion": 0.35, "priority": 1},
