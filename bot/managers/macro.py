@@ -565,7 +565,7 @@ async def handle_macro(
     
     
 
-    # Merge Archons if we have at least 2 High Templars
+    # Merge Archons 
     if bot.units(UnitTypeId.HIGHTEMPLAR).amount >= 2:
         for templar in bot.units(UnitTypeId.HIGHTEMPLAR).ready:
             templar(AbilityId.MORPH_ARCHON)

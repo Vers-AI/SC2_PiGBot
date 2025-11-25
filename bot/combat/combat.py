@@ -375,7 +375,12 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                         )
                 
                 # Handle other spellcasters (HTs, Sentries) - stay with army, stay safe
+                # Skip HTs that should be merging to archons (2+ HTs exist)
+                ht_count = sum(1 for c in other_casters if c.type_id == UnitTypeId.HIGHTEMPLAR)
                 for caster in other_casters:
+                    # Skip HTs when archon merge is possible - let macro.py handle them
+                    if caster.type_id == UnitTypeId.HIGHTEMPLAR and ht_count >= 2:
+                        continue
                     caster_maneuver = CombatManeuver()
                     caster_maneuver.add(KeepUnitSafe(unit=caster, grid=avoid_grid))
                     caster_maneuver.add(AMove(unit=caster, target=move_to))

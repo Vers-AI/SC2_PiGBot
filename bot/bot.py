@@ -109,7 +109,7 @@ class PiG_Bot(AresBot):
         self._cannon_rush_cleanup_timer = None
 
         # Debug flags
-        self.debug = True  # Enable debug output for targeting analysis
+        self.debug = False  # Enable debug output for targeting analysis
         
         # Target persistence for stable attack behavior
         self.current_attack_target = None
@@ -322,11 +322,6 @@ class PiG_Bot(AresBot):
         from bot.managers.scouting import control_observers
         observers = self.units(UnitTypeId.OBSERVER)
         control_observers(self, observers, main_army)
-
-        # Merge Archons if we have 2 or more High Templar
-        if self.units(UnitTypeId.HIGHTEMPLAR).amount >= 2:
-            for templar in self.units(UnitTypeId.HIGHTEMPLAR).ready:
-                templar(AbilityId.MORPH_ARCHON)
 
        
         
