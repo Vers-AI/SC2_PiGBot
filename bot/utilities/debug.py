@@ -11,6 +11,7 @@ from sc2.ids.unit_typeid import UnitTypeId
 from ares.consts import UnitRole
 
 from bot.utilities.intel import get_enemy_intel_quality
+from cython_extensions import cy_find_units_center_mass, cy_distance_to
 
 # Worker types to filter from combat sim
 WORKER_TYPES = {UnitTypeId.SCV, UnitTypeId.PROBE, UnitTypeId.DRONE, UnitTypeId.MULE}
@@ -321,6 +322,140 @@ def render_nova_labels(bot, nova_manager) -> None:
                 Point3((target.x, target.y, target_z)),
                 color=Point3((255, 165, 0)),  # Orange line to target
             )
+
+
+def render_formation_debug(bot, squad_units: list, target) -> None:
+    """
+    Render formation/cohesion debug visualization.
+    
+    Shows:
+    - Army center of mass (blue sphere)
+    - Cohesion radius (blue circle)
+    - Units that are ahead of formation (yellow labels + lines)
+    - Units with formation adjustments (cyan labels + lines to adjusted pos)
+    """
+    if not bot.debug or not squad_units or len(squad_units) < 2:
+        return
+    
+    from bot.combat.combat import (
+        get_formation_move_target, 
+        FORMATION_COHESION_AHEAD_THRESHOLD,
+        FORMATION_COHESION_SPREAD_THRESHOLD,
+        MELEE_RANGE_THRESHOLD
+    )
+    from sc2.position import Point2
+    
+    # Get army center of mass
+    army_center, _ = cy_find_units_center_mass(squad_units, 10.0)
+    army_center = Point2(army_center)
+    center_z = bot.get_terrain_z_height(army_center)
+    
+    # Draw army center (blue sphere)
+    bot.client.debug_sphere_out(
+        Point3((army_center.x, army_center.y, center_z + 0.5)),
+        1.5,
+        Point3((0, 100, 255))  # Blue
+    )
+    
+    # Draw cohesion spread radius circle (outer - orange)
+    import math
+    num_points = 24
+    for i in range(num_points):
+        angle1 = 2 * math.pi * i / num_points
+        angle2 = 2 * math.pi * (i + 1) / num_points
+        p1 = Point2((army_center.x + FORMATION_COHESION_SPREAD_THRESHOLD * math.cos(angle1),
+                     army_center.y + FORMATION_COHESION_SPREAD_THRESHOLD * math.sin(angle1)))
+        p2 = Point2((army_center.x + FORMATION_COHESION_SPREAD_THRESHOLD * math.cos(angle2),
+                     army_center.y + FORMATION_COHESION_SPREAD_THRESHOLD * math.sin(angle2)))
+        z1 = bot.get_terrain_z_height(p1)
+        z2 = bot.get_terrain_z_height(p2)
+        bot.client.debug_line_out(
+            Point3((p1.x, p1.y, z1 + 0.2)),
+            Point3((p2.x, p2.y, z2 + 0.2)),
+            color=Point3((255, 165, 0))  # Orange circle for spread threshold
+        )
+    
+    # Calculate distances
+    center_dist_to_target = cy_distance_to(army_center, target)
+    
+    # Check each unit's formation status
+    ahead_count = 0
+    spread_count = 0
+    adjusted_count = 0
+    
+    for unit in squad_units:
+        unit_dist_to_target = cy_distance_to(unit.position, target)
+        ahead_distance = center_dist_to_target - unit_dist_to_target
+        dist_from_center = cy_distance_to(unit.position, army_center)
+        
+        pos = unit.position
+        z = bot.get_terrain_z_height(pos)
+        
+        # Get this unit's formation target
+        formation_target = get_formation_move_target(unit, squad_units, target)
+        
+        is_melee = unit.ground_range <= MELEE_RANGE_THRESHOLD
+        
+        # Unit is streaming ahead (cohesion triggered) - will HOLD POSITION
+        if ahead_distance > FORMATION_COHESION_AHEAD_THRESHOLD:
+            ahead_count += 1
+            # Yellow label for units holding/waiting
+            label = f"HOLD +{ahead_distance:.1f}"
+            bot.client.debug_text_world(
+                label,
+                Point3((pos.x, pos.y, z + 1.0)),
+                color=(255, 255, 0),  # Yellow
+                size=10,
+            )
+            # Draw line to where they're going (army center area)
+            ft_z = bot.get_terrain_z_height(formation_target)
+            bot.client.debug_line_out(
+                Point3((pos.x, pos.y, z + 0.3)),
+                Point3((formation_target.x, formation_target.y, ft_z + 0.3)),
+                color=Point3((255, 255, 0))  # Yellow
+            )
+        # Unit is too spread out from center
+        elif dist_from_center > FORMATION_COHESION_SPREAD_THRESHOLD:
+            spread_count += 1
+            # Orange label for spread units
+            label = f"SPREAD {dist_from_center:.1f}"
+            bot.client.debug_text_world(
+                label,
+                Point3((pos.x, pos.y, z + 1.0)),
+                color=(255, 165, 0),  # Orange
+                size=10,
+            )
+            # Draw line to formation target
+            ft_z = bot.get_terrain_z_height(formation_target)
+            bot.client.debug_line_out(
+                Point3((pos.x, pos.y, z + 0.3)),
+                Point3((formation_target.x, formation_target.y, ft_z + 0.3)),
+                color=Point3((255, 165, 0))  # Orange
+            )
+        # Unit got formation adjustment (ranged behind melee)
+        elif formation_target != target:
+            adjusted_count += 1
+            # Cyan label for formation-adjusted units
+            label = "FORM" if not is_melee else "FRONT"
+            bot.client.debug_text_world(
+                label,
+                Point3((pos.x, pos.y, z + 1.0)),
+                color=(0, 255, 255),  # Cyan
+                size=10,
+            )
+            # Draw line to adjusted position
+            ft_z = bot.get_terrain_z_height(formation_target)
+            bot.client.debug_line_out(
+                Point3((pos.x, pos.y, z + 0.3)),
+                Point3((formation_target.x, formation_target.y, ft_z + 0.3)),
+                color=Point3((0, 255, 255))  # Cyan
+            )
+    
+    # Summary text
+    bot.client.debug_text_2d(
+        f"Formation: {ahead_count} ahead, {spread_count} spread, {adjusted_count} form",
+        Point2((0.1, 0.44)), None, 14
+    )
 
 
 def log_nova_error(error: Exception) -> None:

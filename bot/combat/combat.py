@@ -54,14 +54,85 @@ from bot.utilities.debug import (
     render_disruptor_labels,
     render_nova_labels,
     log_nova_error,
+    render_formation_debug,
 )
 from bot.utilities.intel import get_enemy_intel_quality
 
 from cython_extensions import (
-    cy_pick_enemy_target, cy_closest_to, cy_distance_to, cy_distance_to_squared, cy_in_attack_range, cy_find_units_center_mass
+    cy_pick_enemy_target, cy_closest_to, cy_distance_to, cy_distance_to_squared, cy_in_attack_range, cy_find_units_center_mass,
+    cy_adjust_moving_formation
 )
 
 
+# Formation + cohesion constants
+FORMATION_COHESION_AHEAD_THRESHOLD = 6.0  # Units this far AHEAD of center slow down
+FORMATION_COHESION_SPREAD_THRESHOLD = 8.0  # Max allowed distance from army center
+FORMATION_UNIT_MULTIPLIER = 2.0   # Spacing for formation adjustment
+FORMATION_RETREAT_ANGLE = 0.3     # Diagonal spread for ranged units
+
+
+def get_formation_move_target(
+    unit: Unit, 
+    squad_units: list[Unit], 
+    target: Point2,
+) -> Point2:
+    """
+    Get move target that maintains formation AND cohesion during map crossing.
+    
+    Formation: Uses cy_adjust_moving_formation to keep melee in front, ranged behind
+    Cohesion: Slows down units that get too far ahead OR too spread out
+    
+    Args:
+        unit: The unit to get move target for
+        squad_units: All units in the squad (for center mass calculation)
+        target: The ultimate destination
+        
+    Returns:
+        Adjusted move target (may be army center if unit is too far ahead/spread)
+    """
+    if len(squad_units) < 2:
+        return target
+    
+    # Get army center of mass
+    army_center, _ = cy_find_units_center_mass(squad_units, 10.0)
+    army_center = Point2(army_center)
+    
+    # Identify melee units (fodder - should be in front)
+    fodder_tags = [u.tag for u in squad_units if u.ground_range <= MELEE_RANGE_THRESHOLD]
+    
+    # Only use cy_adjust_moving_formation if we have melee units (otherwise it does nothing)
+    if fodder_tags:
+        # Get formation adjustments from cython function
+        # Returns dict of {unit_tag: (x, y)} for units that need to move back
+        adjusted_positions = cy_adjust_moving_formation(
+            our_units=squad_units,
+            target=target,
+            fodder_tags=fodder_tags,
+            unit_multiplier=FORMATION_UNIT_MULTIPLIER,
+            retreat_angle=FORMATION_RETREAT_ANGLE
+        )
+        
+        # If this unit needs formation adjustment (ranged unit too far forward), use that
+        if unit.tag in adjusted_positions:
+            return Point2(adjusted_positions[unit.tag])
+    
+    # Cohesion check 1: Is this unit too far ahead of army center (toward target)?
+    unit_dist_to_target = cy_distance_to(unit.position, target)
+    center_dist_to_target = cy_distance_to(army_center, target)
+    ahead_distance = center_dist_to_target - unit_dist_to_target
+    
+    if ahead_distance > FORMATION_COHESION_AHEAD_THRESHOLD:
+        # Unit is streaming ahead - move toward army center to wait for others
+        return army_center.towards(target, FORMATION_COHESION_AHEAD_THRESHOLD * 0.5)
+    
+    # Cohesion check 2: Is this unit too far from army center (spread out)?
+    dist_from_center = cy_distance_to(unit.position, army_center)
+    if dist_from_center > FORMATION_COHESION_SPREAD_THRESHOLD:
+        # Unit is too spread out - move toward army center
+        return army_center.towards(target, FORMATION_COHESION_SPREAD_THRESHOLD * 0.5)
+    
+    # Unit is in good position - continue to target
+    return target
 
 
 def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSquad]) -> Point2:
@@ -236,6 +307,10 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
             # Check for nearby enemy structures
             nearby_structures = bot.enemy_structures.closer_than(STRUCTURE_ATTACK_RANGE, squad_position)
             
+            # Debug: render formation visualization (only during safe map crossing)
+            if not close_by and not nearby_structures:
+                render_formation_debug(bot, units, move_to)
+            
             # Movement logic: PathUnitToTarget only when truly safe
             for unit in units:
                 unit_grid = bot.mediator.get_air_grid if unit.is_flying else grid
@@ -259,12 +334,24 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     continue  # Skip rest of movement logic for disruptors
                 
                 # Use PathUnitToTarget only when no enemies or structures nearby (map crossing)
+                should_wait = False  # Flag to skip fallback movement when unit should wait
                 if not close_by and not nearby_structures:
-                    # Safe map crossing - use efficient pathing
+                    # Safe map crossing - use formation-aware movement to prevent streaming
                     if cy_distance_to_squared(unit.position, move_to) > MAP_CROSSING_DISTANCE_SQ:
-                        no_enemy_maneuver.add(PathUnitToTarget(
-                            unit=unit, grid=unit_grid, target=move_to, success_at_distance=MAP_CROSSING_SUCCESS_DISTANCE
-                        ))
+                        # Get formation-adjusted target (keeps melee front, ranged back, army together)
+                        formation_target = get_formation_move_target(unit, units, move_to)
+                        
+                        # If formation_target != move_to, unit is ahead and should WAIT (not move)
+                        if formation_target != move_to:
+                            # Unit should wait - don't give any move command, let it stop naturally
+                            should_wait = True
+                            # Optional: give a hold position to make the wait explicit
+                            unit.hold_position()
+                        else:
+                            # Unit is in good position - continue to target
+                            no_enemy_maneuver.add(PathUnitToTarget(
+                                unit=unit, grid=unit_grid, target=move_to, success_at_distance=MAP_CROSSING_SUCCESS_DISTANCE
+                            ))
                 elif nearby_structures:
                     # Structures nearby - attack them with AMove for base clearing
                     closest_structure = cy_closest_to(unit.position, nearby_structures)
@@ -273,8 +360,8 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     # Default movement when enemies around but no structures
                     no_enemy_maneuver.add(AMove(unit=unit, target=move_to))
                     
-                # Fallback for units without orders
-                if not unit.orders:
+                # Fallback for units without orders (but NOT if they should be waiting)
+                if not unit.orders and not should_wait:
                     no_enemy_maneuver.add(AMove(unit=unit, target=move_to))
                 bot.register_behavior(no_enemy_maneuver)
 
