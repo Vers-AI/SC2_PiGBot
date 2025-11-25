@@ -87,11 +87,11 @@ tags:
 - [ ] Implement PvZ Double Stargate Phoenix (vs Mutas)
 - [ ] Implement PvP 4‑Gate All‑in
 - [x] Implement PvP 2‑Gate Expand
-- [ ] Add Repear wall positions
+- [x] Add Repear wall positions
 - [ ] Build selector by opponent race + scout info
 - [ ] Connect selected build to `BuildOrderRunner` at game start
 - [ ] Mid‑game build switch logic (e.g., Spire → Stargate)
-- [ ] Adjust transition from build order to fluid composition to wait till amount of macro to sustain [urgent]
+- [x] Adjust transition from build order to fluid composition to wait till amount of macro to sustain 
 
 
 ### Scouting & Interpretation
@@ -99,6 +99,9 @@ tags:
 - [ ] Fallback logic if scout dies early
 - [ ] Create a Reaction System [Current]
 - [ ] Observers ensure mid‑game critical tech scouting
+- [ ] Add trigger observer speed upgrades when intel is stale
+- [ ] Add trigger a unit scout if information is stale and no observer exists
+
 
 ### Logging & Data Storage
 - [ ] Log per‑game JSON to `/logs/`  
@@ -129,15 +132,15 @@ tags:
 - [x] Remove Target Unit; use Target Unit **position**
 - [x] Check if regrouping is too aggressive in `regroup_army`
 - [ ] Check threat sensitivity—Marines/Marauders/Reapers
-- [ ] Review Battle_Sim sensitivity + `all_out_attack`
+- [x] Review Battle_Sim sensitivity + `all_out_attack`
 - [ ] Add `Did_Enemy_rush` hook
 - [x] Remove Overcharge
 - [ ] Test Energy Recharge
-- [ ] Test new battle‑sim conditions
+- [x] Test new battle‑sim conditions
 - [x] Fix battle lockout bouncing
 - [x] Cap workers at a set limit (80; 8 on gold base)
 - [x] Add upgrades logic
-- [ ] Inner/outer radius for unit grouping; break when 30% engaged
+- [x] Inner/outer radius for unit grouping; break when 30% engaged
 - [x] Add Logs for every 30 seconds
 - [x] Put debug in game
 - [x] Fix Gatekeeper off in non‑PvZ
