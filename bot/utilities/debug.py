@@ -109,12 +109,12 @@ def render_combat_state_overlay(bot, main_army: Units, enemy_threat_level: int, 
 
 def _render_combat_sim_overlay(bot, main_army: Units) -> None:
     """Render combat simulator results (global and squad-level)."""
-    # Global fight result (army vs army, excluding workers/structures)
+    # Get enemy army (filter workers) - use cached enemy
+    cached_enemy = bot.mediator.get_cached_enemy_army or []
+    combat_enemies = [u for u in cached_enemy if u.type_id not in WORKER_TYPES]
+    
+    # Global fight result
     try:
-        combat_enemies = [
-            u for u in bot.mediator.get_cached_enemy_army
-            if u.type_id not in WORKER_TYPES and not u.is_structure
-        ]
         global_result = bot.mediator.can_win_fight(
             own_units=main_army,
             enemy_units=combat_enemies,
@@ -124,28 +124,24 @@ def _render_combat_sim_overlay(bot, main_army: Units) -> None:
             f"Global Fight: {global_result.name}", 
             Point2((0.1, 0.32)), None, 14
         )
-        
-        # Show army composition being fed to combat sim (main_army = ATTACKING units only)
-        own_supply = sum(u.type_id._value_ and bot.calculate_supply_cost(u.type_id) for u in main_army)
-        enemy_supply = sum(u.type_id._value_ and bot.calculate_supply_cost(u.type_id) for u in combat_enemies)
-        
-        # Compact unit type summary (top 3 by count)
-        own_types = _get_unit_type_summary(main_army)
-        enemy_types = _get_unit_type_summary(combat_enemies)
-        
-        bot.client.debug_text_2d(
-            f"Own: {len(main_army)}u ~{own_supply:.0f}sup [{own_types}]", 
-            Point2((0.1, 0.34)), None, 12
-        )
-        bot.client.debug_text_2d(
-            f"Enemy: {len(combat_enemies)}u ~{enemy_supply:.0f}sup [{enemy_types}]", 
-            Point2((0.1, 0.36)), None, 12
-        )
     except Exception:
         bot.client.debug_text_2d(
             "Global Fight: N/A", 
             Point2((0.1, 0.32)), None, 14
         )
+    
+    # Army compositions
+    own_types = _get_unit_type_summary(main_army or [])
+    enemy_types = _get_unit_type_summary(combat_enemies)
+    
+    bot.client.debug_text_2d(
+        f"Own: {len(main_army) if main_army else 0}u [{own_types}]", 
+        Point2((0.1, 0.34)), None, 12
+    )
+    bot.client.debug_text_2d(
+        f"Enemy: {len(combat_enemies)}u [{enemy_types}]", 
+        Point2((0.1, 0.36)), None, 12
+    )
     
     # Squad engagement tracker summary
     tracker = getattr(bot, '_squad_engagement_tracker', {})
@@ -204,7 +200,7 @@ def render_target_markers(bot, main_army: Units) -> None:
     if hasattr(bot, 'current_attack_target') and bot.current_attack_target:
         bot.client.debug_text_2d(
             f"Current Target: {bot.current_attack_target}", 
-            Point2((0.1, 0.36)), None, 14
+            Point2((0.1, 0.40)), None, 14
         )
         target_3d = Point3((
             bot.current_attack_target.x, 
@@ -218,7 +214,7 @@ def render_target_markers(bot, main_army: Units) -> None:
         army_center = main_army.center
         bot.client.debug_text_2d(
             f"Army Center: {army_center}", 
-            Point2((0.1, 0.38)), None, 14
+            Point2((0.1, 0.42)), None, 14
         )
         army_center_3d = Point3((
             army_center.x, 
