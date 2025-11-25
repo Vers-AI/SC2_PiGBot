@@ -51,16 +51,18 @@ def micro_ranged_unit(
     maneuver = CombatManeuver()
     closest_enemy = cy_closest_to(unit.position, enemies)
     
-    # Defensive mode: always prioritize safety and kiting
+    # ALWAYS add KeepUnitSafe FIRST with avoidance grid
+    # This ensures units dodge dangerous abilities (disruptor shots, banelings, etc.)
+    maneuver.add(KeepUnitSafe(unit, avoid_grid))
+    
+    # Defensive mode: prioritize kiting
     if not aggressive:
-        maneuver.add(KeepUnitSafe(unit, avoid_grid))
         maneuver.add(StutterUnitBack(unit, target=closest_enemy, grid=grid))
         return maneuver
     
     # Aggressive mode: standard stutter-step micro
     if not unit.weapon_ready:
-        # Weapon on cooldown - explicit safety check then kite back
-        maneuver.add(KeepUnitSafe(unit, avoid_grid))
+        # Weapon on cooldown - kite back
         maneuver.add(StutterUnitBack(unit, target=closest_enemy, grid=grid))
     else:
         # Weapon ready - engage with priority targeting
@@ -79,6 +81,7 @@ def micro_melee_unit(
     unit: Unit,
     enemies: List[Unit],
     priority_targets: List[Unit],
+    avoid_grid: np.ndarray,
     fallback_position: Optional[Point2] = None,
     aggressive: bool = True
 ) -> CombatManeuver:
@@ -93,6 +96,7 @@ def micro_melee_unit(
         unit: The melee unit to control
         enemies: All enemy units in range
         priority_targets: High-priority targets (tanks, colossi, etc.)
+        avoid_grid: Avoidance grid for safety (dodge disruptor shots, etc.)
         fallback_position: Position to move to if no targets
         aggressive: Whether to advance or hold position
         
@@ -100,6 +104,10 @@ def micro_melee_unit(
         CombatManeuver with appropriate behaviors added
     """
     maneuver = CombatManeuver()
+    
+    # ALWAYS add KeepUnitSafe FIRST with avoidance grid
+    # This ensures melee units dodge dangerous abilities (disruptor shots, banelings, etc.)
+    maneuver.add(KeepUnitSafe(unit, avoid_grid))
     
     # Attack targets in range (both aggressive and defensive)
     if in_attack_range_priority := cy_in_attack_range(unit, priority_targets):
@@ -130,8 +138,9 @@ def micro_disruptor(
     """
     Handle disruptor nova firing and movement to stay with ground army.
     
-    When enemies present: fires nova if able, otherwise stays with ground army center.
-    This prevents disruptors from sitting idle during combat.
+    Disruptors are special: they can't attack, only fire novas.
+    - Nova ready + enemies: let nova system take FULL control (no interference)
+    - Nova on cooldown: stay safe in backlines, follow army from behind
     
     Args:
         disruptor: The Disruptor unit to control
@@ -149,22 +158,28 @@ def micro_disruptor(
     from ares.behaviors.combat.individual import PathUnitToTarget
     from bot.constants import DISRUPTOR_SQUAD_FOLLOW_DISTANCE, DISRUPTOR_SQUAD_TARGET_DISTANCE
     
-    maneuver = CombatManeuver()
+    # Check if nova is ready AND enemies are present
+    nova_ready = AbilityId.EFFECT_PURIFICATIONNOVA in disruptor.abilities
     
-    # Try to fire nova if ability is ready
-    if AbilityId.EFFECT_PURIFICATIONNOVA in disruptor.abilities:
+    if nova_ready and enemies:
+        # Nova system takes FULL control - don't register any ARES maneuver
+        # This avoids conflict between KeepUnitSafe and nova targeting
         try:
             result = bot.use_disruptor_nova.execute(
                 disruptor, enemies, friendly_units, nova_manager
             )
             if result:  # Nova fired successfully
-                bot.register_behavior(maneuver)  # Empty maneuver, nova controls itself
                 return True
         except Exception as e:
             print(f"DEBUG ERROR in disruptor nova firing: {e}")
     
-    # Nova not fired or not ready - stay with ground army center
-    # Calculate ground unit center (exclude air units like warp prism/observers)
+    # Nova on cooldown OR no enemies - disruptor should stay safe in backlines
+    maneuver = CombatManeuver()
+    
+    # KeepUnitSafe FIRST - dodge dangerous abilities
+    maneuver.add(KeepUnitSafe(disruptor, avoid_grid))
+    
+    # Follow army from behind (stay with ground units, not air)
     ground_units = [u for u in friendly_units if not u.is_flying]
     if ground_units:
         ground_center, _ = cy_find_units_center_mass(ground_units, 10.0)
@@ -178,7 +193,6 @@ def micro_disruptor(
                 target=Point2(ground_center),
                 success_at_distance=DISRUPTOR_SQUAD_TARGET_DISTANCE
             ))
-        # Otherwise stay put (close enough)
     else:
         # Fallback: stay with squad position if no ground units
         distance_to_squad = cy_distance_to(disruptor.position, squad_position)
@@ -190,8 +204,6 @@ def micro_disruptor(
                 success_at_distance=DISRUPTOR_SQUAD_TARGET_DISTANCE
             ))
     
-    # Always add safety behavior
-    maneuver.add(KeepUnitSafe(disruptor, avoid_grid))
     bot.register_behavior(maneuver)
     return True
 

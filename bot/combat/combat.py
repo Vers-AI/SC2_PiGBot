@@ -260,6 +260,7 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     unit=m_unit,
                     enemies=all_close,
                     priority_targets=priority_targets,
+                    avoid_grid=avoid_grid,
                     fallback_position=enemy_target.position if enemy_target else move_to,
                     aggressive=can_engage
                 )
