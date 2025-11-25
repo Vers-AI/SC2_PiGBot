@@ -174,17 +174,30 @@ class PiG_Bot(AresBot):
         self.natural_expansion: Point2 = self.mediator.get_own_nat
         self.expansions_generator = cycle(self.expansion_locations_list)
 
+        # Set gatekeeping position based on enemy race
+        self.gatekeeping_pos = None  # Initialize
+        
         if self.enemy_race in {Race.Zerg, Race.Random}:
+            # PvZ: use natural choke gatekeeping position
             if self.mediator.get_pvz_nat_gatekeeping_pos is not None:
                 self.gatekeeping_pos = self.mediator.get_pvz_nat_gatekeeping_pos
             else:
                 self.gatekeeping_pos = self.natural_expansion.towards(self.game_info.map_center, 6)
-            
-            if self.gatekeeping_pos is not None:
-                self.rally_point = self.gatekeeping_pos.towards(self.natural_expansion, 5)
+        
+        elif self.enemy_race == Race.Protoss:
+            # PvP: use main ramp wall warp-in position (blocks the wall gap)
+            warpin_pos = self.main_base_ramp.protoss_wall_warpin
+            if warpin_pos is not None:
+                self.gatekeeping_pos = warpin_pos
+        
+        # Set rally point based on gatekeeping position and opponent race
+        if self.gatekeeping_pos is not None:
+            if self.enemy_race == Race.Protoss:
+                # PvP: rally inside base (behind main ramp gatekeeper)
+                self.rally_point = self.gatekeeping_pos.towards(self.start_location, 5)
             else:
-                self.rally_point = self.natural_expansion.towards(self.game_info.map_center, 5)
-
+                # PvZ/Random: rally behind natural choke gatekeeper
+                self.rally_point = self.gatekeeping_pos.towards(self.natural_expansion, 5)
         else:
             self.rally_point = self.natural_expansion.towards(self.game_info.map_center, 5)
         
@@ -330,7 +343,8 @@ class PiG_Bot(AresBot):
                 self.build_order_runner.set_build_completed()
                 print(f"Build order force-completed at {self.time:.1f}s due to high minerals")
             self.game_state = 0  # early game
-            if self.enemy_race in {Race.Zerg, Race.Random}:
+            # Gatekeeper for Zerg and Protoss (if position exists)
+            if self.enemy_race in {Race.Zerg, Race.Random, Race.Protoss} and self.gatekeeping_pos is not None:
                 if not gatekeeper:
                     zealots = self.units(UnitTypeId.ZEALOT).ready
                     if zealots:

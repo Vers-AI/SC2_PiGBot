@@ -5,6 +5,7 @@ from sc2.units import Units
 from sc2.unit import Unit
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.ability_id import AbilityId
+from sc2.data import Race
 from ares.consts import LOSS_MARGINAL_OR_WORSE, TIE_OR_BETTER, UnitTreeQueryType, EngagementResult, VICTORY_DECISIVE_OR_BETTER, VICTORY_MARGINAL_OR_BETTER, LOSS_OVERWHELMING_OR_WORSE, LOSS_DECISIVE_OR_WORSE, WORKER_TYPES
 
 from ares.behaviors.combat import CombatManeuver
@@ -510,12 +511,17 @@ def gatekeeper_control(bot, gatekeeper: Units) -> None:
             else:
                 gate(AbilityId.HOLDPOSITION)
         else:
-            # Move distance towards the natural expansion
-            direction = bot.natural_expansion - gate_keep_pos
+            # Determine fallback direction based on opponent race
+            # PvP (main ramp): fall back towards start location
+            # PvZ/Random (natural choke): fall back towards natural
+            if bot.enemy_race == Race.Protoss:
+                fallback_target = bot.start_location
+            else:
+                fallback_target = bot.natural_expansion
+            
+            direction = fallback_target - gate_keep_pos
             if direction.length > 0:  # Avoid division by zero
-                # Normalize to get direction vector with length 1
                 direction = direction.normalized
-                # Calculate position from gate_keep_pos towards natural
                 target_pos = gate_keep_pos + (direction * GATEKEEPER_MOVE_DISTANCE)
                 gate.move(target_pos)   
             
@@ -954,8 +960,13 @@ def select_defensive_anchor(bot, main_army: Units) -> Point2:
     else:
         # Check for gatekeeper position (best choke control)
         if hasattr(bot, 'gatekeeping_pos') and bot.gatekeeping_pos is not None:
-            # Position 4 units behind gatekeeper towards natural (avoid bunching at choke)
-            new_anchor = bot.gatekeeping_pos.towards(bot.natural_expansion, 4)
+            # Position behind gatekeeper (direction depends on opponent race)
+            # PvP (main ramp): position towards start location
+            # PvZ/Random (natural choke): position towards natural
+            if bot.enemy_race == Race.Protoss:
+                new_anchor = bot.gatekeeping_pos.towards(bot.start_location, 4)
+            else:
+                new_anchor = bot.gatekeeping_pos.towards(bot.natural_expansion, 4)
         
         # Check for any structures at natural (shows operational investment)
         elif bot.structures:
