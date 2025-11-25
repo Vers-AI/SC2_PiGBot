@@ -209,11 +209,12 @@ def get_enemy_intel_quality(bot: "PiG_Bot") -> dict:
 
 def update_enemy_intel_tracking(bot: "PiG_Bot") -> None:
     """
-    Update enemy intel tracking flags. Call this every frame.
+    Update enemy intel tracking flags and intel urgency. Call this every frame.
     
     Sets:
         - bot._enemy_army_ever_seen: sticky flag, True once we've seen enemy army
         - bot._last_enemy_army_visible_time: last time we had direct vision of enemy army
+        - bot._intel_urgency: 0-1 score, builds when stale, decays when fresh
     """
     # Get enemy army excluding workers
     enemy_army = [
@@ -231,3 +232,21 @@ def update_enemy_intel_tracking(bot: "PiG_Bot") -> None:
     elif enemy_army:
         # We have memory of enemy army but can't see them now
         bot._enemy_army_ever_seen = True
+    
+    # Update intel urgency (gradual build/decay to avoid oscillation)
+    # Only track urgency after we've seen enemy army at least once
+    if bot._enemy_army_ever_seen:
+        intel = get_enemy_intel_quality(bot)
+        freshness = intel["freshness"]
+        
+        # Stale threshold matches combat.py (< 0.3 = STALE/BLIND)
+        STALE_THRESHOLD = 0.3
+        URGENCY_BUILD_RATE = 0.02   # How fast urgency builds (per frame, ~0.4/sec at 22fps)
+        URGENCY_DECAY_RATE = 0.005  # How fast urgency decays (slower than build)
+        
+        if freshness < STALE_THRESHOLD:
+            # Intel is stale - build urgency
+            bot._intel_urgency = min(1.0, bot._intel_urgency + URGENCY_BUILD_RATE)
+        else:
+            # Intel is fresh - slowly decay urgency
+            bot._intel_urgency = max(0.0, bot._intel_urgency - URGENCY_DECAY_RATE)

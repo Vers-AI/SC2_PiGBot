@@ -135,6 +135,11 @@ class PiG_Bot(AresBot):
         # Enemy intel tracking (for combat sim trust)
         self._enemy_army_ever_seen = False  # Sticky flag: have we EVER seen enemy combat units?
         self._last_enemy_army_visible_time = 0.0  # Last time we had direct vision of enemy army
+        
+        # Intel urgency system (gradual build/decay to avoid oscillation)
+        # 0.0 = no urgency, 1.0 = max urgency
+        # Responses trigger at thresholds: 0.3 (observer priority), 0.5 (extra observers), 0.7 (speed upgrade)
+        self._intel_urgency = 0.0
 
 
 

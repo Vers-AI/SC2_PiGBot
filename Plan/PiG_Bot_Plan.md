@@ -99,8 +99,10 @@ tags:
 - [ ] Fallback logic if scout dies early
 - [ ] Create a Reaction System [Current]
 - [ ] Observers ensure mid‑game critical tech scouting
-- [ ] Add trigger observer speed upgrades when intel is stale
+- [x] Add trigger observer speed upgrades when intel is stale (via `_intel_urgency` system)
+- [x] Add trigger observer production priority when intel is stale
 - [ ] Add trigger a unit scout if information is stale and no observer exists
+- [ ] Add Sentry hallucination scout when intel is stale (requires Sentry logic first)
 
 
 ### Logging & Data Storage

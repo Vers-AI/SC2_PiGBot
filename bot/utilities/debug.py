@@ -137,9 +137,25 @@ def _render_combat_sim_overlay(bot, main_army: Units) -> None:
     intel = get_enemy_intel_quality(bot)
     freshness_bar = "█" * int(intel["freshness"] * 10) + "░" * (10 - int(intel["freshness"] * 10))
     intel_status = "FRESH" if intel["freshness"] >= 0.7 else ("STALE" if intel["freshness"] >= 0.3 else "BLIND")
+    
+    # Intel urgency indicator (shows response thresholds)
+    urgency = getattr(bot, '_intel_urgency', 0.0)
+    urgency_bar = "█" * int(urgency * 10) + "░" * (10 - int(urgency * 10))
+    urgency_status = ""
+    if urgency >= 0.7:
+        urgency_status = " →UPGRADE"
+    elif urgency >= 0.5:
+        urgency_status = " →+OBS"
+    elif urgency >= 0.3:
+        urgency_status = " →PRIORITY"
+    
     bot.client.debug_text_2d(
         f"Intel: [{freshness_bar}] {intel_status} ({intel['visible_count']}vis/{intel['memory_count']}mem)", 
         Point2((0.1, 0.30)), None, 12
+    )
+    bot.client.debug_text_2d(
+        f"Urgency: [{urgency_bar}]{urgency_status}", 
+        Point2((0.1, 0.28)), None, 12
     )
     
     # Army compositions
