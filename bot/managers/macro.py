@@ -101,6 +101,35 @@ def get_optimal_gas_workers(bot) -> int:
     # Normal operation - follow toggle state
     return 3 if bot._gas_worker_toggle else 0
 
+def get_economy_state(bot) -> str:
+    """
+    Single source of truth for economy health.
+    Used to gate production intensity and upgrade timing.
+    
+    Returns:
+        str: "recovery", "reduced", "moderate", or "full"
+    
+    Thresholds based on SC2 economy research:
+    - 1 saturated base (~16 mineral workers) = ~900-1000 minerals/min
+    - 1 gate continuous production = ~220-250 minerals/min
+    - So ~700+ minerals/min can support 3 gates comfortably
+    """
+    workers = bot.workers.amount
+    mineral_rate = bot.state.score.collection_rate_minerals
+    
+    # Hard safety gate: critically underdeveloped
+    if workers < 20:
+        return "recovery"
+    
+    # Income-based tiers
+    if mineral_rate < 400 or workers < 30:
+        return "reduced"
+    elif mineral_rate < 700 or workers < 44:
+        return "moderate"
+    else:
+        return "full"
+
+
 # Army composition constants 
 STANDARD_ARMY_0 = {
     UnitTypeId.IMMORTAL: {"proportion": 0.15, "priority": 1},
@@ -327,11 +356,13 @@ def get_desired_upgrades(bot) -> list[UpgradeId]:
     if bot.structures(UnitTypeId.TWILIGHTCOUNCIL) or (len(bot.townhalls) >= 3 and bot.supply_used >= 54):
         upgrades.append(UpgradeId.CHARGE)
     
-    # Gate early upgrades if economy not ready
-    if (len([th for th in bot.townhalls if th.is_ready]) < 2
-        or bot.supply_workers < 44
-        or len(bot.gas_buildings) < 4
-        or bot.supply_army < 15):
+    # Gate early upgrades if economy not ready (use centralized economy state)
+    economy_state = get_economy_state(bot)
+    if economy_state in ("recovery", "reduced"):
+        return upgrades
+    
+    # Also gate if army is too small (need units before upgrades)
+    if bot.supply_army < 15:
         return upgrades
     
     # Ground upgrades when Forge exists or 3+ bases at 56+ supply
@@ -419,15 +450,9 @@ def select_army_composition(bot, main_army: Units) -> dict:
         # Calculate the percentage of Archons in the army
         archon_percentage = archon_count / len(main_army) if len(main_army) > 0 else 0
         
-        # Debug info
-        if bot.debug:
-            print(f"{comp_name} Archon percentage: {archon_percentage:.2f} ({archon_count}/{len(main_army)})")
-        
         # Switch to version 1 when Archons reach threshold
         if archon_percentage >= threshold:
             selected_composition = army_1
-            if bot.debug:
-                print(f"Switching to {comp_name}_ARMY_1 due to high Archon count")
     
     return selected_composition
 
@@ -469,40 +494,59 @@ async def handle_macro(
                 facility.train(UnitTypeId.WARPPRISM)
                 break
     
-    # Scale gateways to desired count (3→5→8)
-    desired_gates = get_desired_gateway_count(bot)
-    current_gates = (bot.structures(UnitTypeId.GATEWAY).amount + 
-                     bot.structures(UnitTypeId.WARPGATE).amount + 
-                     bot.already_pending(UnitTypeId.GATEWAY))
+    # Get economy state early for gating decisions
+    economy_state = get_economy_state(bot)
     
-    if current_gates < desired_gates and bot.can_afford(UnitTypeId.GATEWAY):
-        bot.register_behavior(BuildStructure(production_location, UnitTypeId.GATEWAY))
+    # Scale gateways to desired count (3→5→8) - only in moderate+ economy
+    if economy_state in ("moderate", "full"):
+        desired_gates = get_desired_gateway_count(bot)
+        current_gates = (bot.structures(UnitTypeId.GATEWAY).amount + 
+                         bot.structures(UnitTypeId.WARPGATE).amount + 
+                         bot.already_pending(UnitTypeId.GATEWAY))
+        
+        if current_gates < desired_gates and bot.can_afford(UnitTypeId.GATEWAY):
+            bot.register_behavior(BuildStructure(production_location, UnitTypeId.GATEWAY))
+        
+        # Scale forges to desired count (0→1→2)
+        desired_forges = get_desired_forge_count(bot)
+        current_forges = (bot.structures(UnitTypeId.FORGE).amount + 
+                         bot.already_pending(UnitTypeId.FORGE))
+        
+        if current_forges < desired_forges and bot.can_afford(UnitTypeId.FORGE):
+            bot.register_behavior(BuildStructure(production_location, UnitTypeId.FORGE))
     
-    # Scale forges to desired count (0→1→2)
-    desired_forges = get_desired_forge_count(bot)
-    current_forges = (bot.structures(UnitTypeId.FORGE).amount + 
-                     bot.already_pending(UnitTypeId.FORGE))
-    
-    if current_forges < desired_forges and bot.can_afford(UnitTypeId.FORGE):
-        bot.register_behavior(BuildStructure(production_location, UnitTypeId.FORGE))
-    
-    # Build macro plan
+    # Build macro plan with layers gated by economy state
     macro_plan: MacroPlan = MacroPlan()
+    
+    # Always: workers and supply (all economy states)
     macro_plan.add(BuildWorkers(to_count=optimal_worker_count))
     macro_plan.add(AutoSupply(base_location=production_location))
-    macro_plan.add(GasBuildingController(to_count=len(bot.townhalls)*2, max_pending=2))
     
-   
-    macro_plan.add(ExpansionController(to_count=expansion_count, max_pending=1))
-    
-    macro_plan.add(ProductionController(army_composition, base_location=production_location, add_production_at_bank=(450,450), ignore_below_proportion=0.3))
-    
-    macro_plan.add(UpgradeController(get_desired_upgrades(bot), base_location=production_location))
-    
-    # Spawn units at warp prism or natural
-    spawn_target = warp_prism[0].position if warp_prism else spawn_location
-    spawn_freeflow = True if bot._used_cheese_response else freeflow
-    macro_plan.add(SpawnController(army_composition, spawn_target=spawn_target, freeflow_mode=spawn_freeflow))
+    if economy_state == "recovery":
+        # Recovery mode: only workers + supply, let economy catch up
+        pass
+    else:
+        # Reduced+: gas buildings and spawn from existing production
+        macro_plan.add(GasBuildingController(to_count=len(bot.townhalls)*2, max_pending=2))
+        
+        spawn_target = warp_prism[0].position if warp_prism else spawn_location
+        spawn_freeflow = True if bot._used_cheese_response else freeflow
+        macro_plan.add(SpawnController(army_composition, spawn_target=spawn_target, freeflow_mode=spawn_freeflow))
+        
+        # Expansion logic: moderate+ gets full expansion, reduced gets safety net to 2 bases
+        if economy_state in ("moderate", "full"):
+            macro_plan.add(ExpansionController(to_count=expansion_count, max_pending=1))
+        elif len(bot.townhalls) < 2:
+            # Safety net: always allow natural expansion even in reduced economy
+            macro_plan.add(ExpansionController(to_count=2, max_pending=1))
+        
+        if economy_state in ("moderate", "full"):
+            # Moderate+: upgrades
+            macro_plan.add(UpgradeController(get_desired_upgrades(bot), base_location=production_location))
+            
+            if economy_state == "full":
+                # Full: add new production buildings
+                macro_plan.add(ProductionController(army_composition, base_location=production_location, add_production_at_bank=(450,450), ignore_below_proportion=0.3))
     
     # Register macro plan
     bot.register_behavior(macro_plan)

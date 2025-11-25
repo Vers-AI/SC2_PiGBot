@@ -10,6 +10,7 @@ Handles presentation and formatting of reports:
 from sc2.ids.unit_typeid import UnitTypeId
 from ares.consts import UnitRole
 from sc2.data import Race
+from bot.managers.macro import get_economy_state
 
 
 def print_startup_report(bot) -> None:
@@ -261,7 +262,9 @@ def _print_enemy_intel(bot) -> None:
 def _print_economy_state(bot) -> None:
     """Print economy state (bases, workers, resources)."""
     gatherers = bot.mediator.get_units_from_role(role=UnitRole.GATHERING)
+    economy_state = get_economy_state(bot)
     
+    print(f"    State: {economy_state}")
     print(f"    Bases: {len(bot.townhalls)}")
     print(f"    Workers: {len(bot.workers)} (Gathering: {len(gatherers)})")
     print(f"    Supply: {bot.supply_used}/{bot.supply_cap}")
