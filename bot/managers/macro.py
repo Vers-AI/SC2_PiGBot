@@ -19,7 +19,7 @@ from ares.behaviors.macro import (
     UpgradeController,
     BuildStructure,
 )
-from ares.consts import UnitRole
+from ares.consts import UnitRole, WORKER_TYPES
 from ares.dicts.unit_data import UNIT_DATA
 from ares.consts import LOSS_MARGINAL_OR_BETTER
 
@@ -274,10 +274,12 @@ def expansion_checker(bot, main_army) -> int:
     #print(f"Idle production time: {idle_production_time:.1f}s")
     
     
-    # Safety check - only expand if safe
+    # Safety check - only expand if safe (filter workers from both armies)
+    own_combat_units = [u for u in bot.own_army if u.type_id not in WORKER_TYPES]
+    enemy_combat_units = [u for u in bot.enemy_army if u.type_id not in WORKER_TYPES]
     army_safe = bot.mediator.can_win_fight(
-        own_units=bot.own_army,
-        enemy_units=bot.enemy_army,
+        own_units=own_combat_units,
+        enemy_units=enemy_combat_units,
         timing_adjust=True,
         good_positioning=False,
         workers_do_no_damage=True,

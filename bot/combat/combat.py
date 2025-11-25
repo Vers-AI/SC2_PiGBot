@@ -51,6 +51,8 @@ from bot.combat.unit_micro import (
 )
 from bot.utilities.debug import (
     render_combat_state_overlay,
+    render_disruptor_labels,
+    render_nova_labels,
     log_nova_error,
 )
 
@@ -117,6 +119,7 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                 squad_fight_result = bot.mediator.can_win_fight(
                     own_units=own_nearby,
                     enemy_units=combat_enemies,
+                    workers_do_no_damage=True,
                 )
                 
                 # Initialize squad tracking if first encounter
@@ -380,11 +383,13 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
     
     # Debug visualization (controlled by bot.debug flag)
     render_combat_state_overlay(bot, main_army, enemy_threat_level, is_early_defensive_mode)
+    render_disruptor_labels(bot)
+    render_nova_labels(bot, getattr(bot, 'nova_manager', None))
 
     # Siege tank special case: Combat simulator underestimates siege tanks due to splash damage
     # and positional advantage, so require overwhelming force before engaging them
     if bot.enemy_units({UnitTypeId.SIEGETANK, UnitTypeId.SIEGETANKSIEGED}):
-        own_supply = sum(bot.calculate_supply_cost(u.type_id) for u in bot.own_army)
+        own_supply = sum(bot.calculate_supply_cost(u.type_id) for u in main_army)
         enemy_supply = sum(bot.calculate_supply_cost(u.type_id) for u in bot.enemy_army)
         if own_supply < enemy_supply * SIEGE_TANK_SUPPLY_ADVANTAGE_REQUIRED:
             bot._commenced_attack = False
@@ -429,7 +434,11 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
                 u for u in bot.mediator.get_cached_enemy_army
                 if u.type_id not in WORKER_TYPES and not u.is_structure
             ]
-            fight_result = bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=combat_enemy_units)
+            fight_result = bot.mediator.can_win_fight(
+                own_units=main_army,
+                enemy_units=combat_enemy_units,
+                workers_do_no_damage=True,
+            )
             # Disengage if situation looks bad (decisive loss or worse)
             if fight_result in LOSS_DECISIVE_OR_WORSE:
                 bot._commenced_attack = False
@@ -447,7 +456,11 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
             u for u in bot.mediator.get_cached_enemy_army
             if u.type_id not in WORKER_TYPES and not u.is_structure
         ]
-        fight_result = bot.mediator.can_win_fight(own_units=bot.own_army, enemy_units=combat_enemy_units)
+        fight_result = bot.mediator.can_win_fight(
+            own_units=main_army,
+            enemy_units=combat_enemy_units,
+            workers_do_no_damage=True,
+        )
         
         # Initiate attack with decisive advantage regardless of defensive flags
         if fight_result in VICTORY_DECISIVE_OR_BETTER:

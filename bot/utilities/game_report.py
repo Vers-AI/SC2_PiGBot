@@ -8,7 +8,7 @@ Handles presentation and formatting of reports:
 """
 
 from sc2.ids.unit_typeid import UnitTypeId
-from ares.consts import UnitRole
+from ares.consts import UnitRole, WORKER_TYPES
 from sc2.data import Race
 from bot.managers.macro import get_economy_state
 
@@ -64,11 +64,13 @@ def print_periodic_intel_report(bot, iteration: int) -> None:
     print(f"    Cheese Response: {bot._used_cheese_response}")
     print(f"    Game State: {bot.game_state} ({'Early' if bot.game_state == 0 else 'Mid' if bot.game_state == 1 else 'Late'})")
     
-    # Fight simulation
+    # Fight simulation (filter workers for accurate combat assessment)
     try:
+        own_combat = [u for u in bot.own_army if u.type_id not in WORKER_TYPES]
+        enemy_combat = [u for u in bot.enemy_army if u.type_id not in WORKER_TYPES]
         fight_result = bot.mediator.can_win_fight(
-            own_units=bot.own_army,
-            enemy_units=bot.enemy_army,
+            own_units=own_combat,
+            enemy_units=enemy_combat,
             timing_adjust=True,
             good_positioning=True,
             workers_do_no_damage=True
