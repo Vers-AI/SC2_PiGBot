@@ -38,7 +38,7 @@ from bot.combat import (
     manage_defensive_unit_roles
 )
 from bot.managers.scouting import control_scout
-from bot.utilities.intel import update_enemy_intel_tracking
+from bot.utilities.intel import update_enemy_intel_tracking, create_choke_grid
 from ares.behaviors.macro import Mining
 from bot.managers.reactions import (
     early_threat_sensor,
@@ -109,7 +109,7 @@ class PiG_Bot(AresBot):
         self._cannon_rush_cleanup_timer = None
 
         # Debug flags
-        self.debug = False  # Enable debug output for targeting analysis
+        self.debug = True  # Enable debug output for targeting analysis
         
         # Target persistence for stable attack behavior
         self.current_attack_target = None
@@ -153,6 +153,9 @@ class PiG_Bot(AresBot):
         
         self.use_disruptor_nova = UseDisruptorNova(mediator=self.mediator, bot=self, debug_output=debug_disruptor_nova)
         self.nova_manager = NovaManager(bot=self, mediator=self.mediator, debug_output=debug_disruptor_nova)  # Initialize the NovaManager
+        
+        # Create choke grid for O(1) formation skip detection
+        self.choke_grid = create_choke_grid(self)
 
         # Wall management moved to separate generate_wall_placements.py tool
         # Run: python generate_wall_placements.py to create wall data

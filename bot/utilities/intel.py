@@ -7,13 +7,71 @@ Limitations: Ghost units expire after 30s in ARES UnitMemoryManager
 """
 from typing import TYPE_CHECKING
 
+import numpy as np
+from map_analyzer import MapData
 from sc2.data import Race
 from sc2.ids.unit_typeid import UnitTypeId as UnitID
+from sc2.position import Point2
 
 from ares.consts import WORKER_TYPES
 
 if TYPE_CHECKING:
     from bot.bot import PiG_Bot
+
+
+# Choke detection config
+RAMP_CHOKE_RADIUS = 6.0   # Radius around ramp top/bottom
+MAP_CHOKE_RADIUS = 10.0   # Radius around map_analyzer chokes
+CHOKE_GRID_WEIGHT = 10.0  # Weight to mark choke zones (> 1.0 = choke area)
+
+
+def create_choke_grid(bot: "PiG_Bot") -> np.ndarray:
+    """
+    Create a grid marking choke/ramp areas for O(1) formation skip detection.
+    
+    Call this once in on_start and store as bot.choke_grid.
+    Cells with value > 1.0 indicate "near choke, skip formation logic".
+    
+    Args:
+        bot: Bot instance with access to map_data and game_info
+        
+    Returns:
+        np.ndarray: Grid where values > 1.0 mark choke/ramp zones
+    """
+    map_data: MapData = bot.mediator.get_map_data_object
+    grid = map_data.get_pyastar_grid()
+    
+    # Mark ramps (top and bottom centers)
+    for ramp in bot.game_info.map_ramps:
+        grid = map_data.add_cost(
+            ramp.top_center, RAMP_CHOKE_RADIUS, grid, CHOKE_GRID_WEIGHT
+        )
+        grid = map_data.add_cost(
+            ramp.bottom_center, RAMP_CHOKE_RADIUS, grid, CHOKE_GRID_WEIGHT
+        )
+    
+    # Mark map_analyzer choke points
+    for choke in map_data.map_chokes:
+        grid = map_data.add_cost(
+            choke.center, MAP_CHOKE_RADIUS, grid, CHOKE_GRID_WEIGHT
+        )
+    
+    return grid
+
+
+def is_near_choke(choke_grid: np.ndarray, position: Point2) -> bool:
+    """
+    O(1) check if position is near a choke/ramp using precomputed grid.
+    
+    Args:
+        choke_grid: Precomputed choke grid from create_choke_grid()
+        position: Position to check (typically army_center)
+        
+    Returns:
+        True if near choke (skip formation), False otherwise
+    """
+    pos = position.rounded
+    return choke_grid[pos[0], pos[1]] > 1.0
 
 
 def get_enemy_cannon_rushed(bot, detection_radius: float = 25.0) -> bool:

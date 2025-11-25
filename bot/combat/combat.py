@@ -71,52 +71,23 @@ FORMATION_COHESION_SPREAD_THRESHOLD = 8.0  # Max allowed distance from army cent
 FORMATION_UNIT_MULTIPLIER = 2.0   # Spacing for formation adjustment
 FORMATION_RETREAT_ANGLE = 0.3     # Diagonal spread for ranged units
 
-# Choke/ramp detection constants
-CHOKE_DETECTION_RADIUS = 6.0      # Distance to check for nearby ramps/choke points (ramps can be wide)
 
-
-def is_near_choke_or_ramp(bot, squad_units: list[Unit], army_center: Point2) -> bool:
+def is_near_choke_or_ramp(bot, army_center: Point2) -> bool:
     """
-    Detect if army is near a choke point or on a ramp.
+    O(1) check if army is near a choke/ramp using precomputed grid.
     
     When true, formation logic should be skipped to prevent bottlenecks
     where ranged units block melee units from moving through narrow passages.
     
     Args:
-        bot: Bot instance for accessing choke points and terrain height
-        squad_units: Units in the squad
+        bot: Bot instance with choke_grid attribute (created in on_start)
         army_center: Center of mass of the squad
         
     Returns:
         True if near choke/ramp (skip formation), False otherwise
     """
-    # Check 1: Near ANY ramp on the map (using python-sc2's game_info.map_ramps)
-    try:
-        for ramp in bot.game_info.map_ramps:
-            if cy_distance_to(army_center, ramp.top_center) < CHOKE_DETECTION_RADIUS:
-                return True
-            if cy_distance_to(army_center, ramp.bottom_center) < CHOKE_DETECTION_RADIUS:
-                return True
-    except Exception:
-        pass  # Fallback if map_ramps unavailable
-    
-    # Check 2: Use map_data choke areas (check centers, not all points)
-    try:
-        map_data = bot.mediator.get_map_data_object
-        for choke in map_data.map_chokes:
-            if cy_distance_to(army_center, choke.center) < CHOKE_DETECTION_RADIUS * 2:
-                return True
-    except Exception:
-        pass  # Choke detection unavailable
-    
-    # Check 3: Height variance fallback (if units have different heights, we're on terrain transition)
-    if len(squad_units) >= 3:
-        heights = [bot.get_terrain_z_height(u.position) for u in squad_units[:10]]
-        # SC2 heights are integers, so any variance means height change
-        if max(heights) != min(heights):
-            return True
-    
-    return False
+    x, y = int(army_center.x), int(army_center.y)
+    return bot.choke_grid[x, y] > 1.0
 
 
 def is_blind_ramp_attack(bot, unit: Unit) -> bool:
@@ -201,7 +172,7 @@ def get_formation_move_target(
     army_center = Point2(army_center)
     
     # Skip formation logic near chokes/ramps to prevent bottlenecks
-    if bot is not None and is_near_choke_or_ramp(bot, squad_units, army_center):
+    if bot is not None and is_near_choke_or_ramp(bot, army_center):
         return target
     
     # Identify melee units (fodder - should be in front)
