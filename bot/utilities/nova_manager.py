@@ -1,4 +1,5 @@
 from typing import List, Dict, TYPE_CHECKING, Optional, Set, Tuple
+import traceback
 from sc2.ids.unit_typeid import UnitTypeId
 import numpy as np
 from sc2.position import Point2
@@ -395,11 +396,8 @@ class NovaManager:
             # Draw the sphere
             self.bot.client.debug_sphere_out(point3, max_travel_distance, color=Point3((255, 0, 0)))
             
-            # Log visualization
-            print(f"DEBUG: Drawing Nova radius at {current_position} with radius {max_travel_distance:.2f}")
-            
-        except Exception as e:
-            print(f"DEBUG ERROR in _draw_nova_radius: {e}")
+        except Exception:
+            pass  # Silently fail drawing debug visualization
 
     # draw_nova_visualization method consolidated into _draw_nova_radius
     

@@ -43,9 +43,6 @@ class UseDisruptorNova(CombatIndividualBehavior):
         # Tactical grid reference - retrieved fresh when needed
         self.influence_grid = None
         
-        if self.debug_output:
-            print("DEBUG: UseDisruptorNova initialized")
-        
         # Position tracking
         self.position_update_frequency = position_update_frequency
 
@@ -81,12 +78,7 @@ class UseDisruptorNova(CombatIndividualBehavior):
             
             # First, ensure we have some units to target
             if not enemy_units:
-                if self.debug_output:
-                    print("DEBUG: No enemy units available to target")
                 return None
-                
-            if self.debug_output:
-                print(f"DEBUG: Found {len(enemy_units)} enemy units to consider")
                 
             # Get the disruptor unit to determine position
             disruptor_unit = None
@@ -96,28 +88,13 @@ class UseDisruptorNova(CombatIndividualBehavior):
                     break
                     
             if not disruptor_unit:
-                if self.debug_output:
-                    print("DEBUG: No disruptor unit found in friendly units")
                 return None
-                
-            if self.debug_output:
-                print(f"DEBUG: Using disruptor at position {disruptor_unit.position}")
                 
             # Get tactical ground grid to access influence values - use property syntax
             try:
                 tactical_grid = self.mediator.get_tactical_ground_grid
                 if tactical_grid is None:
-                    if self.debug_output:
-                        print("DEBUG: Tactical grid is None - cannot select target")
                     return None
-                    
-                if self.debug_output:
-                    print(f"DEBUG: Tactical grid shape: {tactical_grid.shape}")
-                
-                    # Debug check for NaN and infinite values
-                    nan_count = np.isnan(tactical_grid).sum()
-                    inf_count = np.isinf(tactical_grid).sum()
-                    print(f"DEBUG: Grid contains {nan_count} NaN values and {inf_count} infinite values")
             except Exception as e:
                 print(f"ERROR accessing tactical grid: {str(e)}")
                 return None
@@ -127,10 +104,8 @@ class UseDisruptorNova(CombatIndividualBehavior):
             if nova_manager:
                 try:
                     exclusion_mask = nova_manager.get_exclusion_mask(tactical_grid)
-                    if self.debug_output:
-                        print(f"DEBUG: Got exclusion mask with {np.sum(exclusion_mask)} cells excluded out of {tactical_grid.size}")
-                except Exception as e:
-                    print(f"ERROR getting exclusion mask: {e}")
+                except Exception:
+                    pass  # Continue without exclusion mask
             
             # Helper function to find points within a circle
             def bounded_circle(center, radius, shape):
@@ -142,21 +117,13 @@ class UseDisruptorNova(CombatIndividualBehavior):
             disruptor_pos = disruptor_unit.position.rounded
             pos_x, pos_y = int(disruptor_pos.x), int(disruptor_pos.y)  # x, y for game coords
             
-            if self.debug_output:
-                print(f"DEBUG: Disruptor grid position: ({pos_x}, {pos_y})")
-            
             # Find the highest influence area within disruptor range
             try:
                 # Get points within radius of disruptor
                 points = bounded_circle(center=(pos_x, pos_y), radius=disruptor_max_range, shape=tactical_grid.shape)
                 
                 if len(points[0]) == 0:
-                    if self.debug_output:
-                        print(f"DEBUG: No points found within range {disruptor_max_range} of disruptor")
                     return None
-                    
-                if self.debug_output:
-                    print(f"DEBUG: Found {len(points[0])} points within range {disruptor_max_range}")
                 
                 # Get values at those points
                 values = tactical_grid[points]
@@ -166,8 +133,6 @@ class UseDisruptorNova(CombatIndividualBehavior):
                 
                 # If we have no finite values, we can't target anything
                 if np.sum(finite_mask) == 0:
-                    if self.debug_output:
-                        print("DEBUG: No finite influence values found in range")
                     return None
                 
                 # Get only the finite values
@@ -187,8 +152,6 @@ class UseDisruptorNova(CombatIndividualBehavior):
                         finite_values = finite_values[non_excluded_mask]
                         finite_indices = finite_indices[non_excluded_mask]
                     else:
-                        if self.debug_output:
-                            print("DEBUG: All points are excluded, no valid targets")
                         return None
                 
                 # Find the index of the maximum value
@@ -203,13 +166,6 @@ class UseDisruptorNova(CombatIndividualBehavior):
                 
                 # Convert the grid position back to a proper game world Point2
                 game_world_pos = Point2((max_x, max_y))
-                
-                # Print positions of enemy units for debugging
-                if self.debug_output and enemy_units:
-                    print(f"DEBUG: Enemy unit positions: {[unit.position for unit in enemy_units]}")
-                
-                if self.debug_output:
-                    print(f"DEBUG: Found maximum influence value {max_value} at position {game_world_pos}")
                 
                 # Check if the influence value is high enough to be worth targeting
                 influence_threshold = 205 
