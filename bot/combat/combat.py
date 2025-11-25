@@ -844,7 +844,7 @@ def fallback_target(bot) -> Point2:
 def control_base_defenders(bot, defender_units: Units, threat_position: Point2) -> None:
     """
     Controls BASE_DEFENDER units using individual behaviors with squad formation.
-    Uses smaller squad radius for close base defense coordination.
+    Uses the same micro functions as main army for consistent combat behavior.
     """
     defensive_squads = bot.mediator.get_squads(role=UnitRole.BASE_DEFENDER, squad_radius=DEFENDER_SQUAD_RADIUS)
     
@@ -870,60 +870,52 @@ def control_base_defenders(bot, defender_units: Units, threat_position: Point2) 
             return_as_dict=False,
         )[0].filter(lambda u: not u.is_memory and not u.is_structure and u.type_id not in COMMON_UNIT_IGNORE_TYPES)
         
+        if not all_close:
+            # No enemies - move towards threat position
+            for unit in units:
+                move_maneuver = CombatManeuver()
+                move_maneuver.add(AMove(unit=unit, target=threat_position))
+                bot.register_behavior(move_maneuver)
+            continue
+        
         # Get priority targets
         priority_targets = get_priority_targets(all_close)
         
-        # Process each defender individually with improved logic
-        for unit in units:
-            unit_grid = bot.mediator.get_air_grid if unit.is_flying else grid
-            
-            defending_maneuver = CombatManeuver()
-            defending_maneuver.add(KeepUnitSafe(unit=unit, grid=avoid_grid))
-            
-            # Handle zealots simply (special case - just AMove)
-            if unit.type_id == UnitTypeId.ZEALOT:
-                defending_maneuver.add(AMove(unit=unit, target=threat_position))
-                bot.register_behavior(defending_maneuver)
-                continue
-            
-            # Separate ranged from melee for better micro
-            if unit.ground_range > MELEE_RANGE_THRESHOLD:
-                # Ranged defender micro (like main army)
-                closest_enemy = cy_closest_to(unit.position, all_close) if all_close else None
-                
-                if closest_enemy and not unit.weapon_ready:
-                    defending_maneuver.add(StutterUnitBack(unit, target=closest_enemy, grid=unit_grid))
-                else:
-                    # Simplified targeting hierarchy: Priority -> Any -> Move
-                    if in_attack_range_priority := cy_in_attack_range(unit, priority_targets):
-                        defending_maneuver.add(ShootTargetInRange(unit=unit, targets=in_attack_range_priority))
-                    elif in_attack_range_any := cy_in_attack_range(unit, all_close):
-                        defending_maneuver.add(ShootTargetInRange(unit=unit, targets=in_attack_range_any))
-                    else:
-                        # Move towards threats or position
-                        if priority_targets:
-                            closest_priority = cy_closest_to(unit.position, priority_targets)
-                            defending_maneuver.add(AMove(unit=unit, target=closest_priority.position))
-                        elif all_close:
-                            closest_threat = cy_closest_to(unit.position, all_close)
-                            defending_maneuver.add(AMove(unit=unit, target=closest_threat.position))
-                        else:
-                            defending_maneuver.add(AMove(unit=unit, target=threat_position))
-            else:
-                # Melee defender micro (like main army)
-                if in_attack_range_priority := cy_in_attack_range(unit, priority_targets):
-                    defending_maneuver.add(ShootTargetInRange(unit=unit, targets=in_attack_range_priority))
-                elif in_attack_range_any := cy_in_attack_range(unit, all_close):
-                    defending_maneuver.add(ShootTargetInRange(unit=unit, targets=in_attack_range_any))
-                else:
-                    # Move towards priority target or threat position
-                    if priority_targets:
-                        closest_priority = cy_closest_to(unit.position, priority_targets)
-                        defending_maneuver.add(AMove(unit=unit, target=closest_priority.position))
-                    else:
-                        defending_maneuver.add(AMove(unit=unit, target=threat_position))
-            
-            bot.register_behavior(defending_maneuver)
+        # Separate unit types for appropriate micro
+        melee = [u for u in units if u.ground_range <= MELEE_RANGE_THRESHOLD and u.energy == 0 and u.can_attack]
+        ranged = [u for u in units if u.ground_range > MELEE_RANGE_THRESHOLD and u.energy == 0 and u.can_attack]
+        spellcasters = [u for u in units if u.energy > 0 or u.type_id == UnitTypeId.DISRUPTOR]
+        
+        # Ranged micro - use same function as main army (aggressive=True for base defense)
+        for r_unit in ranged:
+            ranged_maneuver = micro_ranged_unit(
+                unit=r_unit,
+                enemies=all_close,
+                priority_targets=priority_targets,
+                grid=grid,
+                avoid_grid=avoid_grid,
+                aggressive=True  # Always aggressive when defending base
+            )
+            bot.register_behavior(ranged_maneuver)
+        
+        # Melee micro - use same function as main army
+        for m_unit in melee:
+            melee_maneuver = micro_melee_unit(
+                unit=m_unit,
+                enemies=all_close,
+                priority_targets=priority_targets,
+                avoid_grid=avoid_grid,
+                fallback_position=threat_position,
+                aggressive=True  # Always aggressive when defending base
+            )
+            bot.register_behavior(melee_maneuver)
+        
+        # Spellcasters - stay safe, move with defenders
+        for caster in spellcasters:
+            caster_maneuver = CombatManeuver()
+            caster_maneuver.add(KeepUnitSafe(unit=caster, grid=avoid_grid))
+            caster_maneuver.add(AMove(unit=caster, target=threat_position))
+            bot.register_behavior(caster_maneuver)
 
 
 def select_defensive_anchor(bot, main_army: Units) -> Point2:
