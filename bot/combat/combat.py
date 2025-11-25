@@ -55,6 +55,7 @@ from bot.utilities.debug import (
     render_nova_labels,
     log_nova_error,
 )
+from bot.utilities.intel import get_enemy_intel_quality
 
 from cython_extensions import (
     cy_pick_enemy_target, cy_closest_to, cy_distance_to, cy_distance_to_squared, cy_in_attack_range, cy_find_units_center_mass
@@ -451,6 +452,27 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
                 return attack_target
     else:
         # Not currently attacking: evaluate if we should initiate attack
+        
+        # === INTEL QUALITY GATE ===
+        # Don't trust combat sim if we haven't seen enemy army or info is too stale
+        intel = get_enemy_intel_quality(bot)
+        
+        # Gate 1: Must have seen enemy army at least once
+        if not intel["has_intel"]:
+            # Combat sim has ZERO enemy data - don't trust it, stay defensive
+            return select_defensive_anchor(bot, main_army)
+        
+        # Gate 2: Adjust required victory threshold based on intel freshness
+        # Fresh (>0.7): trust combat sim normally
+        # Stale (0.3-0.7): require higher confidence
+        # Very stale (<0.3): don't initiate attacks, need fresh intel
+        FRESH_INTEL_THRESHOLD = 0.7
+        STALE_INTEL_THRESHOLD = 0.3
+        
+        if intel["freshness"] < STALE_INTEL_THRESHOLD:
+            # Intel is very stale - don't initiate attack, stay defensive until we scout
+            return select_defensive_anchor(bot, main_army)
+        
         # Filter enemy units to exclude workers and structures for more conservative combat simulation
         combat_enemy_units = [
             u for u in bot.mediator.get_cached_enemy_army
@@ -462,19 +484,29 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
             workers_do_no_damage=True,
         )
         
-        # Initiate attack with decisive advantage regardless of defensive flags
-        if fight_result in VICTORY_DECISIVE_OR_BETTER:
-            bot._commenced_attack = True
-            bot._attack_commenced_time = bot.time
-            return attack_target
-        # With build order complete, attack with marginal advantage (stricter threshold than maintaining engagement)
-        elif not is_early_defensive_mode:
-            if (fight_result in VICTORY_MARGINAL_OR_BETTER and not bot._under_attack):
+        # Adjust required threshold based on intel freshness
+        if intel["freshness"] >= FRESH_INTEL_THRESHOLD:
+            # Fresh intel - trust combat sim, attack with decisive advantage
+            if fight_result in VICTORY_DECISIVE_OR_BETTER:
                 bot._commenced_attack = True
                 bot._attack_commenced_time = bot.time
                 return attack_target
+            # With build order complete, attack with marginal advantage
+            elif not is_early_defensive_mode:
+                if (fight_result in VICTORY_MARGINAL_OR_BETTER and not bot._under_attack):
+                    bot._commenced_attack = True
+                    bot._attack_commenced_time = bot.time
+                    return attack_target
+        else:
+            # Moderately stale intel (0.3-0.7) - require emphatic victory to initiate
+            from ares.consts import VICTORY_EMPHATIC_OR_BETTER
+            if fight_result in VICTORY_EMPHATIC_OR_BETTER:
+                bot._commenced_attack = True
+                bot._attack_commenced_time = bot.time
+                return attack_target
+        
         # When build order isn't complete or in defensive mode, only redirect for major threats
-        elif bot._under_attack and bot.enemy_units:
+        if bot._under_attack and bot.enemy_units:
             # Use enhanced threat assessment to avoid bouncing
             enemy_center, _ = cy_find_units_center_mass(bot.enemy_units, 10.0)
             major_threat_info = assess_threat(bot, bot.enemy_units, main_army, return_details=True)

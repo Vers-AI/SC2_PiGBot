@@ -10,6 +10,8 @@ from sc2.units import Units
 from sc2.ids.unit_typeid import UnitTypeId
 from ares.consts import UnitRole
 
+from bot.utilities.intel import get_enemy_intel_quality
+
 # Worker types to filter from combat sim
 WORKER_TYPES = {UnitTypeId.SCV, UnitTypeId.PROBE, UnitTypeId.DRONE, UnitTypeId.MULE}
 
@@ -129,6 +131,15 @@ def _render_combat_sim_overlay(bot, main_army: Units) -> None:
             "Global Fight: N/A", 
             Point2((0.1, 0.32)), None, 14
         )
+    
+    # Intel quality display
+    intel = get_enemy_intel_quality(bot)
+    freshness_bar = "█" * int(intel["freshness"] * 10) + "░" * (10 - int(intel["freshness"] * 10))
+    intel_status = "FRESH" if intel["freshness"] >= 0.7 else ("STALE" if intel["freshness"] >= 0.3 else "BLIND")
+    bot.client.debug_text_2d(
+        f"Intel: [{freshness_bar}] {intel_status} ({intel['visible_count']}vis/{intel['memory_count']}mem)", 
+        Point2((0.1, 0.30)), None, 12
+    )
     
     # Army compositions
     own_types = _get_unit_type_summary(main_army or [])

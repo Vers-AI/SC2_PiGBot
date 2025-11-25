@@ -1,8 +1,19 @@
 """
 Utility functions for gathering intelligence about the enemy.
+
+Purpose: Track enemy intel quality and cannon rush detection
+Key Decisions: Use unit.age and unit.is_memory for staleness tracking
+Limitations: Ghost units expire after 30s in ARES UnitMemoryManager
 """
+from typing import TYPE_CHECKING
+
 from sc2.data import Race
 from sc2.ids.unit_typeid import UnitTypeId as UnitID
+
+from ares.consts import WORKER_TYPES
+
+if TYPE_CHECKING:
+    from bot.bot import PiG_Bot
 
 
 def get_enemy_cannon_rushed(bot, detection_radius: float = 25.0) -> bool:
@@ -48,3 +59,117 @@ def get_enemy_cannon_rushed(bot, detection_radius: float = 25.0) -> bool:
     except Exception as e:
         print(f"Error in cannon rush detection: {e}")
         return False
+
+
+def get_enemy_intel_quality(bot: "PiG_Bot") -> dict:
+    """
+    Analyze the freshness of our enemy army intel.
+    
+    Uses unit.age and unit.is_memory from python-sc2 to determine
+    how trustworthy our combat simulation data is.
+    
+    Returns:
+        dict with keys:
+            - has_intel: bool - have we ever seen enemy army?
+            - avg_age: float - average age of enemy unit data (seconds)
+            - visible_count: int - units we can currently see
+            - memory_count: int - units from memory (not visible)
+            - freshness: float - 0-1 score (1 = all fresh, 0 = all stale)
+    """
+    # Get enemy army excluding workers from CACHED enemy (includes memory units from ARES)
+    cached_enemy = [
+        u for u in bot.mediator.get_cached_enemy_army
+        if u.type_id not in WORKER_TYPES
+    ]
+    
+    # Also check currently visible enemy units (raw observation, no memory)
+    # bot.enemy_units comes directly from game observation
+    current_visible = [
+        u for u in bot.enemy_units
+        if u.type_id not in WORKER_TYPES and not u.is_structure
+    ]
+    
+    # If we have neither cached nor current visible enemies
+    if not cached_enemy and not current_visible:
+        # If we've EVER seen enemy army before, 0 enemies is GOOD intel (we know they have nothing)
+        # Only return "no intel" if we've never seen enemy army at all
+        if bot._enemy_army_ever_seen:
+            return {
+                "has_intel": True,  # We HAVE intel: enemy has no visible army!
+                "avg_age": 0.0,     # Current observation
+                "visible_count": 0,
+                "memory_count": 0,
+                "freshness": 1.0,   # 0 enemies visible = perfectly fresh intel
+            }
+        else:
+            return {
+                "has_intel": False,  # Never seen enemy army, truly blind
+                "avg_age": float('inf'),
+                "visible_count": 0,
+                "memory_count": 0,
+                "freshness": 0.0,
+            }
+    
+    # Count visible as units we've seen recently (age < 3 seconds)
+    # 3s is forgiving for active combat where snapshots update slightly delayed
+    # This is more reliable than is_memory which can be inconsistent
+    VISIBLE_AGE_THRESHOLD = 3.0
+    visible = [u for u in cached_enemy if u.age < VISIBLE_AGE_THRESHOLD]
+    memory = [u for u in cached_enemy if u.age >= VISIBLE_AGE_THRESHOLD]
+    
+    # Fallback: if cached shows no visible but we have current_visible, use that count
+    if not visible and current_visible:
+        visible = current_visible
+    
+    total_count = len(visible) + len(memory)
+    if total_count == 0:
+        return {
+            "has_intel": False,
+            "avg_age": float('inf'),
+            "visible_count": 0,
+            "memory_count": 0,
+            "freshness": 0.0,
+        }
+    
+    # Calculate average age of all enemy units we know about
+    all_units = cached_enemy if cached_enemy else current_visible
+    avg_age = sum(u.age for u in all_units) / len(all_units) if all_units else 0.0
+    
+    # Freshness score: 1.0 = all visible now, decays over 30 seconds
+    # (30s matches ARES UnitMemoryManager expiration)
+    STALENESS_WINDOW = 30.0
+    freshness = sum(max(0, 1 - u.age / STALENESS_WINDOW) for u in all_units) / len(all_units)
+    
+    return {
+        "has_intel": True,
+        "avg_age": avg_age,
+        "visible_count": len(visible),
+        "memory_count": len(memory),
+        "freshness": freshness,
+    }
+
+
+def update_enemy_intel_tracking(bot: "PiG_Bot") -> None:
+    """
+    Update enemy intel tracking flags. Call this every frame.
+    
+    Sets:
+        - bot._enemy_army_ever_seen: sticky flag, True once we've seen enemy army
+        - bot._last_enemy_army_visible_time: last time we had direct vision of enemy army
+    """
+    # Get enemy army excluding workers
+    enemy_army = [
+        u for u in bot.mediator.get_cached_enemy_army
+        if u.type_id not in WORKER_TYPES
+    ]
+    
+    # Check if any enemy army is currently visible (not memory)
+    visible_army = [u for u in enemy_army if not u.is_memory]
+    
+    if visible_army:
+        # We currently see enemy army
+        bot._enemy_army_ever_seen = True
+        bot._last_enemy_army_visible_time = bot.time
+    elif enemy_army:
+        # We have memory of enemy army but can't see them now
+        bot._enemy_army_ever_seen = True

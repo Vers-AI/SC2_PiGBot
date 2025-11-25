@@ -38,6 +38,7 @@ from bot.combat import (
     manage_defensive_unit_roles
 )
 from bot.managers.scouting import control_scout
+from bot.utilities.intel import update_enemy_intel_tracking
 from ares.behaviors.macro import Mining
 from bot.managers.reactions import (
     early_threat_sensor,
@@ -108,7 +109,7 @@ class PiG_Bot(AresBot):
         self._cannon_rush_cleanup_timer = None
 
         # Debug flags
-        self.debug = False  # Enable debug output for targeting analysis
+        self.debug = True  # Enable debug output for targeting analysis
         
         # Target persistence for stable attack behavior
         self.current_attack_target = None
@@ -130,6 +131,10 @@ class PiG_Bot(AresBot):
         # Strategic anchor positioning (for smart army placement)
         self._current_defensive_anchor = None  # Current anchor position
         self._anchor_change_time = 0.0  # Last time anchor was changed (for cooldown)
+        
+        # Enemy intel tracking (for combat sim trust)
+        self._enemy_army_ever_seen = False  # Sticky flag: have we EVER seen enemy combat units?
+        self._last_enemy_army_visible_time = 0.0  # Last time we had direct vision of enemy army
 
 
 
@@ -214,6 +219,9 @@ class PiG_Bot(AresBot):
         )) 
 
         self.enemy_army = self.mediator.get_cached_enemy_army
+        
+        # Update enemy intel tracking (for combat sim trust)
+        update_enemy_intel_tracking(self)
 
         # Retrieve roles (initial fetch)
         main_army = self.mediator.get_units_from_role(role=UnitRole.ATTACKING)
