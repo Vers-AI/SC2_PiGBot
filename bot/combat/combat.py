@@ -49,7 +49,7 @@ from bot.combat.unit_micro import (
     micro_disruptor,
     get_priority_targets,
 )
-from bot.combat.debug import (
+from bot.utilities.debug import (
     render_combat_state_overlay,
     log_nova_error,
 )

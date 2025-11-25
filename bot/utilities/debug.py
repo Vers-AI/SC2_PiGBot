@@ -7,7 +7,11 @@ Limitations: Requires bot.debug=True in bot.py to activate
 
 from sc2.position import Point2, Point3
 from sc2.units import Units
+from sc2.ids.unit_typeid import UnitTypeId
 from ares.consts import UnitRole
+
+# Worker types to filter from combat sim
+WORKER_TYPES = {UnitTypeId.SCV, UnitTypeId.PROBE, UnitTypeId.DRONE, UnitTypeId.MULE}
 
 
 def render_combat_state_overlay(bot, main_army: Units, enemy_threat_level: int, is_early_defensive_mode: bool) -> None:
@@ -56,8 +60,53 @@ def render_combat_state_overlay(bot, main_army: Units, enemy_threat_level: int, 
         Point2((0.1, 0.28)), None, 14
     )
     
+    # Army composition info (archon percentage for comp switching)
+    if main_army and len(main_army) > 0:
+        archon_count = sum(1 for u in main_army if u.type_id == UnitTypeId.ARCHON)
+        archon_pct = archon_count / len(main_army)
+        bot.client.debug_text_2d(
+            f"Archons: {archon_count}/{len(main_army)} ({archon_pct:.0%}) [switch@15%]", 
+            Point2((0.1, 0.30)), None, 14
+        )
+    
+    # Combat simulator results
+    _render_combat_sim_overlay(bot, main_army)
+    
     # Visual markers for targeting
     render_target_markers(bot, main_army)
+
+
+def _render_combat_sim_overlay(bot, main_army: Units) -> None:
+    """Render combat simulator results (global and squad-level)."""
+    # Global fight result (army vs army, excluding workers/structures)
+    try:
+        combat_enemies = [
+            u for u in bot.mediator.get_cached_enemy_army
+            if u.type_id not in WORKER_TYPES and not u.is_structure
+        ]
+        global_result = bot.mediator.can_win_fight(
+            own_units=bot.own_army,
+            enemy_units=combat_enemies,
+        )
+        bot.client.debug_text_2d(
+            f"Global Fight: {global_result.name}", 
+            Point2((0.1, 0.32)), None, 14
+        )
+    except Exception:
+        bot.client.debug_text_2d(
+            "Global Fight: N/A", 
+            Point2((0.1, 0.32)), None, 14
+        )
+    
+    # Squad engagement tracker summary
+    tracker = getattr(bot, '_squad_engagement_tracker', {})
+    if tracker:
+        engaged = sum(1 for v in tracker.values() if v.get("can_engage", False))
+        total = len(tracker)
+        bot.client.debug_text_2d(
+            f"Squad Engage: {engaged}/{total} squads", 
+            Point2((0.1, 0.34)), None, 14
+        )
 
 
 def render_target_markers(bot, main_army: Units) -> None:
@@ -77,7 +126,7 @@ def render_target_markers(bot, main_army: Units) -> None:
     if hasattr(bot, 'current_attack_target') and bot.current_attack_target:
         bot.client.debug_text_2d(
             f"Current Target: {bot.current_attack_target}", 
-            Point2((0.1, 0.30)), None, 14
+            Point2((0.1, 0.36)), None, 14
         )
         target_3d = Point3((
             bot.current_attack_target.x, 
@@ -91,7 +140,7 @@ def render_target_markers(bot, main_army: Units) -> None:
         army_center = main_army.center
         bot.client.debug_text_2d(
             f"Army Center: {army_center}", 
-            Point2((0.1, 0.32)), None, 14
+            Point2((0.1, 0.38)), None, 14
         )
         army_center_3d = Point3((
             army_center.x, 
