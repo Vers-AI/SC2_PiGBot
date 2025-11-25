@@ -90,10 +90,8 @@ def is_near_choke_or_ramp(bot, squad_units: list[Unit], army_center: Point2) -> 
         True if near choke/ramp (skip formation), False otherwise
     """
     # Check 1: Near ANY ramp on the map (using python-sc2's game_info.map_ramps)
-    # This is the most reliable way to detect ramps
     try:
         for ramp in bot.game_info.map_ramps:
-            # Check both top and bottom of each ramp
             if cy_distance_to(army_center, ramp.top_center) < CHOKE_DETECTION_RADIUS:
                 return True
             if cy_distance_to(army_center, ramp.bottom_center) < CHOKE_DETECTION_RADIUS:
@@ -117,6 +115,55 @@ def is_near_choke_or_ramp(bot, squad_units: list[Unit], army_center: Point2) -> 
         if max(heights) != min(heights):
             return True
     
+    return False
+
+
+def is_blind_ramp_attack(bot, unit: Unit) -> bool:
+    """
+    Check if unit is at the bottom of a ramp with enemy ranged units at the
+    unseen top - attacking would be a blind disadvantage.
+    
+    From anglerbot: Used to trigger KeepUnitSafe instead of attacking.
+    
+    Returns:
+        True if unit should NOT attack (retreat instead), False otherwise
+    """
+    for ramp in bot.game_info.map_ramps:
+        # Check if unit is at bottom of this ramp
+        if cy_distance_to(unit.position, ramp.bottom_center) > 4.0:
+            continue
+            
+        # Skip if we can see the top - no vision disadvantage
+        if bot.is_visible(ramp.top_center):
+            continue
+            
+        # Unit is at bottom, can't see top - check for enemy ranged at top
+        for enemy in bot.enemy_units:
+            if enemy.ground_range < 2:  # Skip melee
+                continue
+            if cy_distance_to(enemy.position, ramp.top_center) < 5.0:
+                return True  # Enemy ranged at top - don't attack blind
+                
+    return False
+
+
+def is_unit_on_ramp(bot, unit: Unit) -> bool:
+    """
+    Check if unit is on or near a ramp.
+    
+    When true and no enemies nearby, unit should move through the ramp
+    instead of standing there (even to attack structures).
+    
+    Returns:
+        True if unit is on/near any ramp
+    """
+    for ramp in bot.game_info.map_ramps:
+        # Check if unit is near top or bottom of ramp
+        if cy_distance_to(unit.position, ramp.top_center) < 5.0:
+            return True
+        if cy_distance_to(unit.position, ramp.bottom_center) < 5.0:
+            return True
+                
     return False
 
 
@@ -301,6 +348,13 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
             for r_unit in ranged:
                 if r_unit in ranged_on_unsafe_ground:
                     continue  # Skip units retreating to safer ground
+                
+                # Ramp safety: don't attack up ramp without vision (blind disadvantage)
+                if is_blind_ramp_attack(bot, r_unit):
+                    retreat_maneuver = CombatManeuver()
+                    retreat_maneuver.add(KeepUnitSafe(unit=r_unit, grid=avoid_grid))
+                    bot.register_behavior(retreat_maneuver)
+                    continue
                     
                 ranged_maneuver = micro_ranged_unit(
                     unit=r_unit,
@@ -394,7 +448,14 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                 
                 # Use PathUnitToTarget only when no enemies or structures nearby (map crossing)
                 should_wait = False  # Flag to skip fallback movement when unit should wait
-                if not close_by and not nearby_structures:
+                
+                # Ramp check - if on ramp with no enemies, push through (don't stand and shoot)
+                # This prevents ranged units blocking ramp while attacking structures
+                if not close_by and is_unit_on_ramp(bot, unit):
+                    no_enemy_maneuver.add(PathUnitToTarget(
+                        unit=unit, grid=unit_grid, target=move_to, success_at_distance=3.0
+                    ))
+                elif not close_by and not nearby_structures:
                     # Safe map crossing - use formation-aware movement to prevent streaming
                     if cy_distance_to_squared(unit.position, move_to) > MAP_CROSSING_DISTANCE_SQ:
                         # Get formation-adjusted target (keeps melee front, ranged back, army together)
