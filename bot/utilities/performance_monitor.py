@@ -1,10 +1,41 @@
 """
 Performance Monitor
-Tracks bot performance metrics in real-time for both decision-making and reporting.
-Can be extended to monitor additional efficiency metrics beyond Spending Quotient.
+Purpose: Tracks bot economy and spending efficiency for both decision-making and reporting.
+Key Decisions: Uses Spending Quotient (SQ) formula from Liquipedia for efficiency metrics.
+              Economy state is a simple capacity check; SQ measures spending efficiency.
+Limitations: SQ unreliable when income < 600/min (early game).
 """
 
 import math
+
+
+def get_economy_state(bot) -> str:
+    """
+    Single source of truth for economy health.
+    Used to gate production intensity and upgrade timing.
+    
+    Returns:
+        str: "recovery", "reduced", "moderate", or "full"
+    
+    Thresholds based on SC2 economy research:
+    - 1 saturated base (~16 mineral workers) = ~900-1000 minerals/min
+    - 1 gate continuous production = ~220-250 minerals/min
+    - So ~700+ minerals/min can support 3 gates comfortably
+    """
+    workers = bot.workers.amount
+    mineral_rate = bot.state.score.collection_rate_minerals
+    
+    # Hard safety gate: critically underdeveloped
+    if workers < 20:
+        return "recovery"
+    
+    # Income-based tiers
+    if mineral_rate < 400 or workers < 30:
+        return "reduced"
+    elif mineral_rate < 700 or workers < 44:
+        return "moderate"
+    else:
+        return "full"
 
 
 class PerformanceMonitor:
@@ -154,3 +185,23 @@ class PerformanceMonitor:
             return "GOLD"
         else:
             return "SILVER"
+    
+    def should_trigger_freeflow(self, bot) -> bool:
+        """
+        Use SQ to detect if we should trigger freeflow mode (spending problem).
+        Only reliable when we have sufficient income data (>600/min).
+        
+        Returns:
+            True if SQ indicates we're banking too much and should spend freely
+        """
+        # SQ unreliable below 600 income (per Liquipedia)
+        if self.avg_income_minerals < 600 or self.samples_taken < 5:
+            return False
+        
+        # Only trigger if we're in a good economy state but spending poorly
+        economy = get_economy_state(bot)
+        if economy not in ("moderate", "full"):
+            return False
+        
+        # Low SQ = banking too much = trigger freeflow
+        return self.get_current_sq() < 50

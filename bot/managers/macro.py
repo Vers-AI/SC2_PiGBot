@@ -25,11 +25,12 @@ from ares.consts import LOSS_MARGINAL_OR_BETTER
 
 from bot.managers.scouting import control_scout
 from bot.constants import COMMON_UNIT_IGNORE_TYPES
+from bot.utilities.performance_monitor import get_economy_state
 
 
 def get_freeflow_mode(bot) -> bool:
     """
-    Dynamic freeflow calculation based on current economy state.
+    Dynamic freeflow calculation based on current economy state and spending efficiency.
     Freeflow mode ignores army composition proportions and spends resources freely.
     
     Args:
@@ -54,6 +55,10 @@ def get_freeflow_mode(bot) -> bool:
     if (bot.enemy_race == Race.Protoss 
         and len(bot.townhalls) <= 1 
         and bot.unit_pending(UnitTypeId.IMMORTAL)):
+        return True
+    
+    # SQ-based trigger: low spending quotient means we're banking too much
+    if hasattr(bot, 'performance_monitor') and bot.performance_monitor.should_trigger_freeflow(bot):
         return True
     
     # Normal proportional production
@@ -100,35 +105,6 @@ def get_optimal_gas_workers(bot) -> int:
     
     # Normal operation - follow toggle state
     return 3 if bot._gas_worker_toggle else 0
-
-def get_economy_state(bot) -> str:
-    """
-    Single source of truth for economy health.
-    Used to gate production intensity and upgrade timing.
-    
-    Returns:
-        str: "recovery", "reduced", "moderate", or "full"
-    
-    Thresholds based on SC2 economy research:
-    - 1 saturated base (~16 mineral workers) = ~900-1000 minerals/min
-    - 1 gate continuous production = ~220-250 minerals/min
-    - So ~700+ minerals/min can support 3 gates comfortably
-    """
-    workers = bot.workers.amount
-    mineral_rate = bot.state.score.collection_rate_minerals
-    
-    # Hard safety gate: critically underdeveloped
-    if workers < 20:
-        return "recovery"
-    
-    # Income-based tiers
-    if mineral_rate < 400 or workers < 30:
-        return "reduced"
-    elif mineral_rate < 700 or workers < 44:
-        return "moderate"
-    else:
-        return "full"
-
 
 # Army composition constants 
 STANDARD_ARMY_0 = {
