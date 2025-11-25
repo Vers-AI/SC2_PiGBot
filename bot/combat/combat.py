@@ -70,11 +70,61 @@ FORMATION_COHESION_SPREAD_THRESHOLD = 8.0  # Max allowed distance from army cent
 FORMATION_UNIT_MULTIPLIER = 2.0   # Spacing for formation adjustment
 FORMATION_RETREAT_ANGLE = 0.3     # Diagonal spread for ranged units
 
+# Choke/ramp detection constants
+CHOKE_DETECTION_RADIUS = 6.0      # Distance to check for nearby ramps/choke points (ramps can be wide)
+
+
+def is_near_choke_or_ramp(bot, squad_units: list[Unit], army_center: Point2) -> bool:
+    """
+    Detect if army is near a choke point or on a ramp.
+    
+    When true, formation logic should be skipped to prevent bottlenecks
+    where ranged units block melee units from moving through narrow passages.
+    
+    Args:
+        bot: Bot instance for accessing choke points and terrain height
+        squad_units: Units in the squad
+        army_center: Center of mass of the squad
+        
+    Returns:
+        True if near choke/ramp (skip formation), False otherwise
+    """
+    # Check 1: Near ANY ramp on the map (using python-sc2's game_info.map_ramps)
+    # This is the most reliable way to detect ramps
+    try:
+        for ramp in bot.game_info.map_ramps:
+            # Check both top and bottom of each ramp
+            if cy_distance_to(army_center, ramp.top_center) < CHOKE_DETECTION_RADIUS:
+                return True
+            if cy_distance_to(army_center, ramp.bottom_center) < CHOKE_DETECTION_RADIUS:
+                return True
+    except Exception:
+        pass  # Fallback if map_ramps unavailable
+    
+    # Check 2: Use map_data choke areas (check centers, not all points)
+    try:
+        map_data = bot.mediator.get_map_data_object
+        for choke in map_data.map_chokes:
+            if cy_distance_to(army_center, choke.center) < CHOKE_DETECTION_RADIUS * 2:
+                return True
+    except Exception:
+        pass  # Choke detection unavailable
+    
+    # Check 3: Height variance fallback (if units have different heights, we're on terrain transition)
+    if len(squad_units) >= 3:
+        heights = [bot.get_terrain_z_height(u.position) for u in squad_units[:10]]
+        # SC2 heights are integers, so any variance means height change
+        if max(heights) != min(heights):
+            return True
+    
+    return False
+
 
 def get_formation_move_target(
     unit: Unit, 
     squad_units: list[Unit], 
     target: Point2,
+    bot=None,
 ) -> Point2:
     """
     Get move target that maintains formation AND cohesion during map crossing.
@@ -82,10 +132,14 @@ def get_formation_move_target(
     Formation: Uses cy_adjust_moving_formation to keep melee in front, ranged behind
     Cohesion: Slows down units that get too far ahead OR too spread out
     
+    SKIP formation when near chokes/ramps to prevent bottlenecks where ranged
+    units block melee from moving through narrow passages.
+    
     Args:
         unit: The unit to get move target for
         squad_units: All units in the squad (for center mass calculation)
         target: The ultimate destination
+        bot: Bot instance for choke/ramp detection (optional)
         
     Returns:
         Adjusted move target (may be army center if unit is too far ahead/spread)
@@ -96,6 +150,10 @@ def get_formation_move_target(
     # Get army center of mass
     army_center, _ = cy_find_units_center_mass(squad_units, 10.0)
     army_center = Point2(army_center)
+    
+    # Skip formation logic near chokes/ramps to prevent bottlenecks
+    if bot is not None and is_near_choke_or_ramp(bot, squad_units, army_center):
+        return target
     
     # Identify melee units (fodder - should be in front)
     fodder_tags = [u.tag for u in squad_units if u.ground_range <= MELEE_RANGE_THRESHOLD]
@@ -340,7 +398,8 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     # Safe map crossing - use formation-aware movement to prevent streaming
                     if cy_distance_to_squared(unit.position, move_to) > MAP_CROSSING_DISTANCE_SQ:
                         # Get formation-adjusted target (keeps melee front, ranged back, army together)
-                        formation_target = get_formation_move_target(unit, units, move_to)
+                        # Pass bot for choke/ramp detection to prevent bottlenecks
+                        formation_target = get_formation_move_target(unit, units, move_to, bot=bot)
                         
                         # If formation_target != move_to, unit is ahead and should WAIT (not move)
                         if formation_target != move_to:
