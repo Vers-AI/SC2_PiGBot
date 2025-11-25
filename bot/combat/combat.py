@@ -131,7 +131,7 @@ def is_blind_ramp_attack(bot, unit: Unit) -> bool:
     """
     for ramp in bot.game_info.map_ramps:
         # Check if unit is at bottom of this ramp
-        if cy_distance_to(unit.position, ramp.bottom_center) > 4.0:
+        if cy_distance_to(unit.position, ramp.bottom_center) > 5.0:
             continue
             
         # Skip if we can see the top - no vision disadvantage
@@ -139,10 +139,11 @@ def is_blind_ramp_attack(bot, unit: Unit) -> bool:
             continue
             
         # Unit is at bottom, can't see top - check for enemy ranged at top
-        for enemy in bot.enemy_units:
+        # Use all_enemy_units (includes memory) since we can't see them if top is dark
+        for enemy in bot.all_enemy_units:
             if enemy.ground_range < 2:  # Skip melee
                 continue
-            if cy_distance_to(enemy.position, ramp.top_center) < 5.0:
+            if cy_distance_to(enemy.position, ramp.top_center) < 6.0:
                 return True  # Enemy ranged at top - don't attack blind
                 
     return False
