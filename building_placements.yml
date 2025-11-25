@@ -1,5 +1,5 @@
 Protoss:
-  Incorporeal:
+  Incorporeal AIE:
     VsZergNatWall:
       AvailableVsRaces: ["Protoss", "Zerg", "Random"]
       UpperSpawn:
@@ -24,7 +24,7 @@ Protoss:
         FirstPylon: [[ 119.0, 20.0 ]]
         ThreeByThrees: [[ 119.5, 23.5 ], [ 117.5, 14.5 ]]
         StaticDefences: [[ 117.0, 20.0 ]]
-  Persephone:
+  Persephone AIE:
     VsZergNatWall:
       AvailableVsRaces: ["Protoss", "Zerg", "Random"]
       UpperSpawn:
@@ -47,7 +47,7 @@ Protoss:
       LowerSpawn:
         FirstPylon: [[ 48.0, 55.0 ]]
         ThreeByThrees: [ [ 49.5, 52.5 ], [ 44.5, 52.5 ]]
-  Pylon:
+  Pylon AIE:
     VsZergNatWall:
       AvailableVsRaces: ["Protoss", "Zerg", "Random"]
       UpperSpawn:
@@ -70,7 +70,7 @@ Protoss:
       LowerSpawn:
         FirstPylon: [[ 171.0, 72.0 ]]
         ThreeByThrees: [[ 171.5, 75.5 ], [ 169.5, 66.5 ]]
-  Torches:
+  Torches AIE:
     VsZergNatWall:
       AvailableVsRaces: ["Protoss", "Zerg", "Random"]
       UpperSpawn:
@@ -118,9 +118,9 @@ Protoss:
       LowerSpawn:
         FirstPylon: [[ 58.0, 47.0 ]]
         ThreeByThrees: [[ 55.5, 47.5 ], [ 53.5, 50.5 ]]
-  Ultralove:
+  Ultralove AIE:
     VsZergNatWall:
-      AvailableVsRaces: ["Protoss", "Zerg", "Random"]
+      AvailableVsRaces: ["Protoss", "Zerg", "Terran", "Random"]
       UpperSpawn:
         FirstPylon: [[ 110.0, 138.0 ]]
         Pylons: [[ 113.0, 135.0 ]]
@@ -133,15 +133,15 @@ Protoss:
         ThreeByThrees: [[ 72.5, 51.5 ], [ 73.5, 48.5 ], [ 77.5, 46.5 ]]
         StaticDefences: [[ 71.0, 46.0 ]]
         GateKeeper: [[ 75.5, 47.5 ]]
-    VsZergNatWall:
-      AvailableVsRaces: ["Terran"]
-      UpperSpawn:
-        FirstPylon: [[ 127.0, 124.0 ]]
-        ThreeByThrees: [ [ 129.5, 123.5 ], [ 131.5, 120.5 ]]
-      LowerSpawn:
-        FirstPylon: [[ 57.0, 60.0 ]]
-        ThreeByThrees: [[ 54.5, 60.5 ], [ 52.5, 63.5 ]]
-  Magannatha:
+    #VsZergNatWall: # broken for now 
+    #  AvailableVsRaces: ["Terran"]
+    #  UpperSpawn:
+    #    FirstPylon: [[ 127.0, 124.0 ]]
+    #    ThreeByThrees: [ [ 129.5, 123.5 ], [ 131.5, 120.5 ]]
+    #  LowerSpawn:
+    #    FirstPylon: [[ 57.0, 60.0 ]]
+    #    ThreeByThrees: [[ 54.5, 60.5 ], [ 52.5, 63.5 ]]
+  Magannatha AIE:
     VsZergNatWall:
       AvailableVsRaces: ["Protoss", "Zerg", "Random"]
       UpperSpawn:
