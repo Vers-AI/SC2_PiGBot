@@ -1,8 +1,8 @@
 """
 Rush detection utilities for identifying early Zerg aggression.
 
-Purpose: Classify Zerg opener as 12_pool, speedling, or macro
-Key Decisions: Pool timing is primary discriminator; gas is a feature not a label
+Purpose: Classify Zerg opener as 12_pool, speedling, or none (hybrid rule + ML system)
+Key Decisions: Pool timing is primary discriminator; auto-TRUE guards for clear rushes
 Limitations: Requires enemy main location scouted; probe death reduces signal quality
 """
 
@@ -360,17 +360,18 @@ def get_enemy_ling_rushed_v2(bot: "PiG_Bot") -> bool:
     Labels:
         - 12_pool: Very early pool (~12 supply), earliest ling rush
         - speedling: Early pool + gas for fast Metabolic Boost timing
-        - macro: Normal/standard opener (negative class)
+        - none: Not a rush (negative class)
     
     Returns:
-        True if rush detected (12_pool or speedling), False if macro
+        True if rush detected (12_pool or speedling), False if none
     """
     # Initialize tracking attributes
     if not hasattr(bot, '_ling_rushed_v2'):
         bot._ling_rushed_v2 = False
-        bot._rush_label = "macro"
+        bot._rush_label = "none"
         bot._score_12p = 0
         bot._score_speed = 0
+        bot._auto_true_fired = False
     
     # Return early if already detected as rush
     if bot._ling_rushed_v2:
@@ -401,6 +402,7 @@ def get_enemy_ling_rushed_v2(bot: "PiG_Bot") -> bool:
     if bot._first_ling_seen_time is not None and bot._first_ling_seen_time <= T_LING_EARLY:
         bot._ling_rushed_v2 = True
         bot._rush_label = "12_pool"
+        bot._auto_true_fired = True
         print(f"{bot.time_formatted}: Rush detected (Auto-TRUE A): Ling seen at {bot._first_ling_seen_time:.1f}s → 12_pool")
         return True
     
@@ -410,6 +412,7 @@ def get_enemy_ling_rushed_v2(bot: "PiG_Bot") -> bool:
         not bot._ling_has_speed):
         bot._ling_rushed_v2 = True
         bot._rush_label = "12_pool"
+        bot._auto_true_fired = True
         print(f"{bot.time_formatted}: Rush detected (Auto-TRUE B): Slow-ling contact at {bot._first_ling_contact_nat_time:.1f}s → 12_pool")
         return True
     
@@ -419,6 +422,7 @@ def get_enemy_ling_rushed_v2(bot: "PiG_Bot") -> bool:
         bot._ling_has_speed):
         bot._ling_rushed_v2 = True
         bot._rush_label = "speedling"
+        bot._auto_true_fired = True
         print(f"{bot.time_formatted}: Rush detected (Auto-TRUE C): Speed-ling contact at {bot._first_ling_contact_nat_time:.1f}s → speedling")
         return True
     
@@ -509,8 +513,8 @@ def get_enemy_ling_rushed_v2(bot: "PiG_Bot") -> bool:
         print(f"{bot.time_formatted}: Rush detected! speedling (score={score_speed})")
         return True
     
-    # Default: macro (not a rush)
-    bot._rush_label = "macro"
+    # Default: none (not a rush)
+    bot._rush_label = "none"
     return False
 
 
@@ -520,6 +524,7 @@ def log_rush_detection_result(bot: "PiG_Bot", game_result):
     
     Creates a JSON log entry with all timing data and the final outcome.
     Appends to data/rush_detection_log.jsonl (one line per game).
+    Feature names match the ML spec for direct use in training.
     
     Call this from bot.on_end() method.
     
@@ -535,29 +540,37 @@ def log_rush_detection_result(bot: "PiG_Bot", game_result):
     log_dir.mkdir(exist_ok=True)
     log_file = log_dir / "rush_detection_log.jsonl"
     
+    # Get feature values, using -1 for missing (ML convention)
+    def get_time(attr, default=-1):
+        val = getattr(bot, attr, None)
+        return val if val is not None else default
+    
     log_entry = {
+        # Metadata
         "map_name": bot.game_info.map_name,
         "enemy_race": str(bot.enemy_race),
-        "rush_distance_seconds": getattr(bot, '_rush_time_seconds', None),
+        "rush_distance_seconds": getattr(bot, '_rush_time_seconds', -1),
         
-        # Timing observations
-        "t_nat_started": getattr(bot, '_enemy_nat_started_at', None),
-        "pool_seen_state": getattr(bot, '_pool_seen_state', "none"),
-        "t_pool_start": getattr(bot, '_pool_seen_time', None),
-        "t_extractor_seen": getattr(bot, '_extractor_seen_time', None),
-        "t_queen_started": getattr(bot, '_queen_started_time', None),
-        "t_speed_research": getattr(bot, '_speed_research_time', None),
-        "t_first_ling_seen": getattr(bot, '_first_ling_seen_time', None),
-        "t_first_ling_contact_nat": getattr(bot, '_first_ling_contact_nat_time', None),
-        "ling_has_speed": getattr(bot, '_ling_has_speed', False),
+        # Raw timing features (for ML) - use -1 for missing
+        "pool_start": get_time('_pool_seen_time'),
+        "nat_start": get_time('_enemy_nat_started_at'),
+        "gas_time": get_time('_extractor_seen_time'),
+        "queen_time": get_time('_queen_started_time'),
+        "ling_seen": get_time('_first_ling_seen_time'),
+        "ling_contact": get_time('_first_ling_contact_nat_time'),
+        "speed_start": get_time('_speed_research_time'),
+        "ling_has_speed": 1 if getattr(bot, '_ling_has_speed', False) else 0,
+        "gas_workers": getattr(bot, '_gas_workers_count', 0),
         
-        # Detection scores (new 2-score system)
+        # Rule scores (for ML)
         "score_12p": getattr(bot, '_score_12p', 0),
         "score_speed": getattr(bot, '_score_speed', 0),
-        "rush_label": getattr(bot, '_rush_label', "macro"),
-        "is_rushed": getattr(bot, '_ling_rushed_v2', False),
         
-        # Game outcome
+        # Classification result
+        "auto_true_fired": getattr(bot, '_auto_true_fired', False),
+        "rush_label": getattr(bot, '_rush_label', "none"),
+        
+        # Game outcome (for training labels / analysis)
         "result": str(game_result),
         "game_time_seconds": bot.time,
     }
