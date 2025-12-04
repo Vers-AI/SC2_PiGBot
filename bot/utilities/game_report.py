@@ -127,11 +127,12 @@ def get_replay_tags_to_send(bot) -> list[str]:
     tags = []
     
     # Tag rush type when detected (Zerg only, once per game)
+    # Labels: 12_pool, speedling, macro (macro = not a rush)
     if (bot.enemy_race in {Race.Zerg, Race.Random} 
         and hasattr(bot, '_ling_rushed_v2') 
         and bot._ling_rushed_v2
         and hasattr(bot, '_rush_label')
-        and bot._rush_label != 'none'
+        and bot._rush_label in {'12_pool', 'speedling'}
         and 'Rush' not in bot._replay_tags_sent):
         
         tags.append(f"Rush_{bot._rush_label}")
@@ -277,30 +278,38 @@ def _print_economy_state(bot) -> None:
 
 def _print_rush_detection_status(bot) -> None:
     """Print rush detection intel (Zerg only - early game)."""
-    if not hasattr(bot, '_rush_score') or bot.time > 240.0:
+    if not hasattr(bot, '_rush_label') or bot.time > 240.0:
         return
     
     print("\n  RUSH DETECTION (vs Zerg):")
     
-    # Rush scores
-    total = getattr(bot, '_rush_score', 0)
-    r1 = getattr(bot, '_r1_score', 0)
-    r2 = getattr(bot, '_r2_score', 0)
-    r3 = getattr(bot, '_r3_score', 0)
+    # Rush scores (new 2-score system)
+    score_12p = getattr(bot, '_score_12p', 0)
+    score_speed = getattr(bot, '_score_speed', 0)
+    rush_label = getattr(bot, '_rush_label', 'macro')
+    is_rushed = getattr(bot, '_ling_rushed_v2', False)
     
-    print(f"    Rush Score: {total} (R1={r1}, R2={r2}, R3={r3})")
-    print(f"    Rush Label: {getattr(bot, '_rush_label', 'none')}")
-    print(f"    Rush Detected: {getattr(bot, '_ling_rushed_v2', False)}")
+    print(f"    Label: {rush_label} (12p={score_12p}, speed={score_speed})")
+    print(f"    Rush Detected: {is_rushed}")
     
     # Natural scouting
     natural_scouted = getattr(bot, '_natural_ever_scouted', False)
-    print(f"    Enemy Natural Scouted: {natural_scouted}")
+    nat_started = getattr(bot, '_enemy_nat_started_at', None)
+    nat_str = f"{nat_started:.1f}s" if nat_started else "absent"
+    print(f"    Enemy Natural: {nat_str} (scouted={natural_scouted})")
     
     # Pool info
     pool_state = getattr(bot, '_pool_seen_state', 'none')
     pool_time = getattr(bot, '_pool_seen_time', None)
     pool_time_str = f"{pool_time:.1f}s" if pool_time else "unknown"
-    print(f"    Spawning Pool: {pool_state} (seen at {pool_time_str})")
+    print(f"    Pool: {pool_state} (start≈{pool_time_str})")
+    
+    # Speed research
+    speed_started = getattr(bot, '_speed_research_started', False)
+    speed_time = getattr(bot, '_speed_research_time', None)
+    speed_str = f"{speed_time:.1f}s" if speed_time else "not seen"
+    if speed_started:
+        print(f"    Speed Research: started at {speed_str}")
 
 
 def print_end_game_report(

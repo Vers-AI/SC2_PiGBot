@@ -150,7 +150,7 @@ def get_enemy_intel_quality(bot: "PiG_Bot") -> dict:
     # If we have neither cached nor current visible enemies
     if not cached_enemy and not current_visible:
         # If we've EVER seen enemy army before, 0 enemies is GOOD intel (we know they have nothing)
-        # Only return "no intel" if we've never seen enemy army at all
+        # Only return "no intel" if we've never seen enemy army at allP
         if bot._enemy_army_ever_seen:
             return {
                 "has_intel": True,  # We HAVE intel: enemy has no visible army!

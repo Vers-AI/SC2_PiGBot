@@ -1,8 +1,8 @@
 """
 Rush detection utilities for identifying early Zerg aggression.
 
-Purpose: Compute rush distance tiers and evaluate ling rush signals
-Key Decisions: Use map_data.pathfind for ground distance, dynamic zergling speed from game data
+Purpose: Classify Zerg opener as 12_pool, speedling, or macro
+Key Decisions: Pool timing is primary discriminator; gas is a feature not a label
 Limitations: Requires enemy main location scouted; probe death reduces signal quality
 """
 
@@ -355,166 +355,163 @@ def get_ling_rush_signals(bot: "PiG_Bot") -> dict:
 
 def get_enemy_ling_rushed_v2(bot: "PiG_Bot") -> bool:
     """
-    Three-type zergling rush detection with Auto-TRUE guards.
+    Three-label zergling rush detection with Auto-TRUE guards.
     
-    Detects R1 (12p gasless), R2 (12p 11gas), R3 (13/12 speedling).
-    Uses fixed timing constants (not map-aware).
+    Labels:
+        - 12_pool: Very early pool (~12 supply), earliest ling rush
+        - speedling: Early pool + gas for fast Metabolic Boost timing
+        - macro: Normal/standard opener (negative class)
     
     Returns:
-        True if rush detected (Auto-TRUE or score >= 5), False otherwise
+        True if rush detected (12_pool or speedling), False if macro
     """
     # Initialize tracking attributes
     if not hasattr(bot, '_ling_rushed_v2'):
         bot._ling_rushed_v2 = False
-        bot._rush_score = 0
-        bot._rush_label = "none"
-        bot._r1_score = 0
-        bot._r2_score = 0
-        bot._r3_score = 0
+        bot._rush_label = "macro"
+        bot._score_12p = 0
+        bot._score_speed = 0
     
-    # Return early if already detected
+    # Return early if already detected as rush
     if bot._ling_rushed_v2:
         return True
     
     # Update signals (triggers _track_enemy_timings)
     signals = get_ling_rush_signals(bot)
     
-    # Fixed timing constants 
-    T_POOL_CHECK = 65.0
-    T_NAT_CHECK = 80.0
-    T_LING_EARLY = 105.0
-    T_LING_SOFT = 110.0
-    T_CONTACT_SLOW = 120.0
-    T_CONTACT_FAST = 150.0
-    T_QUEEN_CHECK = 125.0
+    # === TIMING CONSTANTS ===
+    T_POOL_12P_START_MIN = 38.0   # 0:38
+    T_POOL_12P_START_MAX = 42.0   # 0:42
+    T_POOL_12P_DONE = 65.0        # 1:05
+    T_POOL_SPEED_START_MIN = 48.0 # 0:48
+    T_POOL_SPEED_START_MAX = 52.0 # 0:52
+    T_NAT_CHECK = 80.0            # 1:20
+    T_LING_EARLY = 105.0          # 1:45 (auto-TRUE)
+    T_LING_12P_SEEN = 115.0       # 1:55
+    T_CONTACT_SLOW = 120.0        # 2:00 (auto-TRUE slow-ling)
+    T_CONTACT_SPEED = 160.0       # 2:40 (auto-TRUE speed-ling)
+    T_SPEED_START_EARLY = 85.0    # 1:25
+    T_QUEEN_CHECK = 120.0         # 2:00
     
     time_now = bot.time
     
     # === AUTO-TRUE GUARDS (evaluate first) ===
     
-    # Guard A: Any ling seen ≤ 1:45
+    # Guard A: Any ling seen ≤ 1:45 → 12_pool
     if bot._first_ling_seen_time is not None and bot._first_ling_seen_time <= T_LING_EARLY:
         bot._ling_rushed_v2 = True
-        bot._rush_label = "auto_true_early_ling"
-        print(f"{bot.time_formatted}: Rush detected (Auto-TRUE A): Ling seen at {bot._first_ling_seen_time:.1f}s")
+        bot._rush_label = "12_pool"
+        print(f"{bot.time_formatted}: Rush detected (Auto-TRUE A): Ling seen at {bot._first_ling_seen_time:.1f}s → 12_pool")
         return True
     
-    # Guard B: Slow-ling contact ≤ 2:00
+    # Guard B: Slow-ling contact ≤ 2:00 → 12_pool
     if (bot._first_ling_contact_nat_time is not None and 
         bot._first_ling_contact_nat_time <= T_CONTACT_SLOW and
         not bot._ling_has_speed):
         bot._ling_rushed_v2 = True
-        bot._rush_label = "auto_true_slow_contact"
-        print(f"{bot.time_formatted}: Rush detected (Auto-TRUE B): Slow-ling contact at {bot._first_ling_contact_nat_time:.1f}s")
+        bot._rush_label = "12_pool"
+        print(f"{bot.time_formatted}: Rush detected (Auto-TRUE B): Slow-ling contact at {bot._first_ling_contact_nat_time:.1f}s → 12_pool")
         return True
     
-    # Guard C: Speed-ling contact ≤ 2:30
+    # Guard C: Speed-ling contact ≤ 2:40 → speedling
     if (bot._first_ling_contact_nat_time is not None and 
-        bot._first_ling_contact_nat_time <= T_CONTACT_FAST and
+        bot._first_ling_contact_nat_time <= T_CONTACT_SPEED and
         bot._ling_has_speed):
         bot._ling_rushed_v2 = True
-        bot._rush_label = "auto_true_speed_contact"
-        print(f"{bot.time_formatted}: Rush detected (Auto-TRUE C): Speed-ling contact at {bot._first_ling_contact_nat_time:.1f}s")
+        bot._rush_label = "speedling"
+        print(f"{bot.time_formatted}: Rush detected (Auto-TRUE C): Speed-ling contact at {bot._first_ling_contact_nat_time:.1f}s → speedling")
         return True
     
-    # === SCORING: Three Rush Types ===
+    # === SCORING ===
     
-    r1_score = 0  # 12-Pool Gasless
-    r2_score = 0  # 12-Pool 11-Gas  
-    r3_score = 0  # 13/12 Speedling
+    score_12p = 0   # 12-pool score
+    score_speed = 0 # Speedling score
     
-    # Common features
+    # Get pool start time estimate
+    pool_start = bot._pool_seen_time  # Already estimated start time
+    
+    # === 12_POOL SIGNALS ===
+    
+    # Early pool start (0:38-0:42)
+    if pool_start is not None and T_POOL_12P_START_MIN <= pool_start <= T_POOL_12P_START_MAX:
+        score_12p += 4
+    
+    # Pool done early (≤1:05)
+    if bot._pool_seen_state == "done" and pool_start is not None and pool_start <= T_POOL_12P_START_MAX:
+        score_12p += 3
+    
+    # No natural by 1:20
     no_natural = bot._enemy_nat_started_at is None and time_now >= T_NAT_CHECK
-    pool_early = (bot._pool_seen_state in {"morphing", "done"} and 
-                  bot._pool_seen_time is not None and 
-                  bot._pool_seen_time <= T_POOL_CHECK)
-    early_lings = bot._first_ling_seen_time is not None and bot._first_ling_seen_time <= T_LING_SOFT
-    no_gas = bot._extractor_seen_time is None and time_now >= T_NAT_CHECK
+    if no_natural:
+        score_12p += 3
+    
+    # Very early lings (≤1:55)
+    if bot._first_ling_seen_time is not None and bot._first_ling_seen_time <= T_LING_12P_SEEN:
+        score_12p += 4
+    
+    # No queen by 2:00
     no_queen = (bot._pool_seen_state in {"morphing", "done"} and 
                 bot._queen_started_time is None and 
                 time_now >= T_QUEEN_CHECK)
-    
-    # === R1: 12-Pool Gasless ===
-    if no_natural:
-        r1_score += 3
-    if pool_early and no_natural:
-        r1_score += 3
-    if no_gas:
-        r1_score += 2
     if no_queen:
-        r1_score += 1
-    if early_lings:
-        r1_score += 4
+        score_12p += 2
     
-    # === R2: 12-Pool 11-Gas (ling-bane or early speed) ===
-    if no_natural:
-        r2_score += 3
-    if pool_early:
-        r2_score += 3
-    # Active gas: extractor + workers on gas
-    if bot._extractor_seen_time is not None and bot._gas_workers_count >= 2 and time_now <= 70.0:
-        r2_score += 2
-    # Speed research
-    if bot._speed_research_started and bot._speed_research_time is not None and bot._speed_research_time <= 110.0:
-        r2_score += 2
-    if early_lings:
-        r2_score += 3
-    # Baneling nest
-    if bot._baneling_nest_seen_time is not None and 120.0 <= bot._baneling_nest_seen_time <= 140.0:
-        r2_score += 2
-    if no_queen:
-        r2_score += 1
+    # === SPEEDLING SIGNALS ===
     
-    # === R3: 13/12 Speedling ===
-    # 13 pool timing (starts later)
-    pool_13 = (bot._pool_seen_time is not None and 
-               35.0 <= bot._pool_seen_time <= 40.0 and
-               bot._extractor_seen_time is not None and bot._gas_workers_count >= 2)
-    if pool_13:
-        r3_score += 3
-    if no_natural:
-        r3_score += 2
-    if bot._speed_research_started and bot._speed_research_time is not None and bot._speed_research_time <= 110.0:
-        r3_score += 2
-    # Speed contact
+    # Speedling pool timing (0:48-0:52)
+    if pool_start is not None and T_POOL_SPEED_START_MIN <= pool_start <= T_POOL_SPEED_START_MAX:
+        score_speed += 3
+    
+    # Early gas with workers mining
+    if bot._extractor_seen_time is not None and bot._gas_workers_count >= 2:
+        score_speed += 3
+    
+    # Speed research early (≤1:25)
+    if bot._speed_research_started and bot._speed_research_time is not None:
+        if bot._speed_research_time <= T_SPEED_START_EARLY:
+            score_speed += 4
+    
+    # Slow lings appear (2:05-2:15) - indicates speedling build before speed finishes
+    if bot._first_ling_seen_time is not None and 125.0 <= bot._first_ling_seen_time <= 135.0:
+        score_speed += 2
+    
+    # Speed-ling contact ≤2:40
     if (bot._first_ling_contact_nat_time is not None and 
-        bot._first_ling_contact_nat_time <= T_CONTACT_FAST and 
+        bot._first_ling_contact_nat_time <= T_CONTACT_SPEED and 
         bot._ling_has_speed):
-        r3_score += 4
-    if early_lings:
-        r3_score += 3
-    if no_queen:
-        r3_score += 1
+        score_speed += 4
     
-    # === Aggregate Score ===
-    total_score = r1_score + r2_score + r3_score
+    # Dampers (reduce speedling score if looks macro)
+    # Natural on time
+    if bot._enemy_nat_started_at is not None and bot._enemy_nat_started_at <= T_NAT_CHECK:
+        score_speed -= 1
     
-    # Determine highest-scoring rush type
-    if max(r1_score, r2_score, r3_score) == r1_score and r1_score > 0:
-        rush_label = "12p_gasless"
-    elif max(r1_score, r2_score, r3_score) == r2_score and r2_score > 0:
-        rush_label = "12p_11gas"
-    elif max(r1_score, r2_score, r3_score) == r3_score and r3_score > 0:
-        rush_label = "13_12_speed"
-    else:
-        rush_label = "none"
+    # Normal queen timing
+    if bot._queen_started_time is not None and 110.0 <= bot._queen_started_time <= 120.0:
+        score_speed -= 1
     
     # Update bot state
-    bot._rush_score = total_score
-    bot._r1_score = r1_score
-    bot._r2_score = r2_score
-    bot._r3_score = r3_score
-    bot._rush_label = rush_label
+    bot._score_12p = score_12p
+    bot._score_speed = score_speed
     
-    # Threshold: score >= 5 triggers rush response
-    rush_detected = total_score >= 5
+    # === CLASSIFICATION ===
     
-    # Trigger detection
-    if rush_detected:
+    # 12_pool has priority if both score high
+    if score_12p >= 5:
         bot._ling_rushed_v2 = True
-        print(f"{bot.time_formatted}: Rush detected! Score={total_score} (R1={r1_score}, R2={r2_score}, R3={r3_score}), Type={rush_label}")
+        bot._rush_label = "12_pool"
+        print(f"{bot.time_formatted}: Rush detected! 12_pool (score={score_12p})")
+        return True
     
-    return bot._ling_rushed_v2
+    if score_speed >= 5:
+        bot._ling_rushed_v2 = True
+        bot._rush_label = "speedling"
+        print(f"{bot.time_formatted}: Rush detected! speedling (score={score_speed})")
+        return True
+    
+    # Default: macro (not a rush)
+    bot._rush_label = "macro"
+    return False
 
 
 def log_rush_detection_result(bot: "PiG_Bot", game_result):
@@ -531,7 +528,7 @@ def log_rush_detection_result(bot: "PiG_Bot", game_result):
         game_result: Result enum from on_end parameter
     """
     # Skip if we haven't initialized tracking yet
-    if not hasattr(bot, '_rush_score'):
+    if not hasattr(bot, '_rush_label'):
         return
     
     log_dir = Path("data")
@@ -546,19 +543,18 @@ def log_rush_detection_result(bot: "PiG_Bot", game_result):
         # Timing observations
         "t_nat_started": getattr(bot, '_enemy_nat_started_at', None),
         "pool_seen_state": getattr(bot, '_pool_seen_state', "none"),
-        "t_pool_seen": getattr(bot, '_pool_seen_time', None),
+        "t_pool_start": getattr(bot, '_pool_seen_time', None),
         "t_extractor_seen": getattr(bot, '_extractor_seen_time', None),
         "t_queen_started": getattr(bot, '_queen_started_time', None),
+        "t_speed_research": getattr(bot, '_speed_research_time', None),
         "t_first_ling_seen": getattr(bot, '_first_ling_seen_time', None),
         "t_first_ling_contact_nat": getattr(bot, '_first_ling_contact_nat_time', None),
         "ling_has_speed": getattr(bot, '_ling_has_speed', False),
         
-        # Detection scores
-        "total_score": getattr(bot, '_rush_score', 0),
-        "r1_score": getattr(bot, '_r1_score', 0),
-        "r2_score": getattr(bot, '_r2_score', 0),
-        "r3_score": getattr(bot, '_r3_score', 0),
-        "rush_label": getattr(bot, '_rush_label', "none"),
+        # Detection scores (new 2-score system)
+        "score_12p": getattr(bot, '_score_12p', 0),
+        "score_speed": getattr(bot, '_score_speed', 0),
+        "rush_label": getattr(bot, '_rush_label', "macro"),
         "is_rushed": getattr(bot, '_ling_rushed_v2', False),
         
         # Game outcome
