@@ -31,6 +31,7 @@ from bot.managers.structure_manager import use_chronoboost
 from bot.managers.reactions import defend_cannon_rush, defend_worker_rush, early_threat_sensor, cheese_reaction, threat_detection
 from bot.combat import (
     control_main_army,
+    control_defenders,
     warp_prism_follower,
     handle_attack_toggles,
     attack_target,
@@ -308,6 +309,9 @@ class PiG_Bot(AresBot):
             self.main_army_position = main_army.center
             # Still run decision logic to set flags
             handle_attack_toggles(self, main_army, attack_target(self, main_army_position=self.main_army_position))
+
+        # Control BASE_DEFENDER units every frame (separated from allocation in threat_detection)
+        control_defenders(self)
 
         # Update active novas every frame (critical for trajectory correction)
         if hasattr(self, 'nova_manager') and self.nova_manager:

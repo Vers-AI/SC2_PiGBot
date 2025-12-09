@@ -16,6 +16,7 @@ from bot.constants import (
 
 from bot.combat.combat import (
     control_main_army,
+    control_defenders,
     gatekeeper_control,
     warp_prism_follower,
     handle_attack_toggles,
@@ -49,6 +50,7 @@ __all__ = [
     "handle_attack_toggles",
     "attack_target",
     "fallback_target",
+    "control_defenders",
     "control_base_defenders",
     "manage_defensive_unit_roles",
     # Unit micro functions

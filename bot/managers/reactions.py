@@ -632,23 +632,16 @@ def threat_detection(bot, main_army: Units) -> None:
                 
                 defender_cap_reached = existing_defender_value >= max_defender_value
                 
+                # ALLOCATION ONLY: Assign new defenders if cap not reached
+                # Control is handled separately in combat.py via bot.py orchestration
                 if not defender_cap_reached:
-                    # Allocate appropriate defensive forces first
-                    defensive_units = allocate_defensive_forces(bot, threat_info, threat_position, enemy_units)
-                else:
-                    defensive_units = Units([], bot)  # Don't allocate more, have enough value
+                    new_defenders = allocate_defensive_forces(bot, threat_info, threat_position, enemy_units)
+                    if new_defenders:
+                        for unit in new_defenders:
+                            bot.mediator.assign_role(tag=unit.tag, role=UnitRole.BASE_DEFENDER)
                 
-                if defensive_units:
-                    # Properly assign units to BASE_DEFENDER role (ARES way)
-                    for unit in defensive_units:
-                        bot.mediator.assign_role(tag=unit.tag, role=UnitRole.BASE_DEFENDER)
-                    
-                    # Use dedicated BASE_DEFENDER control function
-                    from bot.combat import control_base_defenders
-                    control_base_defenders(bot, defensive_units, threat_position)
-                
-                # Note: Overwhelming threat handling is now managed by handle_attack_toggles
-                # using proper ARES role switching instead of duplicate logic
+                # Store threat position for combat.py to use
+                bot._defender_threat_position = threat_position
         
         # Store whether main army responded for other systems to check
         bot._main_army_defending = main_army_should_respond

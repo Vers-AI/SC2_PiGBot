@@ -817,12 +817,36 @@ def fallback_target(bot) -> Point2:
     return bot.current_base_target
 
 
+def control_defenders(bot) -> None:
+    """
+    Orchestration function called from bot.py on_step.
+    Gets all BASE_DEFENDER units and controls them every frame.
+    """
+    defenders = bot.mediator.get_units_from_role(role=UnitRole.BASE_DEFENDER)
+    if not defenders:
+        return
+    
+    # Get threat position set by threat_detection in reactions.py
+    threat_position = getattr(bot, '_defender_threat_position', None)
+    if threat_position is None:
+        # No active threat - move defenders to rally point
+        threat_position = bot.main_base_ramp.top_center if bot.main_base_ramp else bot.start_location
+    
+    control_base_defenders(bot, defenders, threat_position)
+
+
 def control_base_defenders(bot, defender_units: Units, threat_position: Point2) -> None:
     """
     Controls BASE_DEFENDER units using individual behaviors with squad formation.
     Uses the same micro functions as main army for consistent combat behavior.
     """
-    defensive_squads = bot.mediator.get_squads(role=UnitRole.BASE_DEFENDER, squad_radius=DEFENDER_SQUAD_RADIUS)
+    # Wrap in try-except to handle ARES squad manager KeyError when units die mid-frame
+    try:
+        defensive_squads = bot.mediator.get_squads(role=UnitRole.BASE_DEFENDER, squad_radius=DEFENDER_SQUAD_RADIUS)
+    except KeyError:
+        # ARES internal tracking got out of sync - unit died but tag wasn't cleaned up
+        # Fall back to using defender_units directly without squad grouping
+        defensive_squads = None
     
     if not defensive_squads:
         return
