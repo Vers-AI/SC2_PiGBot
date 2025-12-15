@@ -53,8 +53,9 @@ def compute_rush_distance_tier(bot: "PiG_Bot") -> str:
     targets = np.array([[our_x, our_y]], dtype=np.intp)
     dijkstra_result = cy_dijkstra(cost_grid, targets, checks_enabled=True)
     
-    # Get ground distance to enemy position
-    ground_distance = dijkstra_result.distance[enemy_x, enemy_y]
+    # Get ground distance to enemy position using new lazy evaluation API
+    path = dijkstra_result.get_path(enemy_pos)
+    ground_distance = len(path) if path else 0
     
     if ground_distance <= 0 or ground_distance == float('inf'):
         # Pathfind failed, default to medium tier
