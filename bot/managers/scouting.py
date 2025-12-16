@@ -10,8 +10,65 @@ from sc2.ids.unit_typeid import UnitTypeId
 
 from ares.behaviors.combat import CombatManeuver
 from ares.behaviors.combat.individual import KeepUnitSafe, PathUnitToTarget, UseAbility
-from ares.consts import UnitRole, UnitTreeQueryType
+from ares.consts import UnitRole, UnitTreeQueryType, WORKER_TYPES
 from bot.combat import attack_target
+
+# Staleness thresholds for hunt mode
+HUNT_URGENCY_THRESHOLD = 0.5  # When _intel_urgency exceeds this, start hunting
+LAST_KNOWN_AGE_THRESHOLD = 15.0  # Use last known position if < 15s old
+
+
+def get_hunt_target(bot, observer: Unit) -> Point2:
+    """
+    Get the best target for an observer hunting for the enemy army.
+    
+    Option D (Hybrid): Uses last known position if recent, otherwise patrols enemy expansions.
+    
+    Returns:
+        Point2: The target position for the observer to hunt toward.
+    """
+    tag = observer.tag
+    
+    # Get cached enemy army (includes memory units)
+    cached_army = [
+        u for u in bot.mediator.get_cached_enemy_army
+        if u.type_id not in WORKER_TYPES
+    ]
+    
+    # If we have recent enemy army data, go to last known position
+    if cached_army:
+        avg_age = sum(u.age for u in cached_army) / len(cached_army)
+        if avg_age < LAST_KNOWN_AGE_THRESHOLD:
+            return cached_army[0].position if len(cached_army) == 1 else Point2(
+                (sum(u.position.x for u in cached_army) / len(cached_army),
+                 sum(u.position.y for u in cached_army) / len(cached_army))
+            )
+    
+    # Fallback: patrol enemy expansions using ARES properties
+    # Order: 4th → 3rd → nat → main (armies often stage at outer bases)
+    hunt_targets = [
+        bot.mediator.get_enemy_fourth,
+        bot.mediator.get_enemy_third,
+        bot.mediator.get_enemy_nat,
+        bot.enemy_start_locations[0],  # Enemy main last
+    ]
+    
+    # Initialize or get current hunt target index
+    hunt_key = f"hunt_{tag}"
+    if hunt_key not in bot.observer_targets:
+        bot.observer_targets[hunt_key] = 0
+    
+    current_idx = bot.observer_targets[hunt_key]
+    current_target = hunt_targets[current_idx % len(hunt_targets)]
+    
+    # If close to current target, cycle to next
+    if observer.distance_to(current_target) < 5:
+        next_idx = (current_idx + 1) % len(hunt_targets)
+        bot.observer_targets[hunt_key] = next_idx
+        current_target = hunt_targets[next_idx]
+    
+    return current_target
+
 
 # TODO add survilaence mode to primary obs when its at th ol spot, and patrol obs when it reaches desitnation 
 def control_observers(bot, all_observers: Units, main_army: Units) -> None:
@@ -134,25 +191,36 @@ def control_primary_observer(bot, observer: Optional[Unit], main_army: Units) ->
                         danger_distance=10
                     ))
         else:
-            # Mid/late game: position at enemy natural
-            ol_spot = bot.mediator.get_ol_spot_near_enemy_nat
-            if ol_spot:
+            # Mid/late game: check if we need to hunt for enemy army
+            if bot._intel_urgency > HUNT_URGENCY_THRESHOLD:
+                # Hunt mode: go find the enemy army
+                hunt_target = get_hunt_target(bot, observer)
                 actions.add(PathUnitToTarget(
                     unit=observer,
-                    target=ol_spot,
+                    target=hunt_target,
                     grid=air_grid,
-                    danger_distance=15
+                    danger_distance=12
                 ))
-                if observer.position.distance_to(ol_spot) < 1:
-                    observer(AbilityId.MORPH_SURVEILLANCEMODE)
             else:
-                # Fallback if no overlord spot defined
-                actions.add(PathUnitToTarget(
-                    unit=observer,
-                    target=bot.enemy_start_locations[0],
-                    grid=air_grid,
-                    danger_distance=15
-                ))
+                # Normal mode: position at enemy natural OL spot
+                ol_spot = bot.mediator.get_ol_spot_near_enemy_nat
+                if ol_spot:
+                    actions.add(PathUnitToTarget(
+                        unit=observer,
+                        target=ol_spot,
+                        grid=air_grid,
+                        danger_distance=15
+                    ))
+                    if observer.position.distance_to(ol_spot) < 1:
+                        observer(AbilityId.MORPH_SURVEILLANCEMODE)
+                else:
+                    # Fallback if no overlord spot defined
+                    actions.add(PathUnitToTarget(
+                        unit=observer,
+                        target=bot.enemy_start_locations[0],
+                        grid=air_grid,
+                        danger_distance=15
+                    ))
     
     bot.register_behavior(actions)
 
