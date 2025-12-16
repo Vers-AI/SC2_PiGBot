@@ -649,6 +649,12 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
     else:
         # Not currently attacking: evaluate if we should initiate attack
         
+        # Max supply fallback: force attack when capped
+        if bot.supply_used >= 199:
+            bot._commenced_attack = True
+            bot._attack_commenced_time = bot.time
+            return attack_target
+        
         # === INTEL QUALITY GATE ===
         # Don't trust combat sim if we haven't seen enemy army or info is too stale
         intel = get_enemy_intel_quality(bot)
