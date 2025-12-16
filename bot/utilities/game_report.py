@@ -47,8 +47,21 @@ def print_periodic_intel_report(bot, iteration: int) -> None:
         iteration: Current game iteration
     """
     # Report every 30 game seconds, starting at 30 seconds
-    if bot.time < 30 or (bot.time - 30) % 30 != 0:
+    # Use range-based check to handle step timing variations (robust to frame spikes)
+    if bot.time < 30:
         return
+    
+    # Initialize tracker if needed
+    if not hasattr(bot, '_last_intel_report_time'):
+        bot._last_intel_report_time = 0.0
+    
+    # Check if we've crossed a 30-second boundary since last report
+    next_report_time = bot._last_intel_report_time + 30.0
+    if bot.time < next_report_time:
+        return
+    
+    # Update tracker to the boundary we're reporting for (snap to 30s grid)
+    bot._last_intel_report_time = (int(bot.time) // 30) * 30
     
     game_time_minutes = int(bot.time // 60)
     game_time_seconds = int(bot.time % 60)
