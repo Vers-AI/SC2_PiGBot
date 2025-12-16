@@ -63,8 +63,10 @@ def print_periodic_intel_report(bot, iteration: int) -> None:
     # Update tracker to the boundary we're reporting for (snap to 30s grid)
     bot._last_intel_report_time = (int(bot.time) // 30) * 30
     
-    game_time_minutes = int(bot.time // 60)
-    game_time_seconds = int(bot.time % 60)
+    # Display rounded to nearest 30s boundary
+    report_time = bot._last_intel_report_time
+    game_time_minutes = int(report_time // 60)
+    game_time_seconds = int(report_time % 60)
     
     print("\n" + "="*60)
     print(f"  INTEL REPORT {game_time_minutes}:{game_time_seconds:02d}")
