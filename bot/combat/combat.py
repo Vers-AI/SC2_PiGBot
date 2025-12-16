@@ -998,42 +998,23 @@ def select_defensive_anchor(bot, main_army: Units) -> Point2:
 
 def manage_defensive_unit_roles(bot) -> None:
     """
-    Manages units assigned to BASE_DEFENDER roles.
-    Returns them to ATTACKING when threats are cleared (proper ARES way).
+    Release BASE_DEFENDER units back to ATTACKING when threats clear.
+    
+    Uses ARES enemy tracking which has hysteresis (enemies must leave beyond
+    24 units to clear). This prevents role oscillation from brief visibility gaps.
     """
     defending_units = bot.mediator.get_units_from_role(role=UnitRole.BASE_DEFENDER)
     
     if not defending_units:
         return
     
-    # Check if there are still active threats near bases
     ground_near = bot.mediator.get_ground_enemy_near_bases
     flying_near = bot.mediator.get_flying_enemy_near_bases
     
-    active_threats = False
-    if ground_near or flying_near:
-        # Combine ground + air threats
-        all_threats = {}
-        for key, value in ground_near.items():
-            all_threats[key] = value.copy()
-        for key, value in flying_near.items():
-            all_threats.setdefault(key, set()).update(value)
-        
-        # Check if any significant threats remain
-        for base_location, enemy_tags in all_threats.items():
-            enemy_units = bot.enemy_units.tags_in(enemy_tags)
-            if enemy_units:
-                threat_position, _ = cy_find_units_center_mass(enemy_units, 10.0)
-                threat_info = assess_threat(bot, enemy_units, Units([], bot), return_details=True)
-                # Type assertion since we know return_details=True returns dict
-                assert isinstance(threat_info, dict), "assess_threat with return_details=True should return dict"
-                if threat_info["threat_level"] >= 1:  # Even minor threats keep some defenders
-                    active_threats = True
-                    break
+    # Check if ARES is tracking any enemies near bases
+    active_threats = any(ground_near.values()) or any(flying_near.values())
     
-    # If no active threats, return BASE_DEFENDER units to ATTACKING (proper ARES way)
     if not active_threats:
-        # Individual role assignments back to ATTACKING
         for unit in defending_units:
             bot.mediator.assign_role(tag=unit.tag, role=UnitRole.ATTACKING)
 
