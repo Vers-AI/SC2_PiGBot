@@ -81,6 +81,9 @@ DISRUPTOR_SQUAD_FOLLOW_DISTANCE = 5.0
 DISRUPTOR_SQUAD_TARGET_DISTANCE = 4.0
 """Target distance for disruptor to maintain from squad"""
 
+DISRUPTOR_FORWARD_OFFSET = 8.0
+"""Distance Disruptor positions ahead of army toward target"""
+
 STRUCTURE_ATTACK_RANGE = 12.0
 """Range to detect nearby enemy structures"""
 

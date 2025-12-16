@@ -27,6 +27,7 @@ from bot.constants import (
     UNSAFE_GROUND_CHECK_RADIUS,
     DISRUPTOR_SQUAD_FOLLOW_DISTANCE,
     DISRUPTOR_SQUAD_TARGET_DISTANCE,
+    DISRUPTOR_FORWARD_OFFSET,
     STRUCTURE_ATTACK_RANGE,
     PROXIMITY_STICKY_DISTANCE_SQ,
     MAP_CROSSING_DISTANCE_SQ,
@@ -412,12 +413,16 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                 
                 # Disruptors follow army target when no enemies nearby (like observers)
                 if unit.type_id == UnitTypeId.DISRUPTOR:
-                    distance_to_target = cy_distance_to(unit.position, move_to)
+                    # Position between army and target: lean forward toward action
+                    # Uses pos_of_main_squad (where army IS) + offset toward target (where it's going)
+                    disruptor_target = Point2(pos_of_main_squad.towards(target, DISRUPTOR_FORWARD_OFFSET))
+                    
+                    distance_to_target = cy_distance_to(unit.position, disruptor_target)
                     
                     # If far from target, move towards it
                     if distance_to_target > DISRUPTOR_SQUAD_FOLLOW_DISTANCE:
                         no_enemy_maneuver.add(PathUnitToTarget(
-                            unit=unit, grid=grid, target=move_to,
+                            unit=unit, grid=grid, target=disruptor_target,
                             success_at_distance=DISRUPTOR_SQUAD_TARGET_DISTANCE
                         ))
                     # Otherwise stay put (close enough to target)
