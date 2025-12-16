@@ -250,3 +250,5 @@ def update_enemy_intel_tracking(bot: "PiG_Bot") -> None:
         else:
             # Intel is fresh - slowly decay urgency
             bot._intel_urgency = max(0.0, bot._intel_urgency - URGENCY_DECAY_RATE)
+            # Reset worker scout flag so we can scout again next stale period
+            bot._worker_scout_sent_this_stale_period = False

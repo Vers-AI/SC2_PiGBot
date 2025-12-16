@@ -141,6 +141,7 @@ class PiG_Bot(AresBot):
         # 0.0 = no urgency, 1.0 = max urgency
         # Responses trigger at thresholds: 0.3 (observer priority), 0.5 (extra observers), 0.7 (speed upgrade)
         self._intel_urgency = 0.0
+        self._worker_scout_sent_this_stale_period = False  # Prevents spamming worker scouts
 
 
 
@@ -328,9 +329,10 @@ class PiG_Bot(AresBot):
         # Army cohesion is now handled proactively by the main squad coordination system
 
         # Scouting actions
-        from bot.managers.scouting import control_observers
+        from bot.managers.scouting import control_observers, control_worker_scout
         observers = self.units(UnitTypeId.OBSERVER)
         control_observers(self, observers, main_army)
+        control_worker_scout(self)  # Early game worker scout when intel is stale
 
        
         

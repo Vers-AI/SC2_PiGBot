@@ -18,16 +18,17 @@ HUNT_URGENCY_THRESHOLD = 0.5  # When _intel_urgency exceeds this, start hunting
 LAST_KNOWN_AGE_THRESHOLD = 15.0  # Use last known position if < 15s old
 
 
-def get_hunt_target(bot, observer: Unit) -> Point2:
+def get_hunt_target(bot, unit: Unit) -> Point2:
     """
-    Get the best target for an observer hunting for the enemy army.
+    Get the best target for a unit hunting for the enemy army.
     
     Option D (Hybrid): Uses last known position if recent, otherwise patrols enemy expansions.
+    Works for both observers and worker scouts.
     
     Returns:
-        Point2: The target position for the observer to hunt toward.
+        Point2: The target position to hunt toward.
     """
-    tag = observer.tag
+    tag = unit.tag
     
     # Get cached enemy army (includes memory units)
     cached_army = [
@@ -62,12 +63,78 @@ def get_hunt_target(bot, observer: Unit) -> Point2:
     current_target = hunt_targets[current_idx % len(hunt_targets)]
     
     # If close to current target, cycle to next
-    if observer.distance_to(current_target) < 5:
+    if unit.distance_to(current_target) < 5:
         next_idx = (current_idx + 1) % len(hunt_targets)
         bot.observer_targets[hunt_key] = next_idx
         current_target = hunt_targets[next_idx]
     
     return current_target
+
+
+def control_worker_scout(bot) -> None:
+    """
+    Send a worker scout when intel is stale in early game and no observers available.
+    
+    Triggers when:
+    - Early game (game_state == 0)
+    - Intel urgency is high (> threshold)
+    - No observers available
+    """
+    # Only in early game
+    if bot.game_state != 0:
+        return
+    
+    # Don't scout if we're under attack - need workers for defense
+    if bot._under_attack:
+        return
+    
+    # Only if intel is stale
+    if bot._intel_urgency <= HUNT_URGENCY_THRESHOLD:
+        return
+    
+    # Only if we don't have observers
+    if bot.units(UnitTypeId.OBSERVER).amount > 0:
+        return
+    
+    # Don't spam scouts - only one per stale period
+    if bot._worker_scout_sent_this_stale_period:
+        return
+    
+    # Check if we already have a worker scout assigned
+    existing_scouts = bot.mediator.get_units_from_role(role=UnitRole.SCOUTING)
+    worker_scouts = existing_scouts.filter(lambda u: u.type_id in WORKER_TYPES)
+    
+    if worker_scouts:
+        # Control existing worker scout
+        scout = worker_scouts.first
+        actions = CombatManeuver()
+        ground_grid = bot.mediator.get_ground_grid
+        
+        # If damaged, return to base
+        if scout.health_percentage < 0.5:
+            actions.add(PathUnitToTarget(
+                unit=scout,
+                target=bot.start_location,
+                grid=ground_grid
+            ))
+            # Clear role when returning
+            bot.mediator.clear_role(tag=scout.tag)
+        else:
+            hunt_target = get_hunt_target(bot, scout)
+            actions.add(PathUnitToTarget(
+                unit=scout,
+                target=hunt_target,
+                grid=ground_grid,
+                danger_distance=8
+            ))
+        
+        bot.register_behavior(actions)
+    else:
+        # Need to assign a new worker scout
+        worker = bot.mediator.select_worker(target_position=bot.start_location)
+        if worker:
+            bot.mediator.assign_role(tag=worker.tag, role=UnitRole.SCOUTING)
+            bot._worker_scout_sent_this_stale_period = True  # Mark that we sent a scout
 
 
 # TODO add survilaence mode to primary obs when its at th ol spot, and patrol obs when it reaches desitnation 
