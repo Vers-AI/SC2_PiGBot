@@ -32,8 +32,7 @@ from bot.constants import (
     PROXIMITY_STICKY_DISTANCE_SQ,
     MAP_CROSSING_DISTANCE_SQ,
     MAP_CROSSING_SUCCESS_DISTANCE,
-    SQUAD_ENEMY_DETECTION_RANGE,
-    DEFENDER_ENEMY_DETECTION_RANGE,
+    UNIT_ENEMY_DETECTION_RANGE,
     GATEKEEPER_DETECTION_RANGE,
     GATEKEEPER_MOVE_DISTANCE,
     WARP_PRISM_FOLLOW_DISTANCE,
@@ -55,6 +54,7 @@ from bot.utilities.debug import (
     render_combat_state_overlay,
     render_disruptor_labels,
     render_nova_labels,
+    render_base_defender_debug,
     log_nova_error,
     render_formation_debug,
 )
@@ -242,13 +242,23 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
         # Main squad coordination: main squad goes to target, others converge on main squad
         move_to: Point2 = target if squad.main_squad else pos_of_main_squad
 
-        # Find nearby enemy units
-        all_close = bot.mediator.get_units_in_range(
-            start_points=[squad_position],
-            distances=SQUAD_ENEMY_DETECTION_RANGE,
+        # Find nearby enemy units using per-unit detection (larger range, checks each unit)
+        unit_positions = [u.position for u in units]
+        all_close_results = bot.mediator.get_units_in_range(
+            start_points=unit_positions,
+            distances=UNIT_ENEMY_DETECTION_RANGE,
             query_tree=UnitTreeQueryType.AllEnemy,
             return_as_dict=False,
-        )[0].filter(lambda u: not u.is_memory and not u.is_structure and u.type_id not in COMMON_UNIT_IGNORE_TYPES)
+        )
+        # Combine all detected enemies and deduplicate by tag
+        seen_tags = set()
+        all_close_list = []
+        for result in all_close_results:
+            for u in result:
+                if u.tag not in seen_tags and not u.is_memory and not u.is_structure and u.type_id not in COMMON_UNIT_IGNORE_TYPES:
+                    seen_tags.add(u.tag)
+                    all_close_list.append(u)
+        all_close = Units(all_close_list, bot)
         
         if all_close:
             # Defensive mode override: when not attacking, always engage enemies near our bases
@@ -391,7 +401,7 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
             # Check for broader enemy presence (including all unit types)
             close_by = bot.mediator.get_units_in_range(
                 start_points=[squad_position],
-                distances=SQUAD_ENEMY_DETECTION_RANGE,
+                distances=UNIT_ENEMY_DETECTION_RANGE,
                 query_tree=UnitTreeQueryType.AllEnemy,
                 return_as_dict=False,
             )[0].filter(lambda u: not u.is_memory and not u.is_structure)
@@ -582,6 +592,7 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
     render_combat_state_overlay(bot, main_army, enemy_threat_level, is_early_defensive_mode)
     render_disruptor_labels(bot)
     render_nova_labels(bot, getattr(bot, 'nova_manager', None))
+    render_base_defender_debug(bot)
 
     # Siege tank special case: Combat simulator underestimates siege tanks due to splash damage
     # and positional advantage, so require overwhelming force before engaging them
@@ -873,13 +884,23 @@ def control_base_defenders(bot, defender_units: Units, threat_position: Point2) 
         if not units:
             continue
         
-        # Find nearby enemy units around this defensive squad
-        all_close = bot.mediator.get_units_in_range(
-            start_points=[squad_position],
-            distances=DEFENDER_ENEMY_DETECTION_RANGE,
+        # Find nearby enemy units using per-unit detection (larger range, checks each unit)
+        unit_positions = [u.position for u in units]
+        all_close_results = bot.mediator.get_units_in_range(
+            start_points=unit_positions,
+            distances=UNIT_ENEMY_DETECTION_RANGE,
             query_tree=UnitTreeQueryType.AllEnemy,
             return_as_dict=False,
-        )[0].filter(lambda u: not u.is_memory and not u.is_structure and u.type_id not in COMMON_UNIT_IGNORE_TYPES)
+        )
+        # Combine all detected enemies and deduplicate by tag
+        seen_tags = set()
+        all_close_list = []
+        for result in all_close_results:
+            for u in result:
+                if u.tag not in seen_tags and not u.is_memory and not u.is_structure and u.type_id not in COMMON_UNIT_IGNORE_TYPES:
+                    seen_tags.add(u.tag)
+                    all_close_list.append(u)
+        all_close = Units(all_close_list, bot)
         
         if not all_close:
             # No enemies - move towards threat position

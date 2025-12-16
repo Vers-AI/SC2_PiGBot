@@ -474,6 +474,111 @@ def render_formation_debug(bot, squad_units: list, target) -> None:
     )
 
 
+def render_base_defender_debug(bot) -> None:
+    """
+    Render debug visualization for BASE_DEFENDER units.
+    
+    Shows:
+    - Per-unit detection range circles (yellow)
+    - Detected enemies count
+    - Threat position marker (red sphere)
+    """
+    if not bot.debug:
+        return
+    
+    from bot.constants import UNIT_ENEMY_DETECTION_RANGE, COMMON_UNIT_IGNORE_TYPES
+    from ares.consts import UnitTreeQueryType
+    import math
+    
+    # Get BASE_DEFENDER units
+    defender_units = bot.mediator.get_units_from_role(role=UnitRole.BASE_DEFENDER)
+    
+    # Draw threat position (red sphere)
+    threat_pos = getattr(bot, '_defender_threat_position', None)
+    if threat_pos:
+        z = bot.get_terrain_z_height(threat_pos)
+        bot.client.debug_sphere_out(
+            Point3((threat_pos.x, threat_pos.y, z + 0.5)),
+            1.5,
+            Point3((255, 0, 0))  # Red
+        )
+        bot.client.debug_text_world(
+            "THREAT",
+            Point3((threat_pos.x, threat_pos.y, z + 2.0)),
+            color=(255, 0, 0),
+            size=12,
+        )
+    
+    if not defender_units:
+        return
+    
+    # Per-unit detection (matches control_base_defenders logic)
+    unit_positions = [u.position for u in defender_units]
+    all_close_results = bot.mediator.get_units_in_range(
+        start_points=unit_positions,
+        distances=UNIT_ENEMY_DETECTION_RANGE,
+        query_tree=UnitTreeQueryType.AllEnemy,
+        return_as_dict=False,
+    )
+    
+    # Combine and deduplicate enemies
+    seen_tags = set()
+    all_close_list = []
+    for result in all_close_results:
+        for u in result:
+            if u.tag not in seen_tags and not u.is_memory and not u.is_structure and u.type_id not in COMMON_UNIT_IGNORE_TYPES:
+                seen_tags.add(u.tag)
+                all_close_list.append(u)
+    
+    # Draw detection circle around each defender unit
+    num_points = 16
+    for unit in defender_units:
+        unit_pos = unit.position
+        z = bot.get_terrain_z_height(unit_pos)
+        
+        # Detection range circle (yellow)
+        for i in range(num_points):
+            angle1 = 2 * math.pi * i / num_points
+            angle2 = 2 * math.pi * (i + 1) / num_points
+            p1 = Point2((
+                unit_pos.x + UNIT_ENEMY_DETECTION_RANGE * math.cos(angle1),
+                unit_pos.y + UNIT_ENEMY_DETECTION_RANGE * math.sin(angle1)
+            ))
+            p2 = Point2((
+                unit_pos.x + UNIT_ENEMY_DETECTION_RANGE * math.cos(angle2),
+                unit_pos.y + UNIT_ENEMY_DETECTION_RANGE * math.sin(angle2)
+            ))
+            z1 = bot.get_terrain_z_height(p1)
+            z2 = bot.get_terrain_z_height(p2)
+            bot.client.debug_line_out(
+                Point3((p1.x, p1.y, z1 + 0.2)),
+                Point3((p2.x, p2.y, z2 + 0.2)),
+                color=Point3((255, 255, 0))  # Yellow
+            )
+    
+    # Summary label at center of defenders
+    center = defender_units.center
+    z = bot.get_terrain_z_height(center)
+    enemy_count = len(all_close_list)
+    color = (0, 255, 0) if enemy_count > 0 else (255, 255, 0)
+    label = f"DEF:{len(defender_units)}u E:{enemy_count}"
+    bot.client.debug_text_world(
+        label,
+        Point3((center.x, center.y, z + 2.0)),
+        color=color,
+        size=12,
+    )
+    
+    # Draw lines from defender center to detected enemies (green)
+    for enemy in all_close_list:
+        enemy_z = bot.get_terrain_z_height(enemy.position)
+        bot.client.debug_line_out(
+            Point3((center.x, center.y, z + 0.5)),
+            Point3((enemy.position.x, enemy.position.y, enemy_z + 0.5)),
+            color=Point3((0, 255, 0))  # Green
+        )
+
+
 def log_nova_error(error: Exception) -> None:
     """
     Log NovaManager errors (always shown, not gated by debug flag).

@@ -97,11 +97,8 @@ MAP_CROSSING_SUCCESS_DISTANCE = 6.5
 """Success distance for PathUnitToTarget during map crossing"""
 
 # ===== ENGAGEMENT RANGES =====
-SQUAD_ENEMY_DETECTION_RANGE = 9.0
-"""Range to detect enemies around squad position (attacking)"""
-
-DEFENDER_ENEMY_DETECTION_RANGE = 8.0
-"""Range to detect enemies around defensive squad position (smaller for base defense)"""
+UNIT_ENEMY_DETECTION_RANGE = 15.0
+"""Range to detect enemies around each unit's position (per-unit detection)"""
 
 GATEKEEPER_DETECTION_RANGE = 6.0
 """Range to detect enemies around gatekeeping position"""
