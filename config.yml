@@ -15,6 +15,10 @@ WallGenerationMode: False
 
 UseData: True
 Debug: False
+
+Distances:
+    GroundEnemyNearBases: 25.
+    GroundEnemyLeavingBases: 30.
 GameStep: 4
 DebugGameStep: 4
 
