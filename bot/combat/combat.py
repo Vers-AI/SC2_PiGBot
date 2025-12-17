@@ -6,7 +6,7 @@ from sc2.unit import Unit
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.ability_id import AbilityId
 from sc2.data import Race
-from ares.consts import LOSS_MARGINAL_OR_WORSE, TIE_OR_BETTER, UnitTreeQueryType, EngagementResult, VICTORY_DECISIVE_OR_BETTER, VICTORY_MARGINAL_OR_BETTER, LOSS_OVERWHELMING_OR_WORSE, LOSS_DECISIVE_OR_WORSE, WORKER_TYPES
+from ares.consts import LOSS_MARGINAL_OR_WORSE, TIE_OR_BETTER, UnitTreeQueryType, EngagementResult, VICTORY_DECISIVE_OR_BETTER, VICTORY_MARGINAL_OR_BETTER, LOSS_OVERWHELMING_OR_WORSE, LOSS_DECISIVE_OR_WORSE, WORKER_TYPES, VICTORY_CLOSE_OR_BETTER
 
 from ares.behaviors.combat import CombatManeuver
 from ares.behaviors.combat.individual import (
@@ -748,21 +748,22 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
         
         # Adjust required threshold based on intel freshness
         if intel["freshness"] >= FRESH_INTEL_THRESHOLD:
-            # Fresh intel - trust combat sim, attack with decisive advantage
-            if fight_result in VICTORY_DECISIVE_OR_BETTER:
-                bot._commenced_attack = True
-                bot._attack_commenced_time = bot.time
-                return attack_target
-            # With build order complete, attack with marginal advantage
-            elif not is_early_defensive_mode:
-                if (fight_result in VICTORY_MARGINAL_OR_BETTER and not bot._under_attack):
+            # Fresh intel - trust combat sim with adjusted thresholds
+            if is_early_defensive_mode:
+                # Build order not done - require marginal advantage
+                if fight_result in VICTORY_MARGINAL_OR_BETTER:
+                    bot._commenced_attack = True
+                    bot._attack_commenced_time = bot.time
+                    return attack_target
+            else:
+                # Build order complete - attack even on tie or better
+                if fight_result in TIE_OR_BETTER:
                     bot._commenced_attack = True
                     bot._attack_commenced_time = bot.time
                     return attack_target
         else:
-            # Moderately stale intel (0.3-0.7) - require emphatic victory to initiate
-            from ares.consts import VICTORY_EMPHATIC_OR_BETTER
-            if fight_result in VICTORY_EMPHATIC_OR_BETTER:
+            # Moderately stale intel - require close victory or better
+            if fight_result in VICTORY_CLOSE_OR_BETTER:
                 bot._commenced_attack = True
                 bot._attack_commenced_time = bot.time
                 return attack_target
