@@ -109,8 +109,8 @@ class PiG_Bot(AresBot):
         self._cannon_rush_completed = False
         self._cannon_rush_cleanup_timer = None
 
-        # Debug flags
-        self.debug = False  # Enable debug output for targeting analysis
+        # Debug flags (loaded from config.yml in on_start)
+        self.debug = False  # Will be set from config.yml BotDebug
         
         # Target persistence for stable attack behavior
         self.current_attack_target = None
@@ -152,6 +152,9 @@ class PiG_Bot(AresBot):
         """
         await super().on_start()
 
+        # Load debug flag from config
+        self.debug = self.config.get("BotDebug", False)
+        
         # Debug on start
         self.map_data: MapData  = self.mediator.get_map_data_object
         
