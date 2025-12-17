@@ -11,6 +11,7 @@ from sc2.unit import Unit
 
 from behaviors.combat.individual.combat_individual_behavior import CombatIndividualBehavior
 from ares.managers.manager_mediator import ManagerMediator
+from cython_extensions.general_utils import cy_in_pathing_grid_ma
 import numpy as np
 from sc2.position import Point2, Point3
 
@@ -107,6 +108,12 @@ class UseDisruptorNova(CombatIndividualBehavior):
                 except Exception:
                     pass  # Continue without exclusion mask
             
+            # Get ground grid for pathing checks (nova can't reach cliffs/obstacles)
+            try:
+                ground_grid = self.mediator.get_ground_grid
+            except Exception:
+                ground_grid = None
+            
             # Helper function to find points within a circle
             def bounded_circle(center, radius, shape):
                 xx, yy = np.ogrid[:shape[1], :shape[0]]  # Note: shape[1] is width (x), shape[0] is height (y)
@@ -152,6 +159,26 @@ class UseDisruptorNova(CombatIndividualBehavior):
                         finite_values = finite_values[non_excluded_mask]
                         finite_indices = finite_indices[non_excluded_mask]
                     else:
+                        return None
+                
+                # Apply pathing mask to filter out unreachable positions (cliffs, obstacles)
+                if ground_grid is not None:
+                    # Get ground grid values at the remaining valid points
+                    # We need to map finite_indices back to original points
+                    pathable_mask = np.ones(len(finite_values), dtype=bool)
+                    for i, idx in enumerate(finite_indices):
+                        pt_x, pt_y = points[0][idx], points[1][idx]
+                        pos = Point2((pt_x, pt_y))
+                        if not cy_in_pathing_grid_ma(ground_grid, pos):
+                            pathable_mask[i] = False
+                    
+                    # Apply the pathing mask
+                    if np.sum(pathable_mask) > 0:
+                        finite_values = finite_values[pathable_mask]
+                        finite_indices = finite_indices[pathable_mask]
+                    else:
+                        if self.debug_output:
+                            print("DEBUG: No pathable target positions found")
                         return None
                 
                 # Find the index of the maximum value
