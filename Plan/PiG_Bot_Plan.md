@@ -147,6 +147,7 @@ tags:
 - [x] Add Logs for every 30 seconds
 - [x] Put debug in game
 - [x] Fix Gatekeeper off in non‑PvZ
+- [ ] Use action request to rescue stuck units
 
 ### Gatekeeper System (PvZ Wall Logic) ✅
 - [x] Issue Hold Position
