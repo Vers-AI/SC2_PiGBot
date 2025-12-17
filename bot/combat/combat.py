@@ -1,3 +1,4 @@
+import math
 import numpy as np
 
 from sc2.position import Point2
@@ -39,6 +40,10 @@ from bot.constants import (
     WARP_PRISM_FOLLOW_OFFSET,
     WARP_PRISM_UNIT_CHECK_RANGE,
     WARP_PRISM_DANGER_DISTANCE,
+    WARP_PRISM_MIN_ENEMY_DISTANCE,
+    WARP_PRISM_MATRIX_RADIUS,
+    WARP_PRISM_POSITION_SEARCH_RANGE,
+    WARP_PRISM_POSITION_SEARCH_STEP,
     EARLY_GAME_TIME_LIMIT,
     EARLY_GAME_SAFE_GROUND_CHECK_BASES,
     SIEGE_TANK_SUPPLY_ADVANTAGE_REQUIRED,
@@ -569,9 +574,78 @@ def gatekeeper_control(bot, gatekeeper: Units) -> None:
                 gate.move(target_pos)   
             
 
+def _is_valid_warp_in_position(bot, position: Point2, ground_grid: np.ndarray) -> bool:
+    """
+    Check if a position supports warp-ins within the full matrix radius.
+    
+    Checks:
+    1. Center and edge points within matrix radius are pathable (cy_in_pathing_grid_ma)
+    2. Position is safe enough from enemy army
+    """
+    # Check center position is pathable
+    if not cy_in_pathing_grid_ma(ground_grid, position):
+        return False
+    
+    # Check a few points around the matrix radius to ensure full coverage
+    for angle in [0, 90, 180, 270]:
+        rad = math.radians(angle)
+        check_pos = Point2((
+            position.x + WARP_PRISM_MATRIX_RADIUS * math.cos(rad),
+            position.y + WARP_PRISM_MATRIX_RADIUS * math.sin(rad)
+        ))
+        if not cy_in_pathing_grid_ma(ground_grid, check_pos):
+            return False
+    
+    # Check distance from enemy army
+    enemy_army = bot.mediator.get_cached_enemy_army
+    if enemy_army:
+        closest_enemy = enemy_army.closest_to(position)
+        if closest_enemy.distance_to(position) < WARP_PRISM_MIN_ENEMY_DISTANCE:
+            return False
+    
+    return True
+
+
+def _find_valid_warp_in_position(bot, current_pos: Point2, army_center: Point2) -> Point2:
+    """
+    Find the closest valid position for warp-ins near the current position.
+    Searches in a grid pattern biased toward the army center.
+    
+    Returns the valid position, or army_center as fallback.
+    """
+    ground_grid: np.ndarray = bot.mediator.get_ground_grid
+    
+    # Check current position first
+    if _is_valid_warp_in_position(bot, current_pos, ground_grid):
+        return current_pos
+    
+    # Search in expanding rings, prioritizing positions toward army
+    best_pos = None
+    best_dist_to_army = float('inf')
+    
+    search_range = WARP_PRISM_POSITION_SEARCH_RANGE
+    step = WARP_PRISM_POSITION_SEARCH_STEP
+    
+    # Generate candidate positions in a grid around current position
+    for dx in np.arange(-search_range, search_range + step, step):
+        for dy in np.arange(-search_range, search_range + step, step):
+            if dx == 0 and dy == 0:
+                continue
+            candidate = Point2((current_pos.x + dx, current_pos.y + dy))
+            
+            if _is_valid_warp_in_position(bot, candidate, ground_grid):
+                dist_to_army = candidate.distance_to(army_center)
+                if dist_to_army < best_dist_to_army:
+                    best_dist_to_army = dist_to_army
+                    best_pos = candidate
+    
+    return best_pos if best_pos else army_center
+
+
 def warp_prism_follower(bot, warp_prisms: Units, main_army: Units) -> None:
     """
     Controls Warp Prisms: follows army, morphs between Transport/Phasing.
+    Finds valid pathable/safe positions before entering phase mode.
     """
     air_grid: np.ndarray = bot.mediator.get_air_grid
     if not warp_prisms:
@@ -582,9 +656,15 @@ def warp_prism_follower(bot, warp_prisms: Units, main_army: Units) -> None:
         if main_army:
             distance_to_center = prism.distance_to(main_army.center)
 
-            # If close, morph to Phasing
+            # If close to army, find valid position and phase or move there
             if distance_to_center < WARP_PRISM_FOLLOW_DISTANCE:
-                prism(AbilityId.MORPH_WARPPRISMPHASINGMODE)
+                ground_grid = bot.mediator.get_ground_grid
+                if _is_valid_warp_in_position(bot, prism.position, ground_grid):
+                    prism(AbilityId.MORPH_WARPPRISMPHASINGMODE)
+                else:
+                    # Find closest valid position and move there
+                    valid_pos = _find_valid_warp_in_position(bot, prism.position, main_army.center)
+                    maneuver.add(PathUnitToTarget(unit=prism, target=valid_pos, grid=air_grid))
             else:
                 # If no warpin in progress, revert to Transport
                 # Or simply path near the army

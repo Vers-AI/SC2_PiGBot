@@ -119,6 +119,21 @@ WARP_PRISM_UNIT_CHECK_RANGE = 6.5
 WARP_PRISM_DANGER_DISTANCE = 10.0
 """Danger distance parameter for warp prism pathfinding"""
 
+WARP_PRISM_SAFETY_LIMIT = 1.5
+"""Max grid weight to consider position safe for warp-ins (1.0 = no enemy influence)"""
+
+WARP_PRISM_MIN_ENEMY_DISTANCE = 12.0
+"""Minimum distance from enemy army center to enter phase mode"""
+
+WARP_PRISM_MATRIX_RADIUS = 3.75
+"""Psionic matrix radius for warp prism phasing mode"""
+
+WARP_PRISM_POSITION_SEARCH_RANGE = 8.0
+"""Range to search for valid warp-in positions around current position"""
+
+WARP_PRISM_POSITION_SEARCH_STEP = 2.0
+"""Step size when searching for valid warp-in positions"""
+
 # ===== UNDER ATTACK DETECTION =====
 # OBSERVATION: These thresholds determine when _under_attack flag triggers
 # Adjust based on gameplay feedback
