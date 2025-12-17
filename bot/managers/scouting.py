@@ -22,8 +22,12 @@ def get_hunt_target(bot, unit: Unit) -> Point2:
     """
     Get the best target for a unit hunting for the enemy army.
     
-    Option D (Hybrid): Uses last known position if recent, otherwise patrols enemy expansions.
-    Works for both observers and worker scouts.
+    Uses last known position if recent (< 15s), otherwise patrols enemy expansions
+    in reverse order (4th → 3rd → nat → main) since armies often stage at outer bases.
+    
+    Args:
+        bot: The bot instance
+        unit: The scouting unit (observer or worker)
     
     Returns:
         Point2: The target position to hunt toward.
@@ -80,6 +84,23 @@ def control_worker_scout(bot) -> None:
     - Intel urgency is high (> threshold)
     - No observers available
     """
+    # First: check if we have worker scouts that should be recalled
+    # (observer available, or no longer early game, or under attack)
+    existing_scouts = bot.mediator.get_units_from_role(role=UnitRole.SCOUTING)
+    worker_scouts = existing_scouts.filter(lambda u: u.type_id in WORKER_TYPES)
+    
+    should_recall = (
+        bot.units(UnitTypeId.OBSERVER).amount > 0 or
+        bot.game_state != 0 or
+        bot._under_attack
+    )
+    
+    if worker_scouts and should_recall:
+        # Return worker scout to mining
+        for scout in worker_scouts:
+            bot.mediator.clear_role(tag=scout.tag)
+        return
+    
     # Only in early game
     if bot.game_state != 0:
         return
@@ -134,10 +155,9 @@ def control_worker_scout(bot) -> None:
         worker = bot.mediator.select_worker(target_position=bot.start_location)
         if worker:
             bot.mediator.assign_role(tag=worker.tag, role=UnitRole.SCOUTING)
-            bot._worker_scout_sent_this_stale_period = True  # Mark that we sent a scout
+            bot._worker_scout_sent_this_stale_period = True
 
 
-# TODO add survilaence mode to primary obs when its at th ol spot, and patrol obs when it reaches desitnation 
 def control_observers(bot, all_observers: Units, main_army: Units) -> None:
     """
     Coordinate multiple observers with different roles, adapting to the game situation.
