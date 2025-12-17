@@ -512,11 +512,13 @@ async def handle_macro(
         macro_plan.add(SpawnController(army_composition, spawn_target=spawn_target, freeflow_mode=spawn_freeflow))
         
         # Expansion logic: moderate+ gets full expansion, reduced gets safety net to 2 bases
-        if economy_state in ("moderate", "full"):
-            macro_plan.add(ExpansionController(to_count=expansion_count, max_pending=1))
-        elif len(bot.townhalls) < 2:
-            # Safety net: always allow natural expansion even in reduced economy
-            macro_plan.add(ExpansionController(to_count=2, max_pending=1))
+        # Skip expansions when under attack - focus resources on defense
+        if not bot._under_attack:
+            if economy_state in ("moderate", "full"):
+                macro_plan.add(ExpansionController(to_count=expansion_count, max_pending=1))
+            elif len(bot.townhalls) < 2:
+                # Safety net: always allow natural expansion even in reduced economy
+                macro_plan.add(ExpansionController(to_count=2, max_pending=1))
         
         if economy_state in ("moderate", "full"):
             # Moderate+: upgrades
