@@ -97,7 +97,7 @@ MAP_CROSSING_SUCCESS_DISTANCE = 6.5
 """Success distance for PathUnitToTarget during map crossing"""
 
 # ===== ENGAGEMENT RANGES =====
-UNIT_ENEMY_DETECTION_RANGE = 15.0
+UNIT_ENEMY_DETECTION_RANGE = 12.0
 """Range to detect enemies around each unit's position (per-unit detection)"""
 
 GATEKEEPER_DETECTION_RANGE = 6.0

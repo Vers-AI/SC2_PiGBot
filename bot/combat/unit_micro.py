@@ -16,10 +16,11 @@ from ares.behaviors.combat import CombatManeuver
 from ares.behaviors.combat.individual import (
     KeepUnitSafe, StutterUnitBack, AMove, ShootTargetInRange
 )
+from ares.consts import WORKER_TYPES
 
 from bot.constants import PRIORITY_TARGET_TYPES
 
-from cython_extensions import cy_closest_to, cy_in_attack_range, cy_distance_to, cy_find_units_center_mass
+from cython_extensions import cy_closest_to, cy_in_attack_range, cy_distance_to, cy_find_units_center_mass, cy_pick_enemy_target
 
 
 def micro_ranged_unit(
@@ -49,7 +50,12 @@ def micro_ranged_unit(
         CombatManeuver with appropriate behaviors added
     """
     maneuver = CombatManeuver()
-    closest_enemy = cy_closest_to(unit.position, enemies)
+    closest_enemy = cy_closest_to(unit.position, enemies)  # For kiting direction (includes workers)
+    
+    # For movement direction: prefer non-workers to avoid getting pulled by passing workers
+    # Workers still get shot if in range, just not chased
+    non_worker_enemies = [e for e in enemies if e.type_id not in WORKER_TYPES]
+    best_target = cy_pick_enemy_target(non_worker_enemies) if non_worker_enemies else cy_pick_enemy_target(enemies)
     
     # ALWAYS add KeepUnitSafe FIRST with avoidance grid
     # This ensures units dodge dangerous abilities (disruptor shots, banelings, etc.)
@@ -62,7 +68,7 @@ def micro_ranged_unit(
     
     # Aggressive mode: standard stutter-step micro
     if not unit.weapon_ready:
-        # Weapon on cooldown - kite back
+        # Weapon on cooldown - kite back from closest threat (could be worker, that's fine)
         maneuver.add(StutterUnitBack(unit, target=closest_enemy, grid=grid))
     else:
         # Weapon ready - engage with priority targeting
@@ -71,8 +77,8 @@ def micro_ranged_unit(
         elif in_attack_range_any := cy_in_attack_range(unit, enemies):
             maneuver.add(ShootTargetInRange(unit=unit, targets=in_attack_range_any))
         else:
-            # Nothing in range - move towards closest enemy
-            maneuver.add(AMove(unit=unit, target=closest_enemy.position))
+            # Nothing in range - move towards best non-worker target using position
+            maneuver.add(AMove(unit=unit, target=best_target.position))
     
     return maneuver
 
@@ -109,18 +115,24 @@ def micro_melee_unit(
     # This ensures melee units dodge dangerous abilities (disruptor shots, banelings, etc.)
     maneuver.add(KeepUnitSafe(unit, avoid_grid))
     
-    # Attack targets in range (both aggressive and defensive)
+    # Attack targets in range (both aggressive and defensive) - workers included here
     if in_attack_range_priority := cy_in_attack_range(unit, priority_targets):
         maneuver.add(ShootTargetInRange(unit=unit, targets=in_attack_range_priority))
     elif in_attack_range_any := cy_in_attack_range(unit, enemies):
         maneuver.add(ShootTargetInRange(unit=unit, targets=in_attack_range_any))
     elif aggressive:
         # Aggressive mode: advance toward targets
+        # Filter workers for movement - don't chase passing workers, but will hit them if in range
         if priority_targets:
             closest_priority = cy_closest_to(unit.position, priority_targets)
             maneuver.add(AMove(unit=unit, target=closest_priority.position))
-        elif fallback_position:
-            maneuver.add(AMove(unit=unit, target=fallback_position))
+        else:
+            non_worker_enemies = [e for e in enemies if e.type_id not in WORKER_TYPES]
+            if non_worker_enemies:
+                best_target = cy_pick_enemy_target(non_worker_enemies)
+                maneuver.add(AMove(unit=unit, target=best_target.position))
+            elif fallback_position:
+                maneuver.add(AMove(unit=unit, target=fallback_position))
     # Defensive mode: don't advance, already handled attacks in range above
     
     return maneuver
