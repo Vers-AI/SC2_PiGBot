@@ -96,13 +96,14 @@ tags:
 
 ### Scouting & Interpretation
 - [ ] `scouted_spire()` and other scout triggers
-- [ ] Fallback logic if scout dies early
-- [ ] Create a Reaction System [Current]
-- [ ] Observers ensure mid‑game critical tech scouting
+- [x] Fallback logic if scout dies early
+- [x] Create a Reaction System 
+- [x] Observers ensure mid‑game critical tech scouting
 - [x] Add trigger observer speed upgrades when intel is stale (via `_intel_urgency` system)
 - [x] Add trigger observer production priority when intel is stale
-- [ ] Add trigger a unit scout if information is stale and no observer exists
+- [x] Add trigger a unit scout if information is stale and no observer exists
 - [ ] Add Sentry hallucination scout when intel is stale (requires Sentry logic first)
+- [ ] Add build shield batteries if `under_attack`
 
 
 ### Logging & Data Storage
@@ -133,7 +134,7 @@ tags:
 - [x] Adjust `Worker_rush` detection range
 - [x] Remove Target Unit; use Target Unit **position**
 - [x] Check if regrouping is too aggressive in `regroup_army`
-- [ ] Check threat sensitivity—Marines/Marauders/Reapers
+- [x] Check threat sensitivity—Marines/Marauders/Reapers
 - [x] Review Battle_Sim sensitivity + `all_out_attack`
 - [ ] Add `Did_Enemy_rush` hook
 - [x] Remove Overcharge
