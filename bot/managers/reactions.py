@@ -585,14 +585,50 @@ def threat_detection(bot, main_army: Units) -> None:
     ground_near = bot.mediator.get_ground_enemy_near_bases
     flying_near = bot.mediator.get_flying_enemy_near_bases
 
-    if ground_near or flying_near:
-        # Combine ground + air threats
-        all_threats = {}
-        for key, value in ground_near.items():
-            all_threats[key] = value.copy()
-        for key, value in flying_near.items():
-            all_threats.setdefault(key, set()).update(value)
+    # Combine ground + air threats
+    all_threats = {}
+    for key, value in ground_near.items():
+        all_threats[key] = value.copy()
+    for key, value in flying_near.items():
+        all_threats.setdefault(key, set()).update(value)
+    
+    # Calculate total threat value across ALL bases to update _under_attack flag
+    total_threat_value = 0
+    if all_threats:
+        all_enemy_tags = set()
+        for enemy_tags in all_threats.values():
+            all_enemy_tags.update(enemy_tags)
+        all_threatening_units = bot.enemy_units.tags_in(all_enemy_tags)
+        
+        if all_threatening_units:
+            threat_info = assess_threat(bot, all_threatening_units, main_army, return_details=True)
+            assert isinstance(threat_info, dict), "assess_threat with return_details=True should return dict"
+            total_threat_value = threat_info.get("threat_value", 0)
+    
+    # Calculate ratio of enemy army near our bases
+    known_enemy = bot.mediator.get_cached_enemy_army
+    known_army_value = sum(
+        UNIT_DATA.get(u.type_id, {}).get('army_value', 1.0) 
+        for u in known_enemy if u.type_id not in WORKER_TYPES
+    ) if known_enemy else 0
+    threat_ratio = total_threat_value / max(known_army_value, 1.0)
+    
+    # Update _under_attack using value threshold OR ratio threshold
+    # Hysteresis: higher threshold to trigger, lower to clear
+    # CRITICAL: This runs even when all_threats is empty, allowing flag to clear
+    if bot._under_attack:
+        # Clear when threat value drops below clear threshold
+        if total_threat_value < UNDER_ATTACK_CLEAR_VALUE:
+            bot._under_attack = False
+    else:
+        # Trigger if EITHER threshold is met
+        if total_threat_value >= UNDER_ATTACK_VALUE_THRESHOLD:
+            bot._under_attack = True
+        elif threat_ratio >= UNDER_ATTACK_RATIO_THRESHOLD:
+            bot._under_attack = True
 
+    # Now handle per-base defender allocation
+    if all_threats:
         main_army_should_respond = False
         
         for base_location, enemy_tags in all_threats.items():
@@ -603,35 +639,13 @@ def threat_detection(bot, main_army: Units) -> None:
             threat_position, _ = cy_find_units_center_mass(enemy_units, 10.0)
             threat_position = Point2(threat_position)
             
-            # Use enhanced threat assessment (now consolidated)
+            # Use enhanced threat assessment for this specific base
             threat_info = assess_threat(bot, enemy_units, main_army, return_details=True)
-            # Type assertion since we know return_details=True returns dict
             assert isinstance(threat_info, dict), "assess_threat with return_details=True should return dict"
-            total_threat_value = threat_info.get("threat_value", 0)
-            
-            # Calculate ratio of enemy army near our bases
-            known_enemy = bot.mediator.get_cached_enemy_army
-            known_army_value = sum(
-                UNIT_DATA.get(u.type_id, {}).get('army_value', 1.0) 
-                for u in known_enemy if u.type_id not in WORKER_TYPES
-            ) if known_enemy else 0
-            threat_ratio = total_threat_value / max(known_army_value, 1.0)
-            
-            # Update _under_attack using value threshold OR ratio threshold
-            # Hysteresis: higher threshold to trigger, lower to clear
-            if bot._under_attack:
-                # Clear when threat value drops below clear threshold
-                if total_threat_value < UNDER_ATTACK_CLEAR_VALUE:
-                    bot._under_attack = False
-            else:
-                # Trigger if EITHER threshold is met
-                if total_threat_value >= UNDER_ATTACK_VALUE_THRESHOLD:
-                    bot._under_attack = True
-                elif threat_ratio >= UNDER_ATTACK_RATIO_THRESHOLD:
-                    bot._under_attack = True
+            base_threat_value = threat_info.get("threat_value", 0)
             
             # Smart force allocation instead of all-or-nothing response
-            if total_threat_value > 0:
+            if base_threat_value > 0:
                 # Check if we already have enough defenders before allocating more
                 existing_defenders = bot.mediator.get_units_from_role(role=UnitRole.BASE_DEFENDER)
                 
