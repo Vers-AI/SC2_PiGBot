@@ -64,6 +64,43 @@ from cython_extensions import (
     cy_pick_enemy_target, cy_closest_to, cy_distance_to, cy_distance_to_squared, cy_in_attack_range, cy_find_units_center_mass,
     cy_adjust_moving_formation
 )
+from cython_extensions.general_utils import cy_in_pathing_grid_ma
+
+
+def get_attackable_enemies(unit: Unit, enemies: list, grid: np.ndarray) -> list:
+    """
+    Filter enemies to only those this unit can attack AND reach.
+    
+    Checks:
+    1. Attackability: can unit attack air/ground targets?
+    2. Reachability: for ground units, is enemy position pathable?
+    
+    Args:
+        unit: The unit doing the attacking
+        enemies: List of potential enemy targets
+        grid: Ground pathing grid for reachability checks
+        
+    Returns:
+        Filtered list of enemies this unit can actually engage
+    """
+    attackable = []
+    for e in enemies:
+        # Check attackability (ground vs air)
+        if e.is_flying:
+            if not unit.can_attack_air:
+                continue
+        else:
+            if not unit.can_attack_ground:
+                continue
+        
+        # Check reachability for ground units
+        # Ground units can't reach positions that aren't in the pathing grid
+        if not unit.is_flying:
+            if not cy_in_pathing_grid_ma(grid, e.position):
+                continue
+        
+        attackable.append(e)
+    return attackable
 
 
 # Formation + cohesion constants
@@ -339,11 +376,17 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     retreat_maneuver.add(KeepUnitSafe(unit=r_unit, grid=avoid_grid))
                     bot.register_behavior(retreat_maneuver)
                     continue
+                
+                # Filter enemies to only those this unit can attack and reach
+                unit_enemies = get_attackable_enemies(r_unit, all_close, grid)
+                if not unit_enemies:
+                    continue
+                unit_priority = [t for t in priority_targets if t in unit_enemies]
                     
                 ranged_maneuver = micro_ranged_unit(
                     unit=r_unit,
-                    enemies=all_close,
-                    priority_targets=priority_targets,
+                    enemies=unit_enemies,
+                    priority_targets=unit_priority,
                     grid=grid,
                     avoid_grid=avoid_grid,
                     aggressive=can_engage
@@ -352,10 +395,16 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
 
             # Melee engages directly - simplified approach
             for m_unit in melee:
+                # Filter enemies to only those this unit can attack and reach
+                unit_enemies = get_attackable_enemies(m_unit, all_close, grid)
+                if not unit_enemies:
+                    continue
+                unit_priority = [t for t in priority_targets if t in unit_enemies]
+                
                 melee_maneuver = micro_melee_unit(
                     unit=m_unit,
-                    enemies=all_close,
-                    priority_targets=priority_targets,
+                    enemies=unit_enemies,
+                    priority_targets=unit_priority,
                     avoid_grid=avoid_grid,
                     fallback_position=enemy_target.position if enemy_target else move_to,
                     aggressive=can_engage
@@ -908,10 +957,16 @@ def control_base_defenders(bot, defender_units: Units, threat_position: Point2) 
         
         # Ranged micro - use same function as main army (aggressive=True for base defense)
         for r_unit in ranged:
+            # Filter enemies to only those this unit can attack and reach
+            unit_enemies = get_attackable_enemies(r_unit, all_close, grid)
+            if not unit_enemies:
+                continue
+            unit_priority = [t for t in priority_targets if t in unit_enemies]
+            
             ranged_maneuver = micro_ranged_unit(
                 unit=r_unit,
-                enemies=all_close,
-                priority_targets=priority_targets,
+                enemies=unit_enemies,
+                priority_targets=unit_priority,
                 grid=grid,
                 avoid_grid=avoid_grid,
                 aggressive=True  # Always aggressive when defending base
@@ -920,10 +975,16 @@ def control_base_defenders(bot, defender_units: Units, threat_position: Point2) 
         
         # Melee micro - use same function as main army
         for m_unit in melee:
+            # Filter enemies to only those this unit can attack and reach
+            unit_enemies = get_attackable_enemies(m_unit, all_close, grid)
+            if not unit_enemies:
+                continue
+            unit_priority = [t for t in priority_targets if t in unit_enemies]
+            
             melee_maneuver = micro_melee_unit(
                 unit=m_unit,
-                enemies=all_close,
-                priority_targets=priority_targets,
+                enemies=unit_enemies,
+                priority_targets=unit_priority,
                 avoid_grid=avoid_grid,
                 fallback_position=threat_position,
                 aggressive=True  # Always aggressive when defending base
