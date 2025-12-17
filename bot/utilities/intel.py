@@ -15,14 +15,19 @@ from sc2.position import Point2
 
 from ares.consts import WORKER_TYPES
 
+from bot.constants import (
+    RAMP_CHOKE_RADIUS,
+    MAP_CHOKE_RADIUS,
+    CHOKE_GRID_WEIGHT,
+    VISIBLE_AGE_THRESHOLD,
+    STALENESS_WINDOW,
+    STALE_INTEL_THRESHOLD,
+    URGENCY_BUILD_RATE,
+    URGENCY_DECAY_RATE,
+)
+
 if TYPE_CHECKING:
     from bot.bot import PiG_Bot
-
-
-# Choke detection config
-RAMP_CHOKE_RADIUS = 6.0   # Radius around ramp top/bottom
-MAP_CHOKE_RADIUS = 10.0   # Radius around map_analyzer chokes
-CHOKE_GRID_WEIGHT = 10.0  # Weight to mark choke zones (> 1.0 = choke area)
 
 
 def create_choke_grid(bot: "PiG_Bot") -> np.ndarray:
@@ -168,10 +173,9 @@ def get_enemy_intel_quality(bot: "PiG_Bot") -> dict:
                 "freshness": 0.0,
             }
     
-    # Count visible as units we've seen recently (age < 3 seconds)
-    # 3s is forgiving for active combat where snapshots update slightly delayed
+    # Count visible as units we've seen recently (age < VISIBLE_AGE_THRESHOLD seconds)
+    # This is forgiving for active combat where snapshots update slightly delayed
     # This is more reliable than is_memory which can be inconsistent
-    VISIBLE_AGE_THRESHOLD = 3.0
     visible = [u for u in cached_enemy if u.age < VISIBLE_AGE_THRESHOLD]
     memory = [u for u in cached_enemy if u.age >= VISIBLE_AGE_THRESHOLD]
     
@@ -193,9 +197,8 @@ def get_enemy_intel_quality(bot: "PiG_Bot") -> dict:
     all_units = cached_enemy if cached_enemy else current_visible
     avg_age = sum(u.age for u in all_units) / len(all_units) if all_units else 0.0
     
-    # Freshness score: 1.0 = all visible now, decays over 30 seconds
-    # (30s matches ARES UnitMemoryManager expiration)
-    STALENESS_WINDOW = 30.0
+    # Freshness score: 1.0 = all visible now, decays over STALENESS_WINDOW seconds
+    # (matches ARES UnitMemoryManager expiration)
     freshness = sum(max(0, 1 - u.age / STALENESS_WINDOW) for u in all_units) / len(all_units)
     
     return {
@@ -239,12 +242,8 @@ def update_enemy_intel_tracking(bot: "PiG_Bot") -> None:
         intel = get_enemy_intel_quality(bot)
         freshness = intel["freshness"]
         
-        # Stale threshold matches combat.py (< 0.3 = STALE/BLIND)
-        STALE_THRESHOLD = 0.3
-        URGENCY_BUILD_RATE = 0.02   # How fast urgency builds (per frame, ~0.4/sec at 22fps)
-        URGENCY_DECAY_RATE = 0.005  # How fast urgency decays (slower than build)
-        
-        if freshness < STALE_THRESHOLD:
+        # Stale threshold from constants.py
+        if freshness < STALE_INTEL_THRESHOLD:
             # Intel is stale - build urgency
             bot._intel_urgency = min(1.0, bot._intel_urgency + URGENCY_BUILD_RATE)
         else:

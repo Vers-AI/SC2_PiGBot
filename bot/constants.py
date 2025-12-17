@@ -97,7 +97,7 @@ MAP_CROSSING_SUCCESS_DISTANCE = 6.5
 """Success distance for PathUnitToTarget during map crossing"""
 
 # ===== ENGAGEMENT RANGES =====
-UNIT_ENEMY_DETECTION_RANGE = 12.0
+UNIT_ENEMY_DETECTION_RANGE = 15.0
 """Range to detect enemies around each unit's position (per-unit detection)"""
 
 GATEKEEPER_DETECTION_RANGE = 6.0
@@ -144,3 +144,32 @@ RUSH_SPEED = 3.94
 
 RUSH_DISTANCE_CALIBRATION = 0.833
 """Calibration factor to match official map rush distances (36s official / 43.2s calculated = 0.833)"""
+
+# ===== INTEL QUALITY & FRESHNESS =====
+VISIBLE_AGE_THRESHOLD = 3.0
+"""Age threshold (seconds) to consider a unit 'visible' vs 'memory' (forgiving for active combat)"""
+
+STALENESS_WINDOW = 30.0
+"""Time window (seconds) for intel freshness decay - matches ARES UnitMemoryManager expiration"""
+
+FRESH_INTEL_THRESHOLD = 0.7
+"""Freshness score above which intel is considered 'fresh' - use normal combat sim thresholds"""
+
+STALE_INTEL_THRESHOLD = 0.2
+"""Freshness score below which intel is 'very stale' - don't initiate attacks, need scouting"""
+
+URGENCY_BUILD_RATE = 0.02
+"""Rate per frame that intel urgency builds when stale (~0.4/sec at 22fps)"""
+
+URGENCY_DECAY_RATE = 0.005
+"""Rate per frame that intel urgency decays when fresh (slower than build)"""
+
+# ===== CHOKE/RAMP DETECTION =====
+RAMP_CHOKE_RADIUS = 6.0
+"""Radius around ramp top/bottom for choke grid marking"""
+
+MAP_CHOKE_RADIUS = 10.0
+"""Radius around map_analyzer choke points for grid marking"""
+
+CHOKE_GRID_WEIGHT = 10.0
+"""Weight value to mark choke zones in grid (>1.0 indicates choke area)"""
