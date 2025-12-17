@@ -43,6 +43,8 @@ from bot.constants import (
     EARLY_GAME_SAFE_GROUND_CHECK_BASES,
     SIEGE_TANK_SUPPLY_ADVANTAGE_REQUIRED,
     SQUAD_NEARBY_FRIENDLY_RANGE_SQ,
+    FRESH_INTEL_THRESHOLD,
+    STALE_INTEL_THRESHOLD,
 )
 from bot.combat.unit_micro import (
     micro_ranged_unit,
@@ -726,12 +728,9 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
             return select_defensive_anchor(bot, main_army)
         
         # Gate 2: Adjust required victory threshold based on intel freshness
-        # Fresh (>0.7): trust combat sim normally
-        # Stale (0.3-0.7): require higher confidence
-        # Very stale (<0.3): don't initiate attacks, need fresh intel
-        FRESH_INTEL_THRESHOLD = 0.7
-        STALE_INTEL_THRESHOLD = 0.3
-        
+        # Fresh (>FRESH_INTEL_THRESHOLD): trust combat sim normally
+        # Stale (STALE_INTEL_THRESHOLD to FRESH_INTEL_THRESHOLD): require higher confidence
+        # Very stale (<STALE_INTEL_THRESHOLD): don't initiate attacks, need fresh intel
         if intel["freshness"] < STALE_INTEL_THRESHOLD:
             # Intel is very stale - don't initiate attack, stay defensive until we scout
             return select_defensive_anchor(bot, main_army)
