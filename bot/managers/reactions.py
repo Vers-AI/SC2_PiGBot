@@ -21,6 +21,11 @@ from cython_extensions import (
 
 from bot.utilities.intel import get_enemy_cannon_rushed
 from bot.utilities.rush_detection import get_enemy_ling_rushed_v2
+from bot.constants import (
+    UNDER_ATTACK_VALUE_THRESHOLD,
+    UNDER_ATTACK_RATIO_THRESHOLD,
+    UNDER_ATTACK_CLEAR_VALUE,
+)
 
 
 
@@ -602,32 +607,36 @@ def threat_detection(bot, main_army: Units) -> None:
             threat_info = assess_threat(bot, enemy_units, main_army, return_details=True)
             # Type assertion since we know return_details=True returns dict
             assert isinstance(threat_info, dict), "assess_threat with return_details=True should return dict"
-            current_threat_level = threat_info["threat_level"]  # For original hysteresis thresholds
+            total_threat_value = threat_info.get("threat_value", 0)
             
-            # Preserve original hysteresis thresholds
-            #if bot.game_state == 0:
-            #    high_threshold = 2
-            #    low_threshold = 1
-            #else:
-            high_threshold = 10
-            low_threshold = 1
+            # Calculate ratio of enemy army near our bases
+            known_enemy = bot.mediator.get_cached_enemy_army
+            known_army_value = sum(
+                UNIT_DATA.get(u.type_id, {}).get('army_value', 1.0) 
+                for u in known_enemy if u.type_id not in WORKER_TYPES
+            ) if known_enemy else 0
+            threat_ratio = total_threat_value / max(known_army_value, 1.0)
             
-            # Update global threat status using original hysteresis thresholds
+            # Update _under_attack using value threshold OR ratio threshold
+            # Hysteresis: higher threshold to trigger, lower to clear
             if bot._under_attack:
-                if current_threat_level < low_threshold:
+                # Clear when threat value drops below clear threshold
+                if total_threat_value < UNDER_ATTACK_CLEAR_VALUE:
                     bot._under_attack = False
             else:
-                if current_threat_level >= high_threshold:
+                # Trigger if EITHER threshold is met
+                if total_threat_value >= UNDER_ATTACK_VALUE_THRESHOLD:
+                    bot._under_attack = True
+                elif threat_ratio >= UNDER_ATTACK_RATIO_THRESHOLD:
                     bot._under_attack = True
             
             # Smart force allocation instead of all-or-nothing response
-            if current_threat_level > 0:
+            if total_threat_value > 0:
                 # Check if we already have enough defenders before allocating more
                 existing_defenders = bot.mediator.get_units_from_role(role=UnitRole.BASE_DEFENDER)
                 
                 # Calculate defender value needed (flexible, threat-based cap)
                 existing_defender_value = sum(UNIT_DATA.get(u.type_id, {}).get('army_value', 1.0) for u in existing_defenders)
-                total_threat_value = threat_info.get("threat_value", 0)
                 max_defender_value = max(total_threat_value * 1.5, 10.0)  # 150% of threat value, min 10
                 
                 defender_cap_reached = existing_defender_value >= max_defender_value

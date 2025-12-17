@@ -571,10 +571,11 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
     DOES NOT control units - only sets flags and returns target.
     """
     
-    # Check if main army is currently handling defense (set by threat_detection)
-    if hasattr(bot, '_main_army_defending') and bot._main_army_defending and not bot._under_attack:
-        # Main army is handling a major threat, don't interfere - return current attack target
-        return attack_target
+    # When under attack, redirect entire army to defend
+    # This takes priority - army moves cohesively to threat position
+    if bot._under_attack and hasattr(bot, '_defender_threat_position') and bot._defender_threat_position:
+        bot._commenced_attack = False  # Cancel any ongoing attack
+        return bot._defender_threat_position
     
     # Assess the threat level of enemy units for main combat decisions
     enemy_threat_level = assess_threat(bot, bot.enemy_units, main_army)  # Returns simple int
@@ -717,19 +718,6 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
                 bot._commenced_attack = True
                 bot._attack_commenced_time = bot.time
                 return attack_target
-        
-        # When build order isn't complete or in defensive mode, only redirect for major threats
-        if bot._under_attack and bot.enemy_units:
-            # Use enhanced threat assessment to avoid bouncing
-            enemy_center, _ = cy_find_units_center_mass(bot.enemy_units, 10.0)
-            major_threat_info = assess_threat(bot, bot.enemy_units, main_army, return_details=True)
-            # Type assertion since we know return_details=True returns dict
-            assert isinstance(major_threat_info, dict), "assess_threat with return_details=True should return dict"
-            
-            # Only pull main army for significant threats
-            if (major_threat_info["threat_level"] >= 7 or 
-                major_threat_info["response_type"] == "combat_response"):
-                return Point2(enemy_center)
         
         # Default: use strategic anchor positioning (smart defensive placement)
         return select_defensive_anchor(bot, main_army)

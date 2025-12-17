@@ -119,6 +119,18 @@ WARP_PRISM_UNIT_CHECK_RANGE = 6.5
 WARP_PRISM_DANGER_DISTANCE = 10.0
 """Danger distance parameter for warp prism pathfinding"""
 
+# ===== UNDER ATTACK DETECTION =====
+# OBSERVATION: These thresholds determine when _under_attack flag triggers
+# Adjust based on gameplay feedback
+UNDER_ATTACK_VALUE_THRESHOLD = 15.0
+"""Minimum threat value to trigger under_attack (roughly 3 stalkers worth)"""
+
+UNDER_ATTACK_RATIO_THRESHOLD = 0.4
+"""Minimum ratio of enemy army near bases to trigger under_attack (40% of known army)"""
+
+UNDER_ATTACK_CLEAR_VALUE = 5.0
+"""Threat value below which under_attack clears (hysteresis to prevent flickering)"""
+
 # ===== EARLY GAME DEFENSE =====
 EARLY_GAME_TIME_LIMIT = 600.0
 """Time limit (seconds) for early game defensive positioning (10 minutes)"""
