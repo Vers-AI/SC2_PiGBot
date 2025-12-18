@@ -25,6 +25,7 @@ from bot.constants import (
     UNDER_ATTACK_VALUE_THRESHOLD,
     UNDER_ATTACK_RATIO_THRESHOLD,
     UNDER_ATTACK_CLEAR_VALUE,
+    COMMON_UNIT_IGNORE_TYPES,
 )
 
 
@@ -592,7 +593,7 @@ def threat_detection(bot, main_army: Units) -> None:
     for key, value in flying_near.items():
         all_threats.setdefault(key, set()).update(value)
     
-    # Calculate total threat value across ALL bases to update _under_attack flag
+    # Aggregate total threat value from all bases for global _under_attack flag
     total_threat_value = 0
     if all_threats:
         all_enemy_tags = set()
@@ -605,29 +606,28 @@ def threat_detection(bot, main_army: Units) -> None:
             assert isinstance(threat_info, dict), "assess_threat with return_details=True should return dict"
             total_threat_value = threat_info.get("threat_value", 0)
     
-    # Calculate ratio of enemy army near our bases
+    # Calculate threat ratio: (threat near bases) / (total known enemy army)
+    # Filters: workers, scouts (overlords/observers), and non-combat units
     known_enemy = bot.mediator.get_cached_enemy_army
     known_army_value = sum(
         UNIT_DATA.get(u.type_id, {}).get('army_value', 1.0) 
-        for u in known_enemy if u.type_id not in WORKER_TYPES
+        for u in known_enemy 
+        if u.type_id not in WORKER_TYPES and u.type_id not in COMMON_UNIT_IGNORE_TYPES
     ) if known_enemy else 0
     threat_ratio = total_threat_value / max(known_army_value, 1.0)
     
-    # Update _under_attack using value threshold OR ratio threshold
-    # Hysteresis: higher threshold to trigger, lower to clear
-    # CRITICAL: This runs even when all_threats is empty, allowing flag to clear
+    # Update _under_attack flag with hysteresis (higher threshold to set, lower to clear)
+    # Runs every frame even when no threats detected to allow flag to clear properly
     if bot._under_attack:
-        # Clear when threat value drops below clear threshold
         if total_threat_value < UNDER_ATTACK_CLEAR_VALUE:
             bot._under_attack = False
     else:
-        # Trigger if EITHER threshold is met
         if total_threat_value >= UNDER_ATTACK_VALUE_THRESHOLD:
             bot._under_attack = True
         elif threat_ratio >= UNDER_ATTACK_RATIO_THRESHOLD:
             bot._under_attack = True
 
-    # Now handle per-base defender allocation
+    # Per-base defender allocation
     if all_threats:
         main_army_should_respond = False
         
@@ -639,32 +639,30 @@ def threat_detection(bot, main_army: Units) -> None:
             threat_position, _ = cy_find_units_center_mass(enemy_units, 10.0)
             threat_position = Point2(threat_position)
             
-            # Use enhanced threat assessment for this specific base
+            # Assess threat level for this specific base location
             threat_info = assess_threat(bot, enemy_units, main_army, return_details=True)
             assert isinstance(threat_info, dict), "assess_threat with return_details=True should return dict"
             base_threat_value = threat_info.get("threat_value", 0)
             
-            # Smart force allocation instead of all-or-nothing response
+            # Allocate defenders proportionally to threat level with capped response
             if base_threat_value > 0:
-                # Check if we already have enough defenders before allocating more
                 existing_defenders = bot.mediator.get_units_from_role(role=UnitRole.BASE_DEFENDER)
                 
-                # Calculate defender value needed (flexible, threat-based cap)
+                # Cap defenders at 150% of threat value (minimum 10) to avoid over-committing
                 existing_defender_value = sum(UNIT_DATA.get(u.type_id, {}).get('army_value', 1.0) for u in existing_defenders)
-                max_defender_value = max(total_threat_value * 1.5, 10.0)  # 150% of threat value, min 10
+                max_defender_value = max(total_threat_value * 1.5, 10.0)
                 
                 defender_cap_reached = existing_defender_value >= max_defender_value
                 
-                # ALLOCATION ONLY: Assign new defenders if cap not reached
-                # Control is handled separately in combat.py via bot.py orchestration
+                # Assign new defenders only if below cap (unit control handled in combat.py)
                 if not defender_cap_reached:
                     new_defenders = allocate_defensive_forces(bot, threat_info, threat_position, enemy_units)
                     if new_defenders:
                         for unit in new_defenders:
                             bot.mediator.assign_role(tag=unit.tag, role=UnitRole.BASE_DEFENDER)
                 
-                # Store threat position for combat.py to use
+                # Store threat position for defensive targeting in combat systems
                 bot._defender_threat_position = threat_position
         
-        # Store whether main army responded for other systems to check
+        # Flag main army involvement for coordination with attack logic
         bot._main_army_defending = main_army_should_respond

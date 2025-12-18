@@ -29,15 +29,20 @@ COMMON_UNIT_IGNORE_TYPES: set[UnitTypeId] = {
     UnitTypeId.MULE,
     UnitTypeId.OVERLORD,
     UnitTypeId.OVERSEER,
+    UnitTypeId.OVERSEERSIEGEMODE,
+    UnitTypeId.OBSERVER,
+    UnitTypeId.OBSERVERSIEGEMODE,
     UnitTypeId.LOCUSTMP,
     UnitTypeId.LOCUSTMPFLYING,
     UnitTypeId.ADEPTPHASESHIFT,
     UnitTypeId.CHANGELING,
     UnitTypeId.CHANGELINGMARINE,
+    UnitTypeId.CHANGELINGMARINESHIELD,
     UnitTypeId.CHANGELINGZEALOT,
     UnitTypeId.CHANGELINGZERGLING,
+    UnitTypeId.CHANGELINGZERGLINGWINGS,
 }
-"""Units to ignore in combat targeting - non-threatening or temporary units"""
+"""Units to ignore in combat targeting and threat calculations - non-threatening scouts, supply, temporary units"""
 
 DISRUPTOR_IGNORE_TYPES: set[UnitTypeId] = COMMON_UNIT_IGNORE_TYPES | {
     UnitTypeId.SCV,
