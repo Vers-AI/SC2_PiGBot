@@ -298,15 +298,26 @@ def _print_rush_detection_status(bot) -> None:
     
     print("\n  RUSH DETECTION (vs Zerg):")
     
-    # Rush scores (new 2-score system)
+    # Rush scores and classification
     score_12p = getattr(bot, '_score_12p', 0)
     score_speed = getattr(bot, '_score_speed', 0)
     rush_label = getattr(bot, '_rush_label', 'none')
     is_rushed = getattr(bot, '_ling_rushed_v2', False)
     auto_true = getattr(bot, '_auto_true_fired', False)
+    rush_source = getattr(bot, '_rush_source', None)
     
-    print(f"    Label: {rush_label} (12p={score_12p}, speed={score_speed}) auto={auto_true}")
-    print(f"    Rush Detected: {is_rushed}")
+    # ML probabilities (if available)
+    ml_probs = getattr(bot, '_ml_probs', None)
+    ml_confidence = getattr(bot, '_ml_confidence', None)
+    
+    source_str = f" [{rush_source}]" if rush_source else ""
+    print(f"    Label: {rush_label}{source_str} (12p={score_12p}, speed={score_speed})")
+    
+    if ml_probs:
+        prob_str = ", ".join(f"{k}={v*100:.0f}%" for k, v in sorted(ml_probs.items()))
+        print(f"    ML Probs: {prob_str}")
+    
+    print(f"    Rush Detected: {is_rushed} (auto-TRUE={auto_true})")
     
     # Natural scouting
     natural_scouted = getattr(bot, '_natural_ever_scouted', False)

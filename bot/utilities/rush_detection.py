@@ -22,6 +22,13 @@ from bot.constants import RUSH_SPEED, RUSH_DISTANCE_CALIBRATION
 if TYPE_CHECKING:
     from bot.bot import PiG_Bot
 
+# Feature columns for ML model (must match training script)
+ML_FEATURE_COLS = [
+    "pool_start", "nat_start", "gas_time", "queen_time",
+    "ling_seen", "ling_contact", "speed_start", "ling_has_speed",
+    "gas_workers", "score_12p", "score_speed",
+]
+
 
 def compute_rush_distance_tier(bot: "PiG_Bot") -> str:
     """
@@ -404,6 +411,8 @@ def get_enemy_ling_rushed_v2(bot: "PiG_Bot") -> bool:
         bot._ling_rushed_v2 = True
         bot._rush_label = "12_pool"
         bot._auto_true_fired = True
+        bot._rush_source = "auto-TRUE"
+        bot._rush_chat_pending = "(early lings detected)"
         print(f"{bot.time_formatted}: Rush detected (Auto-TRUE A): Ling seen at {bot._first_ling_seen_time:.1f}s → 12_pool")
         return True
     
@@ -414,6 +423,8 @@ def get_enemy_ling_rushed_v2(bot: "PiG_Bot") -> bool:
         bot._ling_rushed_v2 = True
         bot._rush_label = "12_pool"
         bot._auto_true_fired = True
+        bot._rush_source = "auto-TRUE"
+        bot._rush_chat_pending = "(slow-ling contact)"
         print(f"{bot.time_formatted}: Rush detected (Auto-TRUE B): Slow-ling contact at {bot._first_ling_contact_nat_time:.1f}s → 12_pool")
         return True
     
@@ -424,6 +435,8 @@ def get_enemy_ling_rushed_v2(bot: "PiG_Bot") -> bool:
         bot._ling_rushed_v2 = True
         bot._rush_label = "speedling"
         bot._auto_true_fired = True
+        bot._rush_source = "auto-TRUE"
+        bot._rush_chat_pending = "(speed-ling contact)"
         print(f"{bot.time_formatted}: Rush detected (Auto-TRUE C): Speed-ling contact at {bot._first_ling_contact_nat_time:.1f}s → speedling")
         return True
     
@@ -499,23 +512,69 @@ def get_enemy_ling_rushed_v2(bot: "PiG_Bot") -> bool:
     bot._score_12p = score_12p
     bot._score_speed = score_speed
     
-    # === CLASSIFICATION ===
+    # === CLASSIFICATION (ML + rule-based fallback) ===
     
-    # 12_pool has priority if both score high
+    # Try ML prediction if model is loaded
+    if hasattr(bot, 'rush_model') and bot.rush_model is not None:
+        # Build feature vector (order must match ML_FEATURE_COLS)
+        features = np.array([[
+            bot._pool_seen_time if bot._pool_seen_time is not None else -1,
+            bot._enemy_nat_started_at if bot._enemy_nat_started_at is not None else -1,
+            bot._extractor_seen_time if bot._extractor_seen_time is not None else -1,
+            bot._queen_started_time if bot._queen_started_time is not None else -1,
+            bot._first_ling_seen_time if bot._first_ling_seen_time is not None else -1,
+            bot._first_ling_contact_nat_time if bot._first_ling_contact_nat_time is not None else -1,
+            bot._speed_research_time if bot._speed_research_time is not None else -1,
+            1 if bot._ling_has_speed else 0,
+            bot._gas_workers_count,
+            score_12p,
+            score_speed,
+        ]])
+        
+        probs = bot.rush_model.predict_proba(features)[0]
+        classes = list(bot.rush_model.classes_)  # e.g. ['12_pool', 'none', 'speedling']
+        max_prob = probs.max()
+        ml_label = classes[probs.argmax()]
+        
+        # Store ML probabilities for game_report
+        bot._ml_probs = {cls: float(probs[i]) for i, cls in enumerate(classes)}
+        bot._ml_confidence = float(max_prob)
+        
+        # Use ML if confident (>55%)
+        if max_prob > 0.55:
+            if ml_label in ("12_pool", "speedling"):
+                bot._ling_rushed_v2 = True
+                bot._rush_label = ml_label
+                bot._rush_source = "ML"
+                bot._rush_chat_pending = f"({max_prob*100:.0f}% ML confidence)"
+                print(f"{bot.time_formatted}: Rush detected (ML)! {ml_label} (p={max_prob:.2f})")
+                return True
+            else:
+                # ML says "none" with confidence
+                bot._rush_label = "none"
+                bot._rush_source = "ML"
+                return False
+    
+    # Rule-based fallback (ML not loaded or low confidence)
     if score_12p >= 5:
         bot._ling_rushed_v2 = True
         bot._rush_label = "12_pool"
-        print(f"{bot.time_formatted}: Rush detected! 12_pool (score={score_12p})")
+        bot._rush_source = "rules"
+        bot._rush_chat_pending = f"(rule score={score_12p})"
+        print(f"{bot.time_formatted}: Rush detected (rules)! 12_pool (score={score_12p})")
         return True
     
     if score_speed >= 5:
         bot._ling_rushed_v2 = True
         bot._rush_label = "speedling"
-        print(f"{bot.time_formatted}: Rush detected! speedling (score={score_speed})")
+        bot._rush_source = "rules"
+        bot._rush_chat_pending = f"(rule score={score_speed})"
+        print(f"{bot.time_formatted}: Rush detected (rules)! speedling (score={score_speed})")
         return True
     
     # Default: none (not a rush)
     bot._rush_label = "none"
+    bot._rush_source = None
     return False
 
 

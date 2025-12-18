@@ -2,7 +2,9 @@
 
 from typing import Optional
 from itertools import cycle, chain
+from pathlib import Path
 import numpy as np
+import joblib
 
 # Ares imports (framework-specific)
 from ares import AresBot
@@ -218,6 +220,15 @@ class PiG_Bot(AresBot):
         from bot.utilities.rush_detection import compute_rush_distance_tier
         self.rush_distance_tier = compute_rush_distance_tier(self)
         
+        # Load ML rush detection model (if available)
+        self.rush_model = None
+        model_path = Path("data/rush_detector_model.pkl")
+        if model_path.exists():
+            try:
+                self.rush_model = joblib.load(model_path)
+            except Exception as e:
+                print(f"Failed to load rush model: {e}")
+        
         # Print startup report with all initial game info
         print_startup_report(self)
 
@@ -234,6 +245,11 @@ class PiG_Bot(AresBot):
         # Send replay tags (for filtering replays later)
         for tag in get_replay_tags_to_send(self):
             await self.chat_send(f"Tag: {tag}")
+        
+        # Send pending rush detection chat (set by rush_detection.py)
+        if hasattr(self, '_rush_chat_pending') and self._rush_chat_pending:
+            await self.chat_send(self._rush_chat_pending)
+            self._rush_chat_pending = None
         
         # Update performance metrics (SQ tracking)
         self.performance_monitor.update(iteration, self)
