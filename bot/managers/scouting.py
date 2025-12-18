@@ -91,7 +91,6 @@ def control_worker_scout(bot) -> None:
     
     should_recall = (
         bot.units(UnitTypeId.OBSERVER).amount > 0 or
-        bot.game_state != 0 or
         bot._under_attack
     )
     
@@ -99,10 +98,6 @@ def control_worker_scout(bot) -> None:
         # Return worker scout to mining
         for scout in worker_scouts:
             bot.mediator.clear_role(tag=scout.tag)
-        return
-    
-    # Only in early game
-    if bot.game_state != 0:
         return
     
     # Don't scout if we're under attack - need workers for defense
