@@ -180,6 +180,7 @@ Builds:
         ConstantWorkerProductionTill: 30
         AutoSupplyAtSupply: 0
         OpeningBuildOrder:
+            - 0 GATEWAY @ nat_wall
             - 0 CYBERNETICSCORE @ nat_wall
             - 0 ZEALOT
             - 0 CHRONO @ GATEWAY
