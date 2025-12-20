@@ -537,6 +537,58 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
 
     return pos_of_main_squad
 
+def _has_pending_build_near(bot, position: Point2, radius: float = 2.5) -> bool:
+    """
+    Check if any worker with a build order is within radius of position.
+    Considers both the build target location and the worker's current position.
+    """
+    nearby_workers = bot.workers.closer_than(radius + 5, position)
+    
+    for worker in nearby_workers:
+        if not worker.orders:
+            continue
+        order = worker.orders[0]
+        if order.target and isinstance(order.target, Point2):
+            if cy_distance_to(order.target, position) < radius:
+                return True
+            if cy_distance_to(worker.position, position) < radius:
+                return True
+    return False
+
+
+def _is_position_clear(bot, position: Point2, radius: float = 2.5) -> bool:
+    """
+    Check if position is clear of structures (including those under construction).
+    """
+    nearby_structures = bot.structures.closer_than(radius, position)
+    if nearby_structures:
+        return False
+    return True
+
+
+def _find_safe_fallback_position(bot, ideal_pos: Point2, gate_keep_pos: Point2, direction: Point2) -> Point2:
+    """
+    Find a safe fallback position that doesn't block building placement.
+    Search order: ideal position -> perpendicular offsets -> further back.
+    """
+    if _is_position_clear(bot, ideal_pos) and not _has_pending_build_near(bot, ideal_pos):
+        return ideal_pos
+    
+    perpendicular = Point2((-direction.y, direction.x))
+    
+    for offset_multiplier in [1.5, -1.5, 2.5, -2.5]:
+        candidate = ideal_pos + (perpendicular * offset_multiplier)
+        if _is_position_clear(bot, candidate) and not _has_pending_build_near(bot, candidate):
+            return candidate
+    
+    for extra_distance in [1.0, 2.0]:
+        candidate = ideal_pos + (direction * extra_distance)
+        if _is_position_clear(bot, candidate) and not _has_pending_build_near(bot, candidate):
+            return candidate
+    
+    return ideal_pos
+
+
 def gatekeeper_control(bot, gatekeeper: Units) -> None:
     gate_keep_pos = bot.gatekeeping_pos
     any_close = bot.mediator.get_units_in_range(
@@ -546,10 +598,9 @@ def gatekeeper_control(bot, gatekeeper: Units) -> None:
         return_as_dict=False,
     )[0]
     
-
-    
     if not gate_keep_pos:
         return
+    
     for gate in gatekeeper:
         dist_to_gate: float = cy_distance_to_squared(gate.position, gate_keep_pos)
         if any_close:
@@ -570,8 +621,11 @@ def gatekeeper_control(bot, gatekeeper: Units) -> None:
             direction = fallback_target - gate_keep_pos
             if direction.length > 0:  # Avoid division by zero
                 direction = direction.normalized
-                target_pos = gate_keep_pos + (direction * GATEKEEPER_MOVE_DISTANCE)
-                gate.move(target_pos)   
+                ideal_fallback = gate_keep_pos + (direction * GATEKEEPER_MOVE_DISTANCE)
+                
+                # Find safe position that doesn't block building placement
+                safe_pos = _find_safe_fallback_position(bot, ideal_fallback, gate_keep_pos, direction)
+                gate.move(safe_pos)   
             
 
 def _is_valid_warp_in_position(bot, position: Point2, ground_grid: np.ndarray) -> bool:
