@@ -1,5 +1,3 @@
-# bot/managers/macro.py
-
 from sc2.data import Race
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.ability_id import AbilityId
@@ -103,7 +101,6 @@ def get_optimal_gas_workers(bot) -> int:
     if bot.vespene < 100:
         return 3
     
-    # Normal operation - follow toggle state
     return 3 if bot._gas_worker_toggle else 0
 
 # Army composition constants 
@@ -156,14 +153,13 @@ def calculate_optimal_worker_count(bot) -> int:
     for townhall in bot.townhalls:
         nearby_minerals = bot.mineral_field.closer_than(10, townhall)
         for mineral in nearby_minerals:
-            # Only count if mineral field has substantial minerals left
             if mineral.mineral_contents > 100:  
-                mineral_spots += 2  # 2 workers per mineral field
+                mineral_spots += 2
     
     gas_spots = 0
     for gas_building in bot.gas_buildings:
         if gas_building.vespene_contents > 100:
-            gas_spots += 3  # 3 workers per gas
+            gas_spots += 3
     
     # Add a small buffer for worker replacements
     worker_count = mineral_spots + gas_spots + 4
@@ -180,7 +176,7 @@ def is_base_depleted(bot) -> bool:
         nearby_minerals = bot.mineral_field.closer_than(10, townhall)
         if nearby_minerals:
             depleted_patches = len([m for m in nearby_minerals if m.mineral_contents < 300])
-            if depleted_patches / len(nearby_minerals) > 0.5:  # >50% depleted
+            if depleted_patches / len(nearby_minerals) > 0.5:
                 depleted_bases += 1
     
     # Method 2: Use ARES worker assignment data
@@ -191,7 +187,6 @@ def is_base_depleted(bot) -> bool:
     oversaturated_count = sum(1 for workers in mineral_assignments.values() 
                              if len(workers) >= 3)
     
-    # Active mining workers (total - gas workers)
     gas_workers = len(bot.mediator.get_worker_to_vespene_dict)
     mining_workers = bot.workers.amount - gas_workers
     
@@ -213,18 +208,15 @@ def expansion_checker(bot, main_army) -> int:
     
     Returns the recommended expansion count.
     """
-    # Get current state
     current_bases = len(bot.townhalls)
     current_workers = bot.workers.amount
-    optimal_workers = calculate_optimal_worker_count(bot)  # Use dynamic calculation
+    optimal_workers = calculate_optimal_worker_count(bot)
     worker_saturation = current_workers / optimal_workers if optimal_workers > 0 else 0
     
-    # Get python-sc2 score metrics
     mineral_collection_rate = bot.state.score.collection_rate_minerals
     idle_production_time = bot.state.score.idle_production_time
     idle_worker_time = bot.state.score.idle_worker_time
     
-    # Default to current number of bases
     expansion_count = current_bases
     
     # Calculate spending efficiency (SQ-style)
@@ -245,14 +237,12 @@ def expansion_checker(bot, main_army) -> int:
     if not army_safe:
         return expansion_count
     
-    # Resource starvation detection
     resource_starved = (
         idle_production_time > 30.0  # Production buildings idle for 30+ seconds
         and current_unspent < 500    # Low mineral bank
         and mineral_collection_rate > 0  # But we do have some income
     )
     
-    # Base depletion detection using ARES data + mineral contents
     bases_depleting = is_base_depleted(bot)
     
     # Spending efficiency thresholds (dynamic by game state)
@@ -266,7 +256,6 @@ def expansion_checker(bot, main_army) -> int:
     # Low spending efficiency = banking too much relative to income
     inefficient_spending = spending_efficiency < efficiency_threshold
     
-    # Expansion decision
     if resource_starved:
         expansion_count = current_bases + 1
     elif bases_depleting:
@@ -294,17 +283,13 @@ def get_desired_upgrades(bot) -> list[UpgradeId]:
     """
     upgrades: list[UpgradeId] = []
     
-    
-    # WarpGate when WarpPrism ready and not researched
     if not bot.already_pending_upgrade(UpgradeId.WARPGATERESEARCH):
         upgrades.append(UpgradeId.WARPGATERESEARCH)
     
-    # ExtendedThermalLance when RoboticsBay ready and Colossi present
     if (bot.structures(UnitTypeId.ROBOTICSBAY) 
         and (bot.units(UnitTypeId.COLOSSUS) or bot.already_pending(UnitTypeId.COLOSSUS))):
         upgrades.append(UpgradeId.EXTENDEDTHERMALLANCE)
     
-    # Charge when Twilight exists or 2+ bases at 54+ supply
     if bot.structures(UnitTypeId.TWILIGHTCOUNCIL) or (len(bot.townhalls) >= 3 and bot.supply_used >= 54):
         upgrades.append(UpgradeId.CHARGE)
     
@@ -317,7 +302,6 @@ def get_desired_upgrades(bot) -> list[UpgradeId]:
     if bot.supply_army < 15:
         return upgrades
     
-    # Ground upgrades when Forge exists or 3+ bases at 56+ supply
     if bot.structures(UnitTypeId.FORGE) and ((len(bot.townhalls) >= 3 and bot.supply_used >= 56)):
         upgrades.extend([
             UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1,
@@ -344,6 +328,35 @@ def require_warp_prism(bot) -> bool:
             and total_prisms == 0)
 
 
+def require_shield_battery(bot) -> bool:
+    """
+    Returns True if shield battery should be built after cheese response.
+    Limits to one battery total. Tech requirements checked by BuildStructure.
+    """
+    total_batteries = (bot.structures(UnitTypeId.SHIELDBATTERY).amount + 
+                      bot.already_pending(UnitTypeId.SHIELDBATTERY))
+    
+    return bot._used_cheese_response and total_batteries == 0
+
+
+def get_shield_battery_base_location(bot) -> Point2:
+    """
+    Determines which base location to build shield battery at:
+    - At natural if buildings or townhall exist there
+    - At main base otherwise (uses static_defence placement)
+    """
+    natural_location = bot.mediator.get_own_nat
+    
+    natural_has_base = bot.townhalls.closer_than(10, natural_location).amount > 0
+    natural_has_structures = bot.structures.closer_than(10, natural_location).amount > 0
+    
+    if natural_has_base or natural_has_structures:
+        return natural_location
+    else:
+        # Use main base - BuildStructure with static_defence=True will find defensive spot
+        return bot.start_location
+
+
 def get_desired_gateway_count(bot) -> int:
     """
     Returns desired gateway/warpgate count based on supply and bases.
@@ -362,9 +375,9 @@ def get_desired_forge_count(bot) -> int:
     Returns desired forge count based on bases and game state.
     Build 1 after first expansion, second in late game.
     """
-    if len(bot.townhalls.ready) >= 4:  # 4+ bases
+    if len(bot.townhalls.ready) >= 4:
         return 2
-    elif len(bot.townhalls.ready) >= 2:  # 2+ bases
+    elif len(bot.townhalls.ready) >= 2:
         return 1
     else:
         return 0
@@ -380,7 +393,6 @@ def select_army_composition(bot, main_army: Units) -> dict:
     Returns:
         dict: The selected army composition dictionary
     """
-    # Select composition set based on enemy race
     if bot.enemy_race == Race.Protoss:
         selected_composition = PVP_ARMY_0
         army_1 = PVP_ARMY_1
@@ -413,31 +425,35 @@ async def handle_macro(
     Main macro logic: builds units, keeps supply up, reacts to cheese, 
     or transitions to late game. Call this in your bot's on_step.
     """
-    # Common locations
     spawn_location = bot.natural_expansion
     production_location = bot.start_location
     
-    # Common calculations
     worker_limit = 90 if bot.game_state >= 1 else 66
     optimal_worker_count = min(calculate_optimal_worker_count(bot), worker_limit)
     
-    # Select army composition and expansion targets
     if not bot._used_cheese_response:
         army_composition = select_army_composition(bot, main_army)
         expansion_count = expansion_checker(bot, main_army)
     else:
         army_composition = CHEESE_DEFENSE_ARMY
         expansion_count = 3
-
     
-    # Build warp prism at 60+ supply
+    if require_shield_battery(bot):
+        base_location = get_shield_battery_base_location(bot)
+        bot.register_behavior(
+            BuildStructure(
+                base_location=base_location,
+                structure_id=UnitTypeId.SHIELDBATTERY,
+                static_defence=True
+            )
+        )
+    
     if require_warp_prism(bot):
         for facility in bot.structures(UnitTypeId.ROBOTICSFACILITY).ready.idle:
             if bot.can_afford(UnitTypeId.WARPPRISM):
                 facility.train(UnitTypeId.WARPPRISM)
                 break
     
-    # Get economy state early for gating decisions
     economy_state = get_economy_state(bot)
     
     # Scale gateways to desired count (3→5→8) - only in moderate+ economy
@@ -458,7 +474,6 @@ async def handle_macro(
         if current_forges < desired_forges and bot.can_afford(UnitTypeId.FORGE):
             bot.register_behavior(BuildStructure(production_location, UnitTypeId.FORGE))
     
-    # Build macro plan with layers gated by economy state
     macro_plan: MacroPlan = MacroPlan()
     
     # Always: workers and supply (all economy states)
@@ -496,10 +511,7 @@ async def handle_macro(
                 # Full: add new production buildings
                 macro_plan.add(ProductionController(army_composition, base_location=production_location, add_production_at_bank=(450,450), ignore_below_proportion=0.3))
     
-    # Register macro plan
     bot.register_behavior(macro_plan)
-
-    # Observer production
     if bot.game_state == 0:
         if (bot.units(UnitTypeId.OBSERVER).amount < 1 
             and bot.already_pending(UnitTypeId.OBSERVER) == 0
@@ -508,14 +520,12 @@ async def handle_macro(
                 facility.train(UnitTypeId.OBSERVER)
                 break
     else:
-        # Ensure at least one observer exists
         if (bot.units(UnitTypeId.OBSERVER).amount < 1 
             and bot.already_pending(UnitTypeId.OBSERVER) == 0
             and bot.can_afford(UnitTypeId.OBSERVER)):
             for facility in bot.structures(UnitTypeId.ROBOTICSFACILITY).ready:
                 facility.train(UnitTypeId.OBSERVER)
                 break
-        # Scale observer count by matchup
         target_count = 3 if bot.enemy_race in {Race.Zerg, Race.Terran} else 2
         if (bot.units(UnitTypeId.OBSERVER).amount < target_count
             and bot.already_pending(UnitTypeId.OBSERVER) == 0
@@ -523,11 +533,7 @@ async def handle_macro(
             for facility in bot.structures(UnitTypeId.ROBOTICSFACILITY).ready.idle:
                 facility.train(UnitTypeId.OBSERVER)
                 break
-
     
-    
-
-    # Merge High Templars into Archons
     if bot.units(UnitTypeId.HIGHTEMPLAR).amount >= 2:
         for templar in bot.units(UnitTypeId.HIGHTEMPLAR).ready:
             templar(AbilityId.MORPH_ARCHON)

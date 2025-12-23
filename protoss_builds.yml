@@ -122,7 +122,7 @@ Builds:
             - 19 GATEWAY @ ramp
             - 20 CORE @ ramp
             - 20 ZEALOT
-            - 21 PYLON @ NAT
+            - 21 PYLON @ nat_wall
             - 22 WARPGATERESEARCH
             - 22 STALKER x2
             - 22 CHRONO @ NEXUS 
@@ -167,11 +167,12 @@ Builds:
             - 21 PYLON
             - 22 WARPGATERESEARCH
             - 22 CHRONO @ NEXUS 
-            - 23 Pylon @nat_wall
+            - 23 Pylon @ nat_wall
             - 24 STALKER x2
             - 26 CHRONO @ GATEWAY
             - 26 CHRONO @ GATEWAY
             - 27 GATEWAY @ nat_wall 
+            - 27 SHIELDBATTERY @ nat_wall
             
 
 
