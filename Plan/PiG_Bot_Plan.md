@@ -138,7 +138,7 @@ tags:
 - [x] Review Battle_Sim sensitivity + `all_out_attack`
 - [ ] Add `Did_Enemy_rush` hook
 - [x] Remove Overcharge
-- [ ] Test Energy Recharge
+- [x] Test Energy Recharge
 - [x] Test new battle‑sim conditions
 - [x] Fix battle lockout bouncing
 - [x] Cap workers at a set limit (80; 8 on gold base)

@@ -29,7 +29,7 @@ from sc2.data import Race
 
 # Modular imports for separated concerns
 from bot.managers.macro import handle_macro, get_optimal_gas_workers, get_freeflow_mode
-from bot.managers.structure_manager import use_chronoboost
+from bot.managers.structure_manager import use_chronoboost, use_recharge
 from bot.managers.reactions import defend_cannon_rush, defend_worker_rush, early_threat_sensor, cheese_reaction, threat_detection
 from bot.combat import (
     control_main_army,
@@ -305,8 +305,13 @@ class PiG_Bot(AresBot):
                 freeflow=get_freeflow_mode(self),  # Dynamic calculation
             )
             
+            # Use energy recharge on priority targets
+            use_recharge(self, main_army)
+            
             # Use chronoboost on production/research structures
             use_chronoboost(self)
+            
+            
 
         # Manage defensive unit roles (return them to attacking when threats are cleared)
         manage_defensive_unit_roles(self)
