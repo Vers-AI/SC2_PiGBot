@@ -30,9 +30,9 @@ def get_economy_state(bot) -> str:
         return "recovery"
     
     # Income-based tiers
-    if mineral_rate < 400 or workers < 30:
+    if mineral_rate < 1000 or workers < 30:
         return "reduced"
-    elif mineral_rate < 700 or workers < 44:
+    elif mineral_rate < 1600 or workers < 44:
         return "moderate"
     else:
         return "full"

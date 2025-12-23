@@ -43,7 +43,7 @@ def get_freeflow_mode(bot) -> bool:
     if bot.minerals > 500 and bot.vespene > 500:
         return True
     
-    # High minerals, low gas (your original logic)
+    # High minerals, low gas imbalance
     if bot.minerals > 800 and bot.vespene < 200:
         return True
     
@@ -168,9 +168,6 @@ def calculate_optimal_worker_count(bot) -> int:
     # Add a small buffer for worker replacements
     worker_count = mineral_spots + gas_spots + 4
     
-    # Debug info
-    # print(f"Optimal worker count: {worker_count} (Mineral spots: {mineral_spots}, Gas spots: {gas_spots})")
-    
     return worker_count
 
 
@@ -234,22 +231,6 @@ def expansion_checker(bot, main_army) -> int:
     current_unspent = bot.minerals
     spending_efficiency = mineral_collection_rate / (current_unspent + 1) if mineral_collection_rate > 0 else 0
     
-    
-    
-    # Debug information
-    available_patches = bot.mediator.get_num_available_mineral_patches
-    mineral_assignments = bot.mediator.get_mineral_patch_to_list_of_workers
-    oversaturated_patches = sum(1 for workers in mineral_assignments.values() if len(workers) >= 3)
-    
-    #print(f"Game state: {bot.game_state}")
-    #print(f"Worker saturation: {worker_saturation:.2f} ({current_workers}/{optimal_workers})")
-    #print(f"Available mineral patches: {available_patches}")
-    #print(f"Oversaturated patches: {oversaturated_patches}")
-    #print(f"Mineral collection rate: {mineral_collection_rate}")
-    #print(f"Spending efficiency: {spending_efficiency:.2f}")
-    #print(f"Idle production time: {idle_production_time:.1f}s")
-    
-    
     # Safety check - only expand if safe (filter workers from both armies)
     own_combat_units = [u for u in bot.own_army if u.type_id not in WORKER_TYPES]
     enemy_combat_units = [u for u in bot.enemy_army if u.type_id not in WORKER_TYPES]
@@ -262,7 +243,6 @@ def expansion_checker(bot, main_army) -> int:
     ) in LOSS_MARGINAL_OR_BETTER
     
     if not army_safe:
-        #print("Not expanding - army not safe")
         return expansion_count
     
     # Resource starvation detection
@@ -289,26 +269,20 @@ def expansion_checker(bot, main_army) -> int:
     # Expansion decision
     if resource_starved:
         expansion_count = current_bases + 1
-        #print(f"Expanding due to resource starvation: {expansion_count}")
     elif bases_depleting:
         expansion_count = current_bases + 1
-        #print(f"Expanding due to base depletion: {expansion_count}")
     elif inefficient_spending and worker_saturation > 0.7:
         expansion_count = current_bases + 1
-        #print(f"Expanding due to inefficient spending with high saturation: {expansion_count}")
     
-    # bot.state-based fallback expansions (minimal safety net)
-    if bot.game_state >= 1 and current_bases < 2:  # Mid game, force 2nd base
+    # Game state-based fallback expansions (minimal safety net)
+    if bot.game_state >= 1 and current_bases < 2:
         expansion_count = max(expansion_count, 2)
-        #print(f"Fallback expansion to 2 bases in mid game: {expansion_count}")
-    elif bot.game_state >= 2 and current_bases < 3:  # Late game, force 3rd base
+    elif bot.game_state >= 2 and current_bases < 3:
         expansion_count = max(expansion_count, 3)
-        #print(f"Fallback expansion to 3 bases in late game: {expansion_count}")
     
-    # Safety check - don't expand too early with little army
+    # Limit early expansion with small army
     if current_bases == 1 and len(main_army) < 5 and bot.game_state == 0:
         expansion_count = 1
-        #print("Limiting expansion count due to early game safety concerns")
     
     return expansion_count
 
@@ -408,27 +382,19 @@ def select_army_composition(bot, main_army: Units) -> dict:
     """
     # Select composition set based on enemy race
     if bot.enemy_race == Race.Protoss:
-        # PVP compositions
         selected_composition = PVP_ARMY_0
         army_1 = PVP_ARMY_1
-        threshold = 0.30  # Higher threshold for PVP (30%)
-        comp_name = "PVP"
+        threshold = 0.30
     else:
-        # Standard compositions for PVZ and PVT
         selected_composition = STANDARD_ARMY_0
         army_1 = STANDARD_ARMY_1
-        threshold = 0.15  # Standard threshold (15%)
-        comp_name = "STANDARD"
+        threshold = 0.15
     
-    # Only evaluate composition switch if we have a main army
+    # Switch composition when Archon percentage exceeds threshold
     if main_army and len(main_army) > 0:
-        # Count Archons in the main army
         archon_count = sum(1 for unit in main_army if unit.type_id == UnitTypeId.ARCHON)
-        
-        # Calculate the percentage of Archons in the army
         archon_percentage = archon_count / len(main_army) if len(main_army) > 0 else 0
         
-        # Switch to version 1 when Archons reach threshold
         if archon_percentage >= threshold:
             selected_composition = army_1
     
@@ -455,14 +421,13 @@ async def handle_macro(
     worker_limit = 90 if bot.game_state >= 1 else 66
     optimal_worker_count = min(calculate_optimal_worker_count(bot), worker_limit)
     
-    # Select army composition - standard or cheese defense
+    # Select army composition and expansion targets
     if not bot._used_cheese_response:
         army_composition = select_army_composition(bot, main_army)
         expansion_count = expansion_checker(bot, main_army)
     else:
-        # Cheese defense composition and minimal expansion
         army_composition = CHEESE_DEFENSE_ARMY
-        expansion_count = 3  # Conservative expansion during cheese
+        expansion_count = 3
 
     
     # Build warp prism at 60+ supply
@@ -501,7 +466,6 @@ async def handle_macro(
     macro_plan.add(AutoSupply(base_location=production_location))
     
     if economy_state == "recovery":
-        # Recovery mode: only workers + supply, let economy catch up
         pass
     else:
         # Reduced+: gas buildings and spawn from existing production
@@ -509,7 +473,11 @@ async def handle_macro(
         
         spawn_target = warp_prism[0].position if warp_prism else spawn_location
         spawn_freeflow = True if bot._used_cheese_response else freeflow
-        macro_plan.add(SpawnController(army_composition, spawn_target=spawn_target, freeflow_mode=spawn_freeflow))
+        
+        # Skip spawning if saving for expansion during reduced economy (when safe)
+        saving_for_expansion = (not bot._under_attack and economy_state == "reduced" and bot.minerals < 450)
+        if not saving_for_expansion:
+            macro_plan.add(SpawnController(army_composition, spawn_target=spawn_target, freeflow_mode=spawn_freeflow))
         
         # Expansion logic: moderate+ gets full expansion, reduced gets safety net to 2 bases
         # Skip expansions when under attack - focus resources on defense
@@ -547,15 +515,15 @@ async def handle_macro(
             for facility in bot.structures(UnitTypeId.ROBOTICSFACILITY).ready:
                 facility.train(UnitTypeId.OBSERVER)
                 break
-    else:  # Mid game and beyond
-        # High priority observer - always build one if we don't have any
+    else:
+        # Ensure at least one observer exists
         if (bot.units(UnitTypeId.OBSERVER).amount < 1 
             and bot.already_pending(UnitTypeId.OBSERVER) == 0
             and bot.can_afford(UnitTypeId.OBSERVER)):
             for facility in bot.structures(UnitTypeId.ROBOTICSFACILITY).ready:
                 facility.train(UnitTypeId.OBSERVER)
                 break
-        # Additional observers based on opponent race
+        # Scale observer count by matchup
         target_count = 3 if bot.enemy_race in {Race.Zerg, Race.Terran} else 2
         if (bot.units(UnitTypeId.OBSERVER).amount < target_count
             and bot.already_pending(UnitTypeId.OBSERVER) == 0
@@ -567,7 +535,7 @@ async def handle_macro(
     
     
 
-    # Merge Archons 
+    # Merge High Templars into Archons
     if bot.units(UnitTypeId.HIGHTEMPLAR).amount >= 2:
         for templar in bot.units(UnitTypeId.HIGHTEMPLAR).ready:
             templar(AbilityId.MORPH_ARCHON)
