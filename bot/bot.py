@@ -101,7 +101,6 @@ class PiG_Bot(AresBot):
         self._used_cheese_response = False
         self._rush_time_seconds = 0.0  # Rush time calculated in on_start
         self._under_attack = False
-        self._cheese_reaction_completed = False
         self._not_worker_rush = True
         self._cannon_rush_response = False
         self._is_building = False

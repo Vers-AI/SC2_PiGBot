@@ -70,7 +70,7 @@ def defend_cannon_rush(bot):
                 and bot.build_order_runner.chosen_opening == "Cheese_Reaction_Build"
                 and not bot.build_order_runner.build_completed):
                 bot.build_order_runner.set_build_completed()
-                bot._cheese_reaction_completed = True
+                bot._used_cheese_response = False
                 print(f"Cheese reaction build completed - cannon rush cleared at {bot.time:.1f}s")
             
             # Reset flags
@@ -192,7 +192,7 @@ def defend_worker_rush(bot):
                 and bot.build_order_runner.chosen_opening == "Cheese_Reaction_Build"
                 and not bot.build_order_runner.build_completed):
                 bot.build_order_runner.set_build_completed()
-                bot._cheese_reaction_completed = True
+                bot._used_cheese_response = False
                 print(f"Cheese reaction build completed - worker rush cleared at {bot.time:.1f}s")
             
             # Reset flags

@@ -498,14 +498,6 @@ async def handle_macro(
     
     # Register macro plan
     bot.register_behavior(macro_plan)
-    
-    # Transition from cheese to standard macro when mid-game starts
-    if bot._used_cheese_response and bot.game_state >= 1:
-        bot._used_cheese_response = False
-        bot._cheese_reaction_completed = True
-        print("Cheese reaction completed - transitioning to standard macro")
-        
-
 
     # Observer production
     if bot.game_state == 0:

@@ -770,8 +770,8 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
     enemy_army = bot.enemy_army
     # Early game safety - don't attack during cheese reactions
     is_early_defensive_mode = bot._used_cheese_response
-    # Only clear early defensive mode when the cheese reaction is completed
-    if (is_early_defensive_mode and bot._cheese_reaction_completed) or bot.game_state == 1:  # mid game
+    # Clear defensive mode in mid-game
+    if bot.game_state >= 1:
         is_early_defensive_mode = False
     
     # Debug visualization (controlled by bot.debug flag)
