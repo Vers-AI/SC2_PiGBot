@@ -227,7 +227,9 @@ class PiG_Bot(AresBot):
             try:
                 self.rush_model = joblib.load(model_path)
             except Exception as e:
-                print(f"Failed to load rush model: {e}")
+                print(f"✗ Failed to load rush model: {e}")
+        else:
+            print(f"⚠ No rush model found at {model_path} - using rules only")
         
         # Print startup report with all initial game info
         print_startup_report(self)
