@@ -132,9 +132,9 @@ PVP_ARMY_1 = {
 }
 
 CHEESE_DEFENSE_ARMY = {
-    UnitTypeId.ADEPT: {"proportion": 0.25, "priority": 1},
+    UnitTypeId.ADEPT: {"proportion": 0.25, "priority": 2},
     UnitTypeId.STALKER: {"proportion": 0.15, "priority": 0},
-    UnitTypeId.ZEALOT: {"proportion": 0.6, "priority": 2},
+    UnitTypeId.ZEALOT: {"proportion": 0.6, "priority": 1},
     
     
 }
@@ -431,7 +431,20 @@ async def handle_macro(
     worker_limit = 90 if bot.game_state >= 1 else 66
     optimal_worker_count = min(calculate_optimal_worker_count(bot), worker_limit)
     
-    if not bot._used_cheese_response:
+    economy_state = get_economy_state(bot)
+    
+    # One-way transition from cheese defense to standard army
+    if bot._used_cheese_response and not bot._transitioned_from_cheese:
+        # Check transition conditions (one-way, never reverts)
+        transition_conditions = (
+            bot.game_state >= 1  # Mid-game
+            or (not bot._under_attack and economy_state in ("moderate", "full"))  # Safe + healthy economy
+        )
+        if transition_conditions:
+            bot._transitioned_from_cheese = True
+    
+    # Select army composition based on transition state
+    if not bot._used_cheese_response or bot._transitioned_from_cheese:
         army_composition = select_army_composition(bot, main_army)
         expansion_count = expansion_checker(bot, main_army)
     else:
@@ -453,8 +466,6 @@ async def handle_macro(
             if bot.can_afford(UnitTypeId.WARPPRISM):
                 facility.train(UnitTypeId.WARPPRISM)
                 break
-    
-    economy_state = get_economy_state(bot)
     
     # Scale gateways to desired count (3→5→8) - only in moderate+ economy
     if economy_state in ("moderate", "full"):

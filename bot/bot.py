@@ -99,6 +99,7 @@ class PiG_Bot(AresBot):
         # Flags for in-game logic
         self._commenced_attack = False
         self._used_cheese_response = False
+        self._transitioned_from_cheese = False  # One-way transition from cheese defense to standard army
         self._rush_time_seconds = 0.0  # Rush time calculated in on_start
         self._under_attack = False
         self._not_worker_rush = True
