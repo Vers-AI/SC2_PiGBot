@@ -9,6 +9,7 @@ Limitations: Requires enemy main location scouted; probe death reduces signal qu
 from typing import TYPE_CHECKING
 import json
 from pathlib import Path
+import warnings
 
 import numpy as np
 from sc2.position import Point2
@@ -17,6 +18,10 @@ from ares.consts import UnitRole
 
 from cython_extensions import cy_dijkstra
 from bot.constants import RUSH_SPEED, RUSH_DISTANCE_CALIBRATION
+
+# Suppress sklearn feature name warnings (we use numpy arrays at inference)
+warnings.filterwarnings('ignore', message='.*does not have valid feature names.*')
+warnings.filterwarnings('ignore', category=FutureWarning, module='sklearn')
 
 
 if TYPE_CHECKING:

@@ -9,7 +9,7 @@ Usage:
     python scripts/train_rush_model.py
 
 Output:
-    data/rush_detector_model.pkl
+    bot/models/rush_detector_model.pkl
 """
 
 import json
@@ -40,7 +40,7 @@ FEATURE_COLS = [
 # Paths
 DATA_DIR = Path("data")
 LOG_FILE = DATA_DIR / "rush_detection_log.jsonl"
-MODEL_FILE = DATA_DIR / "rush_detector_model.pkl"
+MODEL_FILE = Path("bot/models/rush_detector_model.pkl")
 
 
 def load_data() -> pd.DataFrame:

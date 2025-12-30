@@ -222,7 +222,7 @@ class PiG_Bot(AresBot):
         
         # Load ML rush detection model (if available)
         self.rush_model = None
-        model_path = Path("data/rush_detector_model.pkl")
+        model_path = Path("bot/models/rush_detector_model.pkl")
         if model_path.exists():
             try:
                 self.rush_model = joblib.load(model_path)
