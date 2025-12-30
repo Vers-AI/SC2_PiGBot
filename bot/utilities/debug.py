@@ -158,6 +158,29 @@ def _render_combat_sim_overlay(bot, main_army: Units) -> None:
         Point2((0.1, 0.28)), None, 12
     )
     
+    # Scout status (any unit with SCOUTING role)
+    # Get tags directly from role dictionary to avoid stale Units objects
+    scout_tags = bot.mediator.get_unit_role_dict.get(UnitRole.SCOUTING, set())
+    # Filter to only tags that still exist
+    valid_tags = {u.tag for u in bot.all_own_units}
+    live_scout_tags = scout_tags & valid_tags
+    
+    if live_scout_tags:
+        # Get the actual units
+        scouts = bot.all_own_units.tags_in(live_scout_tags)
+        scout = scouts.first
+        scout_type = scout.type_id.name
+        scout_hp = f"{int(scout.health_percentage * 100)}%"
+        bot.client.debug_text_2d(
+            f"Scout: {scout_type} #{scout.tag} HP:{scout_hp} ({len(scouts)} total)", 
+            Point2((0.1, 0.26)), None, 12
+        )
+    elif bot._worker_scout_sent_this_stale_period:
+        bot.client.debug_text_2d(
+            f"Scout: Dead/Missing (flag set)", 
+            Point2((0.1, 0.26)), None, 12
+        )
+    
     # Army compositions
     own_types = _get_unit_type_summary(main_army or [])
     enemy_types = _get_unit_type_summary(combat_enemies)

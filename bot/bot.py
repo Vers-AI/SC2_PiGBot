@@ -467,6 +467,13 @@ class PiG_Bot(AresBot):
         elif unit_tag in self.observer_assignments.get("patrol", []):
             self.observer_assignments["patrol"].remove(unit_tag)
             
+        # Handle worker scout death - check if destroyed unit was in SCOUTING role
+        scouting_tags = self.mediator.get_unit_role_dict.get(UnitRole.SCOUTING, set())
+        if unit_tag in scouting_tags:
+            # Clear the role and reset the flag so a new scout can be sent
+            self.mediator.clear_role(tag=unit_tag)
+            self._worker_scout_sent_this_stale_period = False
+            
         # Clean up observer targets if needed
         if unit_tag in self.observer_targets:
             del self.observer_targets[unit_tag]

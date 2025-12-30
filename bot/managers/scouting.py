@@ -87,17 +87,25 @@ def control_worker_scout(bot) -> None:
     # First: check if we have worker scouts that should be recalled
     # (observer available, or no longer early game, or under attack)
     existing_scouts = bot.mediator.get_units_from_role(role=UnitRole.SCOUTING)
+    # Filter to only units that still exist by checking their tags
+    valid_tags = {u.tag for u in bot.all_own_units}
+    existing_scouts = existing_scouts.filter(lambda u: u.tag in valid_tags)
     worker_scouts = existing_scouts.filter(lambda u: u.type_id in WORKER_TYPES)
     
     should_recall = (
         bot.units(UnitTypeId.OBSERVER).amount > 0 or
-        bot._under_attack
+        bot._under_attack or
+        bot._intel_urgency <= HUNT_URGENCY_THRESHOLD  # Intel is fresh, no longer need scout
     )
     
     if worker_scouts and should_recall:
         # Return worker scout to mining
         for scout in worker_scouts:
+            # Explicitly clear SCOUTING role first, then assign GATHERING
             bot.mediator.clear_role(tag=scout.tag)
+            bot.mediator.assign_role(tag=scout.tag, role=UnitRole.GATHERING)
+        # Reset flag so we can send another scout if needed
+        bot._worker_scout_sent_this_stale_period = False
         return
     
     # Don't scout if we're under attack - need workers for defense
@@ -112,13 +120,22 @@ def control_worker_scout(bot) -> None:
     if bot.units(UnitTypeId.OBSERVER).amount > 0:
         return
     
-    # Don't spam scouts - only one per stale period
-    if bot._worker_scout_sent_this_stale_period:
+    # Don't send intel scout if build runner already has a worker scout
+    build_runner_scouts = bot.mediator.get_units_from_role(role=UnitRole.BUILD_RUNNER_SCOUT)
+    build_runner_worker_scouts = build_runner_scouts.filter(lambda u: u.type_id in WORKER_TYPES)
+    if build_runner_worker_scouts:
         return
     
     # Check if we already have a worker scout assigned
     existing_scouts = bot.mediator.get_units_from_role(role=UnitRole.SCOUTING)
+    # Filter to only units that still exist by checking their tags
+    valid_tags = {u.tag for u in bot.all_own_units}
+    existing_scouts = existing_scouts.filter(lambda u: u.tag in valid_tags)
     worker_scouts = existing_scouts.filter(lambda u: u.type_id in WORKER_TYPES)
+    
+    # If flag is set but no worker scouts exist, reset the flag (scout died)
+    if bot._worker_scout_sent_this_stale_period and not worker_scouts:
+        bot._worker_scout_sent_this_stale_period = False
     
     if worker_scouts:
         # Control existing worker scout
@@ -133,8 +150,9 @@ def control_worker_scout(bot) -> None:
                 target=bot.start_location,
                 grid=ground_grid
             ))
-            # Clear role when returning
+            # Explicitly clear SCOUTING role first, then assign GATHERING
             bot.mediator.clear_role(tag=scout.tag)
+            bot.mediator.assign_role(tag=scout.tag, role=UnitRole.GATHERING)
         else:
             hunt_target = get_hunt_target(bot, scout)
             actions.add(PathUnitToTarget(
