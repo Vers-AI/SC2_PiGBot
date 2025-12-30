@@ -169,8 +169,8 @@ RUSH_DISTANCE_CALIBRATION = 0.833
 VISIBLE_AGE_THRESHOLD = 3.0
 """Age threshold (seconds) to consider a unit 'visible' vs 'memory' (forgiving for active combat)"""
 
-STALENESS_WINDOW = 30.0
-"""Time window (seconds) for intel freshness decay - matches ARES UnitMemoryManager expiration"""
+STALENESS_WINDOW = 40.0
+"""Time window (seconds) for intel freshness decay - extended to reduce staleness rate"""
 
 FRESH_INTEL_THRESHOLD = 0.7
 """Freshness score above which intel is considered 'fresh' - use normal combat sim thresholds"""
