@@ -146,8 +146,22 @@ def _track_enemy_timings(bot: "PiG_Bot"):
         bot._baneling_nest_seen_time = None
     if not hasattr(bot, '_ling_has_speed'):
         bot._ling_has_speed = False
+    if not hasattr(bot, '_last_nat_scout_time'):
+        bot._last_nat_scout_time = None  # Most recent time we had vision of enemy natural location
+    if not hasattr(bot, '_nat_present_on_last_scout'):
+        bot._nat_present_on_last_scout = None  # Was natural there when we last looked? (True/False/None)
     
     enemy_nat_pos = bot.mediator.get_enemy_nat
+    
+    # Track whenever we scout the enemy natural location (always update)
+    if bot.is_visible(enemy_nat_pos):
+        bot._last_nat_scout_time = bot.time
+        # Check if natural hatchery exists at this moment
+        nat_hatcheries = [
+            s for s in bot.enemy_structures
+            if s.type_id == UnitTypeId.HATCHERY and s.distance_to(enemy_nat_pos) < 10
+        ]
+        bot._nat_present_on_last_scout = len(nat_hatcheries) > 0
     
     # Track natural hatchery
     if bot._enemy_nat_started_at is None:
@@ -394,7 +408,8 @@ def get_enemy_ling_rushed_v2(bot: "PiG_Bot") -> bool:
     T_POOL_12P_DONE = 65.0        # 1:05
     T_POOL_SPEED_START_MIN = 48.0 # 0:48
     T_POOL_SPEED_START_MAX = 52.0 # 0:52
-    T_NAT_CHECK = 80.0            # 1:20
+    T_NAT_CHECK = 80.0            # 1:20 (used for dampers)
+    T_NAT_CONFIRM_MISSING = 105.0 # 1:45 (must scout after this to confirm no nat)
     T_LING_EARLY = 105.0          # 1:45 (auto-TRUE)
     T_LING_12P_SEEN = 115.0       # 1:55
     T_CONTACT_SLOW = 120.0        # 2:00 (auto-TRUE slow-ling)
@@ -458,9 +473,12 @@ def get_enemy_ling_rushed_v2(bot: "PiG_Bot") -> bool:
     if bot._pool_seen_state == "done" and pool_start is not None and pool_start <= T_POOL_12P_START_MAX:
         score_12p += 3
     
-    # No natural by 1:20
-    no_natural = bot._enemy_nat_started_at is None and time_now >= T_NAT_CHECK
-    if no_natural:
+    # No natural - only count if we've scouted after 1:45 and confirmed no nat
+    # This prevents false positives from late naturals we haven't seen yet
+    scouted_nat_late = (bot._last_nat_scout_time is not None and 
+                        bot._last_nat_scout_time >= T_NAT_CONFIRM_MISSING)
+    confirmed_no_nat = (bot._nat_present_on_last_scout is False and scouted_nat_late)
+    if confirmed_no_nat and bot._enemy_nat_started_at is None:
         score_12p += 3
     
     # Very early lings (≤1:55)
@@ -614,6 +632,8 @@ def log_rush_detection_result(bot: "PiG_Bot", game_result):
         # Raw timing features (for ML) - use -1 for missing
         "pool_start": get_time('_pool_seen_time'),
         "nat_start": get_time('_enemy_nat_started_at'),
+        "last_nat_scout_time": get_time('_last_nat_scout_time'),
+        "nat_present_on_last_scout": 1 if getattr(bot, '_nat_present_on_last_scout', None) else (0 if getattr(bot, '_nat_present_on_last_scout', None) is False else -1),
         "gas_time": get_time('_extractor_seen_time'),
         "queen_time": get_time('_queen_started_time'),
         "ling_seen": get_time('_first_ling_seen_time'),

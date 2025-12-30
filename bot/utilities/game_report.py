@@ -320,10 +320,13 @@ def _print_rush_detection_status(bot) -> None:
     print(f"    Rush Detected: {is_rushed} (auto-TRUE={auto_true})")
     
     # Natural scouting
-    natural_scouted = getattr(bot, '_natural_ever_scouted', False)
+    last_scout_time = getattr(bot, '_last_nat_scout_time', None)
+    nat_present_last = getattr(bot, '_nat_present_on_last_scout', None)
     nat_started = getattr(bot, '_enemy_nat_started_at', None)
     nat_str = f"{nat_started:.1f}s" if nat_started else "absent"
-    print(f"    Enemy Natural: {nat_str} (scouted={natural_scouted})")
+    scout_str = f"last@{last_scout_time:.0f}s" if last_scout_time else "not scouted"
+    present_str = "yes" if nat_present_last else ("no" if nat_present_last is False else "?")
+    print(f"    Enemy Natural: {nat_str} ({scout_str}, present={present_str})")
     
     # Pool info
     pool_state = getattr(bot, '_pool_seen_state', 'none')
