@@ -25,7 +25,9 @@ import joblib
 # Feature columns (must match logging in rush_detection.py)
 FEATURE_COLS = [
     "pool_start",
-    "nat_start", 
+    "nat_start",
+    "last_nat_scout_time",
+    "nat_present_on_last_scout",
     "gas_time",
     "queen_time",
     "ling_seen",

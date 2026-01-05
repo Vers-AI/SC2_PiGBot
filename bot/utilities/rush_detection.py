@@ -29,9 +29,9 @@ if TYPE_CHECKING:
 
 # Feature columns for ML model (must match training script)
 ML_FEATURE_COLS = [
-    "pool_start", "nat_start", "gas_time", "queen_time",
-    "ling_seen", "ling_contact", "speed_start", "ling_has_speed",
-    "gas_workers", "score_12p", "score_speed",
+    "pool_start", "nat_start", "last_nat_scout_time", "nat_present_on_last_scout",
+    "gas_time", "queen_time", "ling_seen", "ling_contact", "speed_start", 
+    "ling_has_speed", "gas_workers", "score_12p", "score_speed",
 ]
 
 
@@ -543,6 +543,8 @@ def get_enemy_ling_rushed_v2(bot: "PiG_Bot") -> bool:
         features = np.array([[
             bot._pool_seen_time if bot._pool_seen_time is not None else -1,
             bot._enemy_nat_started_at if bot._enemy_nat_started_at is not None else -1,
+            bot._last_nat_scout_time if bot._last_nat_scout_time is not None else -1,
+            1 if bot._nat_present_on_last_scout else (0 if bot._nat_present_on_last_scout is False else -1),
             bot._extractor_seen_time if bot._extractor_seen_time is not None else -1,
             bot._queen_started_time if bot._queen_started_time is not None else -1,
             bot._first_ling_seen_time if bot._first_ling_seen_time is not None else -1,
