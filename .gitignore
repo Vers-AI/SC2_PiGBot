@@ -133,3 +133,7 @@ dmypy.json
 
 # Pycharm
 /.idea
+
+# Data files - synced separately
+data/*.jsonl
+data/rush_detection_log.jsonl
