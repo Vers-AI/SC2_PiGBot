@@ -78,7 +78,7 @@ tags:
 ### Macro
 - [ ] Build‑order recovery if buildings get destroyed (consult Rasper)
 - [ ] Adjust PvP strategy to 1‑base (instead of natural)
-- [ ] Fluid weighted composition vs enemy comp [Next]
+- [ ] Fluid weighted composition vs enemy comp & resource [Next]
 
 ### Build Manager
 - [ ] Implement PvT Standard Macro build
@@ -148,6 +148,7 @@ tags:
 - [x] Put debug in game
 - [x] Fix Gatekeeper off in non‑PvZ
 - [ ] Use action request to rescue stuck units
+- [ ] fix the resource dump on tech before 3rd is finished [urgent]
 
 ### Gatekeeper System (PvZ Wall Logic) ✅
 - [x] Issue Hold Position
