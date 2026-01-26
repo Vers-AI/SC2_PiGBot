@@ -78,14 +78,14 @@ def main():
             "PersephoneAIE_v4",
             "IncorporealAIE_v4",
             "LeyLinesAIE_v3",
-            "UltraloveAIE_v2",
-            "MagannathaAIE_v2"
+            "UltraloveAIE",
+            "MagannathaAIE"
         ]
 
         print("Starting local game...")
         run_game(
             maps.get(random.choice(map_list)),
-            [
+      [
                 bot1,
                 Computer(Race.Zerg, Difficulty.VeryHard, ai_build=AIBuild.Rush),
             ],
