@@ -6,6 +6,14 @@ Usage: python generate_wall_placements.py
 
 This bot does nothing except analyze the current map and generate wall coordinates.
 It will overwrite existing map entries or append new ones as needed.
+
+TODO (Future Development):
+- Improve choke detection algorithm for edge cases (narrow/wide chokes)
+- Add VsTerranNatWall generation (currently only VsZergNatWall)
+- Add validation step to verify wall connectivity before saving
+- Support batch generation for multiple maps in one run
+- Consider integrating with ARES's internal placement validation
+- Add visual debug output option to show calculated positions on map
 """
 
 import asyncio

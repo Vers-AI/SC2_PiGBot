@@ -55,8 +55,6 @@ from map_analyzer import MapData
 from bot.utilities.nova_manager import NovaManager
 from bot.utilities.performance_monitor import PerformanceMonitor
 from bot.utilities.game_report import print_end_game_report, print_startup_report, print_periodic_intel_report, get_replay_tags_to_send
-# # Wall manager removed - use generate_wall_placements.py to create wall data
-# from bot.utilities.natural_wall_manager import NaturalWallManager  # Temporarily disabled
 
 
 
@@ -125,9 +123,6 @@ class PiG_Bot(AresBot):
         # Performance monitoring (tracks SQ and other efficiency metrics)
         self.performance_monitor = PerformanceMonitor(sample_interval=22, alpha=0.1)
         
-        # Natural wall management system
-        self.wall_manager = None  # Will be initialized in on_start
-        
         # Gas worker management
         self._gas_worker_toggle = True  # Toggle for gas mining on/off
         
@@ -168,12 +163,6 @@ class PiG_Bot(AresBot):
         
         # Create choke grid for O(1) formation skip detection
         self.choke_grid = create_choke_grid(self)
-
-        # Wall management moved to separate generate_wall_placements.py tool
-        # Run: python generate_wall_placements.py to create wall data
-        # self.wall_manager = NaturalWallManager(self)
-        # opponent_race = await self.wall_manager.get_opponent_race_string()
-        # await self.wall_manager.ensure_map_wall_exists(opponent_race)
 
         self.current_base_target = self.enemy_start_locations[0]
 
