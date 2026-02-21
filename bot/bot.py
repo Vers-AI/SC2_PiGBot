@@ -40,18 +40,10 @@ from bot.combat import (
     gatekeeper_control,
     manage_defensive_unit_roles
 )
-from bot.managers.scouting import control_scout
 from bot.utilities.intel import update_enemy_intel_tracking, create_choke_grid
 from ares.behaviors.macro import Mining
-from bot.managers.reactions import (
-    early_threat_sensor,
-    cheese_reaction,
-    defend_cannon_rush,
-    defend_worker_rush,
-)
 #debugs
 from bot.utilities.use_disruptor_nova import UseDisruptorNova
-from map_analyzer import MapData
 from bot.utilities.nova_manager import NovaManager
 from bot.utilities.performance_monitor import PerformanceMonitor
 from bot.utilities.game_report import print_end_game_report, print_startup_report, print_periodic_intel_report, get_replay_tags_to_send
@@ -259,7 +251,6 @@ class PiG_Bot(AresBot):
         # Retrieve roles (initial fetch)
         main_army = self.mediator.get_units_from_role(role=UnitRole.ATTACKING)
         warp_prism = self.mediator.get_units_from_role(role=UnitRole.DROP_SHIP)
-        scout_units = self.mediator.get_units_from_role(role=UnitRole.SCOUTING)
         gatekeeper = self.mediator.get_units_from_role(role=UnitRole.GATE_KEEPER)
 
         # Always run combat-oriented threat detection first
@@ -289,10 +280,8 @@ class PiG_Bot(AresBot):
             # Macro calls (only run if build order is complete)
             await handle_macro(
                 bot=self,
-                iteration=iteration,
                 main_army=main_army,
                 warp_prism=warp_prism,
-                scout_units=scout_units,
                 freeflow=get_freeflow_mode(self),  # Dynamic calculation
             )
             

@@ -18,11 +18,8 @@ from ares.behaviors.macro import (
     BuildStructure,
 )
 from ares.consts import UnitRole, WORKER_TYPES
-from ares.dicts.unit_data import UNIT_DATA
 from ares.consts import LOSS_MARGINAL_OR_BETTER
 
-from bot.managers.scouting import control_scout
-from bot.constants import COMMON_UNIT_IGNORE_TYPES
 from bot.utilities.performance_monitor import get_economy_state
 
 
@@ -215,8 +212,6 @@ def expansion_checker(bot, main_army) -> int:
     
     mineral_collection_rate = bot.state.score.collection_rate_minerals
     idle_production_time = bot.state.score.idle_production_time
-    idle_worker_time = bot.state.score.idle_worker_time
-    
     expansion_count = current_bases
     
     # Calculate spending efficiency (SQ-style)
@@ -413,12 +408,32 @@ def select_army_composition(bot, main_army: Units) -> dict:
     return selected_composition
 
 
+def _train_observers(bot) -> None:
+    """Train observers to target count based on game state and matchup."""
+    observer_count = bot.units(UnitTypeId.OBSERVER).amount
+    if bot.already_pending(UnitTypeId.OBSERVER) or not bot.can_afford(UnitTypeId.OBSERVER):
+        return
+
+    robotics_facilities = bot.structures(UnitTypeId.ROBOTICSFACILITY).ready
+    if observer_count < 1:
+        for facility in robotics_facilities:
+            facility.train(UnitTypeId.OBSERVER)
+            return
+
+    if bot.game_state == 0:
+        return
+
+    target_count = 3 if bot.enemy_race in {Race.Zerg, Race.Terran} else 2
+    if observer_count < target_count:
+        for facility in robotics_facilities.idle:
+            facility.train(UnitTypeId.OBSERVER)
+            return
+
+
 async def handle_macro(
     bot,
-    iteration: int,
     main_army: Units,
     warp_prism: Units,
-    scout_units: Units,
     freeflow: bool,
 ) -> None:
     """
@@ -523,27 +538,7 @@ async def handle_macro(
                 macro_plan.add(ProductionController(army_composition, base_location=production_location, add_production_at_bank=(450,450), ignore_below_proportion=0.3))
     
     bot.register_behavior(macro_plan)
-    if bot.game_state == 0:
-        if (bot.units(UnitTypeId.OBSERVER).amount < 1 
-            and bot.already_pending(UnitTypeId.OBSERVER) == 0
-            and bot.can_afford(UnitTypeId.OBSERVER)):
-            for facility in bot.structures(UnitTypeId.ROBOTICSFACILITY).ready:
-                facility.train(UnitTypeId.OBSERVER)
-                break
-    else:
-        if (bot.units(UnitTypeId.OBSERVER).amount < 1 
-            and bot.already_pending(UnitTypeId.OBSERVER) == 0
-            and bot.can_afford(UnitTypeId.OBSERVER)):
-            for facility in bot.structures(UnitTypeId.ROBOTICSFACILITY).ready:
-                facility.train(UnitTypeId.OBSERVER)
-                break
-        target_count = 3 if bot.enemy_race in {Race.Zerg, Race.Terran} else 2
-        if (bot.units(UnitTypeId.OBSERVER).amount < target_count
-            and bot.already_pending(UnitTypeId.OBSERVER) == 0
-            and bot.can_afford(UnitTypeId.OBSERVER)):
-            for facility in bot.structures(UnitTypeId.ROBOTICSFACILITY).ready.idle:
-                facility.train(UnitTypeId.OBSERVER)
-                break
+    _train_observers(bot)
     
     if bot.units(UnitTypeId.HIGHTEMPLAR).amount >= 2:
         for templar in bot.units(UnitTypeId.HIGHTEMPLAR).ready:
