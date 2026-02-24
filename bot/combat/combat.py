@@ -55,13 +55,14 @@ from bot.combat.unit_micro import (
     micro_ranged_unit,
     micro_melee_unit,
     micro_disruptor,
-    get_priority_targets,
 )
+from bot.combat.target_scoring import select_target, update_upgrades
 from bot.utilities.debug import (
     render_combat_state_overlay,
     render_disruptor_labels,
     render_nova_labels,
     render_base_defender_debug,
+    render_target_scoring_debug,
     log_nova_error,
     render_formation_debug,
 )
@@ -262,6 +263,9 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
     """
     Controls the main army's movement and engagement logic using individual unit behaviors.
     """
+    # Cache upgrades once per frame for target scoring (Charge check, etc.)
+    update_upgrades(bot.state.upgrades)
+    
     # ARES requires get_squads() to be called before get_position_of_main_squad()
     if not squads:
         squads = bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=ATTACKING_SQUAD_RADIUS)
@@ -352,8 +356,9 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
             ranged = [u for u in units if u.ground_range > MELEE_RANGE_THRESHOLD and u.energy == 0 and u.can_attack]
             spellcasters = [u for u in units if (u.energy > 0 and not u.is_flying) or u.type_id == UnitTypeId.DISRUPTOR]
             
-            # Simple picking logic
-            enemy_target = cy_pick_enemy_target(all_close)
+            # Weighted scoring: pick best target for fallback movement direction
+            # Uses first squad unit as reference (any unit works — just for direction)
+            enemy_target = select_target(units[0], all_close)
             
             # ARES safety awareness - avoid unsafe positions when defending (ranged only)
             ranged_on_unsafe_ground = []
@@ -369,10 +374,7 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                         )
                         r_unit.move(safe_spot)
                         
-            # Get priority targets
-            priority_targets = get_priority_targets(all_close)
-            
-            # Ranged micro - superior logic with priority targeting
+            # Ranged micro - weighted scoring handles priority targeting
             for r_unit in ranged:
                 if r_unit in ranged_on_unsafe_ground:
                     continue  # Skip units retreating to safer ground
@@ -388,30 +390,26 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                 unit_enemies = get_attackable_enemies(r_unit, all_close, grid)
                 if not unit_enemies:
                     continue
-                unit_priority = [t for t in priority_targets if t in unit_enemies]
                     
                 ranged_maneuver = micro_ranged_unit(
                     unit=r_unit,
                     enemies=unit_enemies,
-                    priority_targets=unit_priority,
                     grid=grid,
                     avoid_grid=avoid_grid,
                     aggressive=can_engage
                 )
                 bot.register_behavior(ranged_maneuver)
 
-            # Melee engages directly - simplified approach
+            # Melee micro - weighted scoring handles priority targeting
             for m_unit in melee:
                 # Filter enemies to only those this unit can attack and reach
                 unit_enemies = get_attackable_enemies(m_unit, all_close, grid)
                 if not unit_enemies:
                     continue
-                unit_priority = [t for t in priority_targets if t in unit_enemies]
                 
                 melee_maneuver = micro_melee_unit(
                     unit=m_unit,
                     enemies=unit_enemies,
-                    priority_targets=unit_priority,
                     avoid_grid=avoid_grid,
                     fallback_position=enemy_target.position if enemy_target else move_to,
                     aggressive=can_engage
@@ -776,6 +774,7 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
     
     # Debug visualization (controlled by bot.debug flag)
     render_combat_state_overlay(bot, main_army, enemy_threat_level, is_early_defensive_mode)
+    render_target_scoring_debug(bot, main_army)
     render_disruptor_labels(bot)
     render_nova_labels(bot, getattr(bot, 'nova_manager', None))
     render_base_defender_debug(bot)
@@ -1081,44 +1080,37 @@ def control_base_defenders(bot, defender_units: Units, threat_position: Point2) 
                 bot.register_behavior(move_maneuver)
             continue
         
-        # Get priority targets
-        priority_targets = get_priority_targets(all_close)
-        
         # Separate unit types for appropriate micro
         melee = [u for u in units if u.ground_range <= MELEE_RANGE_THRESHOLD and u.energy == 0 and u.can_attack]
         ranged = [u for u in units if u.ground_range > MELEE_RANGE_THRESHOLD and u.energy == 0 and u.can_attack]
         spellcasters = [u for u in units if u.energy > 0 or u.type_id == UnitTypeId.DISRUPTOR]
         
-        # Ranged micro - use same function as main army (aggressive=True for base defense)
+        # Ranged micro - weighted scoring handles priority targeting
         for r_unit in ranged:
             # Filter enemies to only those this unit can attack and reach
             unit_enemies = get_attackable_enemies(r_unit, all_close, grid)
             if not unit_enemies:
                 continue
-            unit_priority = [t for t in priority_targets if t in unit_enemies]
             
             ranged_maneuver = micro_ranged_unit(
                 unit=r_unit,
                 enemies=unit_enemies,
-                priority_targets=unit_priority,
                 grid=grid,
                 avoid_grid=avoid_grid,
                 aggressive=True  # Always aggressive when defending base
             )
             bot.register_behavior(ranged_maneuver)
         
-        # Melee micro - use same function as main army
+        # Melee micro - weighted scoring handles priority targeting
         for m_unit in melee:
             # Filter enemies to only those this unit can attack and reach
             unit_enemies = get_attackable_enemies(m_unit, all_close, grid)
             if not unit_enemies:
                 continue
-            unit_priority = [t for t in priority_targets if t in unit_enemies]
             
             melee_maneuver = micro_melee_unit(
                 unit=m_unit,
                 enemies=unit_enemies,
-                priority_targets=unit_priority,
                 avoid_grid=avoid_grid,
                 fallback_position=threat_position,
                 aggressive=True  # Always aggressive when defending base

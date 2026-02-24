@@ -30,7 +30,11 @@ from bot.combat.unit_micro import (
     micro_ranged_unit,
     micro_melee_unit,
     micro_disruptor,
-    get_priority_targets,
+)
+
+from bot.combat.target_scoring import (
+    score_target,
+    select_target,
 )
 
 __all__ = [
@@ -57,5 +61,7 @@ __all__ = [
     "micro_ranged_unit",
     "micro_melee_unit",
     "micro_disruptor",
-    "get_priority_targets",
+    # Target scoring
+    "score_target",
+    "select_target",
 ]

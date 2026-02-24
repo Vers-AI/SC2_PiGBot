@@ -602,6 +602,63 @@ def render_base_defender_debug(bot) -> None:
         )
 
 
+def render_target_scoring_debug(bot, main_army: Units) -> None:
+    """Draw lines from each combat unit to its scored target, with score labels.
+    
+    Re-runs select_target for display purposes. Only renders when debug is on.
+    Perf note: skips units with no nearby enemies. Samples at most 20 units to limit draw calls.
+    """
+    if not bot.debug or not main_army:
+        return
+    
+    from bot.combat.target_scoring import score_target, select_target
+    from cython_extensions import cy_closer_than
+    
+    # Get all visible enemy units (non-structure, non-memory)
+    all_enemies = [u for u in (bot.enemy_units or []) if not u.is_structure and not u.is_memory]
+    if not all_enemies:
+        return
+    
+    # Sample units to avoid excessive draw calls in large armies
+    units = list(main_army)[:20]
+    
+    for unit in units:
+        # Pre-filter enemies within 15 range (matches combat detection range)
+        nearby = cy_closer_than(all_enemies, 15.0, unit.position)
+        if not nearby:
+            continue
+        
+        target = select_target(unit, nearby)
+        best_score = score_target(unit, target)
+        
+        # Draw line from unit to its chosen target
+        u_pos = unit.position
+        t_pos = target.position
+        u_z = bot.get_terrain_z_height(u_pos)
+        t_z = bot.get_terrain_z_height(t_pos)
+        
+        # Color by unit type: cyan for ranged, yellow for melee
+        is_melee = unit.ground_range <= 2.0
+        color = Point3((255, 255, 0)) if is_melee else Point3((0, 200, 255))
+        
+        bot.client.debug_line_out(
+            Point3((u_pos.x, u_pos.y, u_z + 0.5)),
+            Point3((t_pos.x, t_pos.y, t_z + 0.5)),
+            color=color,
+        )
+        
+        # Score label above the unit
+        short_name = target.type_id.name[:6]
+        label = f"{short_name} {best_score:.0f}"
+        text_color = (255, 255, 0) if is_melee else (0, 200, 255)
+        bot.client.debug_text_world(
+            label,
+            Point3((u_pos.x, u_pos.y, u_z + 1.5)),
+            color=text_color,
+            size=10,
+        )
+
+
 def log_nova_error(error: Exception) -> None:
     """
     Log NovaManager errors (always shown, not gated by debug flag).

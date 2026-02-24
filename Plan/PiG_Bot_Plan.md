@@ -46,9 +46,9 @@ tags:
 
 ---
 
-## Tasks
+# Tasks
 
-### Combat ✅ (from original **Plan → Combat**)
+## Combat ✅ (from original **Plan → Combat**)
 - [x] Integrate Combat simulator `can_win_fight`  
   - [x] Only attack if enemy combat score == 0
 - [x] Create Probe Rush response
@@ -70,17 +70,42 @@ tags:
   - [x] React to invisible enemies
 - [ ] Add Sentry logic
 
-### Tactics ✅
+### Tactics
 - [x] Break army into squads
 - [x] Per‑squad attack targets & combat simulators
 - [x] Anti‑air squad (only AA units; proportional to threat)
 
-### Macro
+#### MindMe's Weighted Scoring System
+- [x] Phase 1a — Create `target_scoring.py`: `score_target()` + `select_target()` + weight constants
+- [x] Phase 1b — Hybrid unit type values: `UNIT_DATA army_value` base + `TACTICAL_BONUS` overrides (spellcasters, siege, enablers)
+- [x] Phase 1c — Wire into `unit_micro.py`: replace `cy_pick_enemy_target` + `priority_targets` with `select_target()`
+- [x] Phase 1d — Wire into `combat.py`: remove old `get_priority_targets` logic, use `select_target` for fallback targeting
+- [x] Phase 1e — Update `__init__.py` exports
+- [ ] **TEST** — Run games, watch replays, verify targeting behavior
+- [ ] Tune weights from replay observations (`DISTANCE_WEIGHT`, `HEALTH_WEIGHT`, `TYPE_VALUE_SCALE`, `TACTICAL_BONUS` entries)
+- [ ] Phase 2a — Wire combat sim gate + engagement threshold (30% engaged → switch group → individual micro)
+- [ ] Phase 2b — Wire `StutterGroupBack` for coordinated group retreats
+- [ ] Phase 3 — Wire formation movement (`cy_adjust_moving_formation`) for pre-combat grouping
+- [ ] Phase 4 — Feed counter table into production decisions (what to build vs enemy comp)
+### Gatekeeper System (PvZ Wall Logic) ✅
+- [x] Issue Hold Position
+- [x] Move to zealot hole in wall  
+  - [x] Identify the hole
+- [x] If no zealot in role, add zealot Gatekeeper role
+- [x] Create Gatekeeper role
+- [x] Ensure only active in PvZ
+- [x] Only 1 zealot at a time
+- [x] Hold position unless attacking
+- [x] Release role when attacking, **not** when defending
+
+
+## Macro
 - [ ] Build‑order recovery if buildings get destroyed (consult Rasper)
 - [ ] Adjust PvP strategy to 1‑base (instead of natural)
 - [ ] Fluid weighted composition vs enemy comp & resource [Next]
+- [ ] fix the resource dump on tech before 3rd is finished [urgent]
 
-### Build Manager
+## Build Manager
 - [ ] Implement PvT Standard Macro build
 - [ ] Implement PvT Proxy Rax Response build
 - [ ] Implement PvZ Standard Robo Opener
@@ -93,8 +118,7 @@ tags:
 - [ ] Mid‑game build switch logic (e.g., Spire → Stargate)
 - [x] Adjust transition from build order to fluid composition to wait till amount of macro to sustain 
 
-
-### Scouting & Interpretation
+## Data & Information
 - [ ] `scouted_spire()` and other scout triggers
 - [x] Fallback logic if scout dies early
 - [x] Create a Reaction System 
@@ -125,7 +149,7 @@ tags:
 - [ ] Store replay summaries alongside JSON logs
 - [x] Add Tags for replays
 
-### Misc / TODO
+## Misc / TODO
 - [x] Change Gamestate from text → INT
 - [x] Optimal worker check includes minerals + gas
 - [x] Review macro cycle (floating minerals during build order)
@@ -148,18 +172,9 @@ tags:
 - [x] Put debug in game
 - [x] Fix Gatekeeper off in non‑PvZ
 - [ ] Use action request to rescue stuck units
-- [ ] fix the resource dump on tech before 3rd is finished [urgent]
 
-### Gatekeeper System (PvZ Wall Logic) ✅
-- [x] Issue Hold Position
-- [x] Move to zealot hole in wall  
-  - [x] Identify the hole
-- [x] If no zealot in role, add zealot Gatekeeper role
-- [x] Create Gatekeeper role
-- [x] Ensure only active in PvZ
-- [x] Only 1 zealot at a time
-- [x] Hold position unless attacking
-- [x] Release role when attacking, **not** when defending
+
+
 
 
 ---
