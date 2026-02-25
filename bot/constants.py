@@ -185,11 +185,11 @@ URGENCY_DECAY_RATE = 0.005
 """Rate per frame that intel urgency decays when fresh (slower than build)"""
 
 # ===== CHOKE/RAMP DETECTION =====
-RAMP_CHOKE_RADIUS = 6.0
-"""Radius around ramp top/bottom for choke grid marking"""
+RAMP_CHOKE_RADIUS = 2.5
+"""Radius around ramp top/bottom for choke grid marking (actual ramp ~2-3 tiles wide)"""
 
-MAP_CHOKE_RADIUS = 10.0
-"""Radius around map_analyzer choke points for grid marking"""
+MAP_CHOKE_RADIUS = 3.5
+"""Radius around map_analyzer choke points for grid marking (actual choke ~3-5 tiles wide)"""
 
 CHOKE_GRID_WEIGHT = 10.0
 """Weight value to mark choke zones in grid (>1.0 indicates choke area)"""

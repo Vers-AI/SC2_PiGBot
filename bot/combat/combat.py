@@ -57,6 +57,7 @@ from bot.combat.unit_micro import (
     micro_disruptor,
 )
 from bot.combat.target_scoring import select_target, update_upgrades
+from ares.dicts.unit_data import UNIT_DATA
 from bot.utilities.debug import (
     render_combat_state_overlay,
     render_disruptor_labels,
@@ -111,11 +112,25 @@ def get_attackable_enemies(unit: Unit, enemies: list, grid: np.ndarray) -> list:
     return attackable
 
 
-# Formation + cohesion constants
-FORMATION_COHESION_AHEAD_THRESHOLD = 6.0  # Units this far AHEAD of center slow down
-FORMATION_COHESION_SPREAD_THRESHOLD = 8.0  # Max allowed distance from army center
-FORMATION_UNIT_MULTIPLIER = 2.0   # Spacing for formation adjustment
+# Formation + cohesion constants (dynamic: base + sqrt(unit_count) * scale)
+# Small army (5) → ahead ~1.4, spread ~4.6  |  Large army (30) → ahead ~2.1, spread ~6.8
+FORMATION_AHEAD_BASE = 1.0        # Minimum ahead threshold
+FORMATION_AHEAD_SCALE = 0.2       # How much ahead threshold grows with sqrt(n)
+FORMATION_SPREAD_BASE = 3.0       # Minimum spread threshold
+FORMATION_SPREAD_SCALE = 0.7      # How much spread threshold grows with sqrt(n)
+FORMATION_UNIT_MULTIPLIER = 1.2   # How far ranged units reposition behind melee
 FORMATION_RETREAT_ANGLE = 0.3     # Diagonal spread for ranged units
+
+# Engagement gate: minimum total enemy army_value before switching from formation to full micro.
+# Below this, units stay in formation and only ShootTargetInRange. Prevents lone scouts
+# (Zergling=1.0, Overlord=0) from fragmenting the army into individual micro.
+ENGAGEMENT_ARMY_VALUE_THRESHOLD = 4.0
+
+# Active engagement fallback: if an enemy is in weapon range and facing our unit,
+# override the army_value gate. Catches the "lone Zergling attacking a Stalker" case
+# where army_value is low but our unit needs to kite.
+ACTIVE_ENGAGE_RANGE_BUFFER = 0.5  # Extra buffer beyond enemy weapon range + radii
+ACTIVE_ENGAGE_ANGLE = 0.3         # ~17° tolerance for is_facing check
 
 
 def is_near_choke_or_ramp(bot, army_center: Point2) -> bool:
@@ -213,6 +228,12 @@ def get_formation_move_target(
     if len(squad_units) < 2:
         return target
     
+    # Dynamic cohesion thresholds: scale with sqrt(unit_count)
+    # Small armies get tighter bounds, large armies get more breathing room
+    n_sqrt = math.sqrt(len(squad_units))
+    ahead_threshold = FORMATION_AHEAD_BASE + n_sqrt * FORMATION_AHEAD_SCALE
+    spread_threshold = FORMATION_SPREAD_BASE + n_sqrt * FORMATION_SPREAD_SCALE
+    
     # Get army center of mass
     army_center, _ = cy_find_units_center_mass(squad_units, 10.0)
     army_center = Point2(army_center)
@@ -245,15 +266,15 @@ def get_formation_move_target(
     center_dist_to_target = cy_distance_to(army_center, target)
     ahead_distance = center_dist_to_target - unit_dist_to_target
     
-    if ahead_distance > FORMATION_COHESION_AHEAD_THRESHOLD:
+    if ahead_distance > ahead_threshold:
         # Unit is streaming ahead - move toward army center to wait for others
-        return army_center.towards(target, FORMATION_COHESION_AHEAD_THRESHOLD * 0.5)
+        return army_center.towards(target, ahead_threshold * 0.5)
     
     # Cohesion check 2: Is this unit too far from army center (spread out)?
     dist_from_center = cy_distance_to(unit.position, army_center)
-    if dist_from_center > FORMATION_COHESION_SPREAD_THRESHOLD:
+    if dist_from_center > spread_threshold:
         # Unit is too spread out - move toward army center
-        return army_center.towards(target, FORMATION_COHESION_SPREAD_THRESHOLD * 0.5)
+        return army_center.towards(target, spread_threshold * 0.5)
     
     # Unit is in good position - continue to target
     return target
@@ -308,7 +329,29 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     all_close_list.append(u)
         all_close = Units(all_close_list, bot)
         
-        if all_close:
+        # Army value gate: sum enemy army_value to decide formation vs full micro.
+        # Low threat (scout, lone ling) → stay in formation, ShootTargetInRange only.
+        # Real threat → full individual micro.
+        enemy_army_value = sum(
+            UNIT_DATA.get(u.type_id, {}).get("army_value", 0.0)
+            for u in all_close
+        )
+        
+        # Fallback: if any enemy is actively attacking our units (in weapon range + facing),
+        # override the army_value gate so our units can micro (e.g. Stalker kites lone Ling).
+        enemy_actively_engaging = False
+        if all_close and enemy_army_value < ENGAGEMENT_ARMY_VALUE_THRESHOLD:
+            for enemy in all_close:
+                attack_range = enemy.ground_range + enemy.radius + ACTIVE_ENGAGE_RANGE_BUFFER
+                for own_unit in units:
+                    dist = cy_distance_to(enemy.position, own_unit.position)
+                    if dist <= attack_range + own_unit.radius and enemy.is_facing(own_unit, angle_error=ACTIVE_ENGAGE_ANGLE):
+                        enemy_actively_engaging = True
+                        break
+                if enemy_actively_engaging:
+                    break
+        
+        if all_close and (enemy_army_value >= ENGAGEMENT_ARMY_VALUE_THRESHOLD or enemy_actively_engaging):
             # Defensive mode override: when not attacking, always engage enemies near our bases
             # This prevents retreating from winnable local fights due to unfavorable global situation
             if not bot._commenced_attack:
@@ -452,28 +495,30 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     bot.register_behavior(caster_maneuver)
                         
         else:
-            # Check for broader enemy presence (including all unit types)
-            close_by = bot.mediator.get_units_in_range(
-                start_points=[squad_position],
-                distances=UNIT_ENEMY_DETECTION_RANGE,
-                query_tree=UnitTreeQueryType.AllEnemy,
-                return_as_dict=False,
-            )[0].filter(lambda u: not u.is_memory and not u.is_structure)
-            
             # Check for nearby enemy structures
             nearby_structures = bot.enemy_structures.closer_than(STRUCTURE_ATTACK_RANGE, squad_position)
             
-            # Debug: render formation visualization (only during safe map crossing)
-            if not close_by and not nearby_structures:
+            # Low-threat enemies present (below army_value threshold)?
+            # Units maintain formation but shoot anything in weapon range.
+            # NOTE: all_close is already filtered by COMMON_UNIT_IGNORE_TYPES, so
+            # Overlords/Observers/Changelings won't disable formation here.
+            low_threat_targets = all_close if all_close else None
+            
+            # Debug: render formation visualization (during map crossing, even with low-threat enemies)
+            if not nearby_structures:
                 render_formation_debug(bot, units, move_to)
             
-            # Movement logic: PathUnitToTarget only when truly safe
+            # Movement logic: formation + ShootTargetInRange for low-threat situations
             for unit in units:
                 unit_grid = bot.mediator.get_air_grid if unit.is_flying else grid
                 if unit.type_id == UnitTypeId.COLOSSUS:
                     unit_grid = bot.mediator.get_climber_grid
                     
                 no_enemy_maneuver = CombatManeuver()
+                
+                # Shoot low-threat enemies in range without breaking formation
+                if low_threat_targets and unit.can_attack:
+                    no_enemy_maneuver.add(ShootTargetInRange(unit=unit, targets=low_threat_targets))
                 
                 # Disruptors follow army target when no enemies nearby (like observers)
                 if unit.type_id == UnitTypeId.DISRUPTOR:
@@ -493,40 +538,35 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     bot.register_behavior(no_enemy_maneuver)
                     continue  # Skip rest of movement logic for disruptors
                 
-                # Use PathUnitToTarget only when no enemies or structures nearby (map crossing)
                 should_wait = False  # Flag to skip fallback movement when unit should wait
                 
-                # Ramp check - if on ramp with no enemies, push through (don't stand and shoot)
-                # This prevents ranged units blocking ramp while attacking structures
-                if not close_by and is_unit_on_ramp(bot, unit):
+                # Ramp check - push through ramps when no real threats nearby
+                if not low_threat_targets and is_unit_on_ramp(bot, unit):
                     no_enemy_maneuver.add(PathUnitToTarget(
                         unit=unit, grid=unit_grid, target=move_to, success_at_distance=3.0
                     ))
-                elif not close_by and not nearby_structures:
-                    # Safe map crossing - use formation-aware movement to prevent streaming
-                    if cy_distance_to_squared(unit.position, move_to) > MAP_CROSSING_DISTANCE_SQ:
-                        # Get formation-adjusted target (keeps melee front, ranged back, army together)
-                        # Pass bot for choke/ramp detection to prevent bottlenecks
-                        formation_target = get_formation_move_target(unit, units, move_to, bot=bot)
-                        
-                        # If formation_target != move_to, unit is ahead and should WAIT (not move)
-                        if formation_target != move_to:
-                            # Unit should wait - don't give any move command, let it stop naturally
-                            should_wait = True
-                            # Optional: give a hold position to make the wait explicit
-                            unit.hold_position()
-                        else:
-                            # Unit is in good position - continue to target
-                            no_enemy_maneuver.add(PathUnitToTarget(
-                                unit=unit, grid=unit_grid, target=move_to, success_at_distance=MAP_CROSSING_SUCCESS_DISTANCE
-                            ))
                 elif nearby_structures:
                     # Structures nearby - attack them with AMove for base clearing
                     closest_structure = cy_closest_to(unit.position, nearby_structures)
                     no_enemy_maneuver.add(AMove(unit=unit, target=closest_structure.position))
                 else:
-                    # Default movement when enemies around but no structures
-                    no_enemy_maneuver.add(AMove(unit=unit, target=move_to))
+                    # Formation movement — works with or without low-threat enemies.
+                    # cy_adjust_moving_formation keeps melee front, ranged back.
+                    # Cohesion checks prevent streaming ahead or spreading out.
+                    if cy_distance_to_squared(unit.position, move_to) > MAP_CROSSING_DISTANCE_SQ:
+                        formation_target = get_formation_move_target(unit, units, move_to, bot=bot)
+                        
+                        # If formation_target != move_to, unit is ahead/spread — drift back smoothly
+                        if formation_target != move_to:
+                            should_wait = True
+                            no_enemy_maneuver.add(PathUnitToTarget(
+                                unit=unit, grid=unit_grid, target=formation_target, success_at_distance=1.0
+                            ))
+                        else:
+                            # Unit is in good position - continue to target
+                            no_enemy_maneuver.add(PathUnitToTarget(
+                                unit=unit, grid=unit_grid, target=move_to, success_at_distance=MAP_CROSSING_SUCCESS_DISTANCE
+                            ))
                     
                 # Fallback for units without orders (but NOT if they should be waiting)
                 if not unit.orders and not should_wait:

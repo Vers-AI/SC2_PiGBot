@@ -378,11 +378,18 @@ def render_formation_debug(bot, squad_units: list, target) -> None:
     
     from bot.combat.combat import (
         get_formation_move_target, 
-        FORMATION_COHESION_AHEAD_THRESHOLD,
-        FORMATION_COHESION_SPREAD_THRESHOLD,
+        FORMATION_AHEAD_BASE, FORMATION_AHEAD_SCALE,
+        FORMATION_SPREAD_BASE, FORMATION_SPREAD_SCALE,
         MELEE_RANGE_THRESHOLD
     )
     from sc2.position import Point2
+    
+    import math
+    
+    # Compute dynamic thresholds (must match get_formation_move_target)
+    n_sqrt = math.sqrt(len(squad_units))
+    ahead_threshold = FORMATION_AHEAD_BASE + n_sqrt * FORMATION_AHEAD_SCALE
+    spread_threshold = FORMATION_SPREAD_BASE + n_sqrt * FORMATION_SPREAD_SCALE
     
     # Get army center of mass
     army_center, _ = cy_find_units_center_mass(squad_units, 10.0)
@@ -397,15 +404,14 @@ def render_formation_debug(bot, squad_units: list, target) -> None:
     )
     
     # Draw cohesion spread radius circle (outer - orange)
-    import math
     num_points = 24
     for i in range(num_points):
         angle1 = 2 * math.pi * i / num_points
         angle2 = 2 * math.pi * (i + 1) / num_points
-        p1 = Point2((army_center.x + FORMATION_COHESION_SPREAD_THRESHOLD * math.cos(angle1),
-                     army_center.y + FORMATION_COHESION_SPREAD_THRESHOLD * math.sin(angle1)))
-        p2 = Point2((army_center.x + FORMATION_COHESION_SPREAD_THRESHOLD * math.cos(angle2),
-                     army_center.y + FORMATION_COHESION_SPREAD_THRESHOLD * math.sin(angle2)))
+        p1 = Point2((army_center.x + spread_threshold * math.cos(angle1),
+                     army_center.y + spread_threshold * math.sin(angle1)))
+        p2 = Point2((army_center.x + spread_threshold * math.cos(angle2),
+                     army_center.y + spread_threshold * math.sin(angle2)))
         z1 = bot.get_terrain_z_height(p1)
         z2 = bot.get_terrain_z_height(p2)
         bot.client.debug_line_out(
@@ -436,7 +442,7 @@ def render_formation_debug(bot, squad_units: list, target) -> None:
         is_melee = unit.ground_range <= MELEE_RANGE_THRESHOLD
         
         # Unit is streaming ahead (cohesion triggered) - will HOLD POSITION
-        if ahead_distance > FORMATION_COHESION_AHEAD_THRESHOLD:
+        if ahead_distance > ahead_threshold:
             ahead_count += 1
             # Yellow label for units holding/waiting
             label = f"HOLD +{ahead_distance:.1f}"
@@ -454,7 +460,7 @@ def render_formation_debug(bot, squad_units: list, target) -> None:
                 color=Point3((255, 255, 0))  # Yellow
             )
         # Unit is too spread out from center
-        elif dist_from_center > FORMATION_COHESION_SPREAD_THRESHOLD:
+        elif dist_from_center > spread_threshold:
             spread_count += 1
             # Orange label for spread units
             label = f"SPREAD {dist_from_center:.1f}"
