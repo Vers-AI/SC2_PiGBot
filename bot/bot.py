@@ -131,6 +131,7 @@ class PiG_Bot(AresBot):
         # Responses trigger at thresholds: 0.3 (observer priority), 0.5 (extra observers), 0.7 (speed upgrade)
         self._intel_urgency = 0.0
         self._worker_scout_sent_this_stale_period = False  # Prevents spamming worker scouts
+        self._observer_hunt_mode = False  # Sticky flag: stays True until freshness >= FRESH_INTEL_THRESHOLD
 
 
 
@@ -243,7 +244,12 @@ class PiG_Bot(AresBot):
             keep_safe=self._not_worker_rush
         )) 
 
-        self.enemy_army = self.mediator.get_cached_enemy_army
+        # Filter expired ghosts (age >= 30s) from cached enemy army;
+        # UnitCacheManager retains units indefinitely but they're stale after 30s
+        from bot.constants import MEMORY_EXPIRY_TIME
+        self.enemy_army = self.mediator.get_cached_enemy_army.filter(
+            lambda u: u.age < MEMORY_EXPIRY_TIME
+        )
         
         # Update enemy intel tracking (for combat sim trust)
         update_enemy_intel_tracking(self)

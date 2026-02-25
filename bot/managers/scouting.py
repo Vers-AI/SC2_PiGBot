@@ -12,18 +12,28 @@ from ares.behaviors.combat import CombatManeuver
 from ares.behaviors.combat.individual import KeepUnitSafe, PathUnitToTarget, UseAbility
 from ares.consts import UnitRole, UnitTreeQueryType, WORKER_TYPES
 from bot.combat import attack_target
+from bot.constants import FRESH_INTEL_THRESHOLD, MEMORY_EXPIRY_TIME, VISIBLE_AGE_THRESHOLD
+from bot.utilities.intel import get_enemy_intel_quality
 
 # Staleness thresholds for hunt mode
 HUNT_URGENCY_THRESHOLD = 0.5  # When _intel_urgency exceeds this, start hunting
 LAST_KNOWN_AGE_THRESHOLD = 15.0  # Use last known position if < 15s old
 
 
+# Radius within which the observer is "near" the enemy army and should orbit
+ORBIT_NEAR_RADIUS = 15.0
+
+
 def get_hunt_target(bot, unit: Unit) -> Point2:
     """
     Get the best target for a unit hunting for the enemy army.
     
-    Uses last known position if recent (< 15s), otherwise patrols enemy expansions
-    in reverse order (4th → 3rd → nat → main) since armies often stage at outer bases.
+    Behaviour priority:
+    1. If near the cached army and stale units exist, orbit toward the stalest
+       cluster so the observer sweeps the full army instead of sitting at the
+       centroid.
+    2. If we have recent cached army data (< 15s avg age), head to the centroid.
+    3. Fallback: cycle enemy expansions 4th → 3rd → nat → main.
     
     Args:
         bot: The bot instance
@@ -34,20 +44,37 @@ def get_hunt_target(bot, unit: Unit) -> Point2:
     """
     tag = unit.tag
     
-    # Get cached enemy army (includes memory units)
+    # Get cached enemy army, filtering expired ghosts (age >= MEMORY_EXPIRY_TIME)
+    # UnitCacheManager retains units indefinitely but UnitMemoryManager expires at 30s
     cached_army = [
         u for u in bot.mediator.get_cached_enemy_army
-        if u.type_id not in WORKER_TYPES
+        if u.type_id not in WORKER_TYPES and u.age < MEMORY_EXPIRY_TIME
     ]
     
-    # If we have recent enemy army data, go to last known position
     if cached_army:
         avg_age = sum(u.age for u in cached_army) / len(cached_army)
         if avg_age < LAST_KNOWN_AGE_THRESHOLD:
-            return cached_army[0].position if len(cached_army) == 1 else Point2(
+            centroid = cached_army[0].position if len(cached_army) == 1 else Point2(
                 (sum(u.position.x for u in cached_army) / len(cached_army),
                  sum(u.position.y for u in cached_army) / len(cached_army))
             )
+            
+            # If already near the army, orbit toward stale units to refresh
+            # their visibility instead of parking at the centroid
+            if unit.distance_to(centroid) < ORBIT_NEAR_RADIUS:
+                stale_units = [
+                    u for u in cached_army
+                    if u.age >= VISIBLE_AGE_THRESHOLD
+                ]
+                if stale_units:
+                    # Pick the stalest unit — this naturally sweeps the
+                    # observer across the army footprint
+                    stalest = max(stale_units, key=lambda u: u.age)
+                    return stalest.position
+            
+            # Not near the army yet, or every unit is already fresh — head
+            # to the centroid
+            return centroid
     
     # Fallback: patrol enemy expansions using ARES properties
     # Order: 4th → 3rd → nat → main (armies often stage at outer bases)
@@ -251,49 +278,25 @@ def control_primary_observer(bot, observer: Optional[Unit], main_army: Units) ->
                 grid=air_grid,
                 danger_distance=15
             ))
-    # Otherwise, follow its normal assignment based on game phase
+    # Otherwise, hunt or station based on intel freshness (all game states)
     else:
-        # Early game: patrol expansions
-        if bot.game_state == 0:  # early game
-            # Create a list of potential scout targets
-            targets = bot.expansion_locations_list[:5] + [bot.enemy_start_locations[0]]
-            
-            # If we haven't assigned a current target, do so
-            tag = observer.tag
-            if tag not in bot.observer_targets or not bot.observer_targets[tag]:
-                if targets:
-                    bot.observer_targets[tag] = targets[0]
-            
-            # If damaged, run away
+        # Hysteresis: enter hunt mode at high urgency, only exit when
+        # freshness is confirmed good enough for the combat sim
+        if bot._intel_urgency > HUNT_URGENCY_THRESHOLD:
+            bot._observer_hunt_mode = True
+        if bot._observer_hunt_mode:
+            intel = get_enemy_intel_quality(bot)
+            if intel["freshness"] >= FRESH_INTEL_THRESHOLD:
+                bot._observer_hunt_mode = False
+        
+        if bot._observer_hunt_mode:
+            # Hunt mode: actively seek enemy army until intel is fresh
             if observer.shield_percentage < 1:
                 actions.add(KeepUnitSafe(
                     unit=observer,
                     grid=air_grid
                 ))
             else:
-                # If close to the current target, pick the next
-                current_target = bot.observer_targets.get(tag)
-                if current_target and observer.distance_to(current_target) < 1:
-                    # Move to the next index
-                    current_index = targets.index(current_target)
-                    if current_index + 1 < len(targets):
-                        bot.observer_targets[tag] = targets[current_index + 1]
-                    else:
-                        # If we've used all targets, reset to the first one
-                        bot.observer_targets[tag] = targets[0]
-                
-                # Move to the current target if it exists
-                if bot.observer_targets.get(tag) is not None:
-                    actions.add(PathUnitToTarget(
-                        unit=observer,
-                        target=bot.observer_targets[tag],
-                        grid=air_grid,
-                        danger_distance=10
-                    ))
-        else:
-            # Mid/late game: check if we need to hunt for enemy army
-            if bot._intel_urgency > HUNT_URGENCY_THRESHOLD:
-                # Hunt mode: go find the enemy army
                 hunt_target = get_hunt_target(bot, observer)
                 actions.add(PathUnitToTarget(
                     unit=observer,
@@ -301,8 +304,14 @@ def control_primary_observer(bot, observer: Optional[Unit], main_army: Units) ->
                     grid=air_grid,
                     danger_distance=12
                 ))
+        else:
+            # Intel is fresh — station at enemy natural OL spot
+            if observer.shield_percentage < 1:
+                actions.add(KeepUnitSafe(
+                    unit=observer,
+                    grid=air_grid
+                ))
             else:
-                # Normal mode: position at enemy natural OL spot
                 ol_spot = bot.mediator.get_ol_spot_near_enemy_nat
                 if ol_spot:
                     actions.add(PathUnitToTarget(
@@ -314,7 +323,6 @@ def control_primary_observer(bot, observer: Optional[Unit], main_army: Units) ->
                     if observer.position.distance_to(ol_spot) < 1:
                         observer(AbilityId.MORPH_SURVEILLANCEMODE)
                 else:
-                    # Fallback if no overlord spot defined
                     actions.add(PathUnitToTarget(
                         unit=observer,
                         target=bot.enemy_start_locations[0],

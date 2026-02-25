@@ -11,6 +11,7 @@ from sc2.ids.unit_typeid import UnitTypeId
 from ares.consts import UnitRole
 
 from bot.utilities.intel import get_enemy_intel_quality
+from bot.constants import FRESH_INTEL_THRESHOLD, STALE_INTEL_THRESHOLD, MEMORY_EXPIRY_TIME
 from cython_extensions import cy_find_units_center_mass, cy_distance_to
 
 # Worker types to filter from combat sim
@@ -112,9 +113,9 @@ def render_combat_state_overlay(bot, main_army: Units, enemy_threat_level: int, 
 
 def _render_combat_sim_overlay(bot, main_army: Units) -> None:
     """Render combat simulator results (global and squad-level)."""
-    # Get enemy army (filter workers) - use cached enemy
+    # Get enemy army (filter workers and expired ghosts) - use cached enemy
     cached_enemy = bot.mediator.get_cached_enemy_army or []
-    combat_enemies = [u for u in cached_enemy if u.type_id not in WORKER_TYPES]
+    combat_enemies = [u for u in cached_enemy if u.type_id not in WORKER_TYPES and u.age < MEMORY_EXPIRY_TIME]
     
     # Global fight result
     try:
@@ -136,7 +137,7 @@ def _render_combat_sim_overlay(bot, main_army: Units) -> None:
     # Intel quality display
     intel = get_enemy_intel_quality(bot)
     freshness_bar = "█" * int(intel["freshness"] * 10) + "░" * (10 - int(intel["freshness"] * 10))
-    intel_status = "FRESH" if intel["freshness"] >= 0.7 else ("STALE" if intel["freshness"] >= 0.3 else "BLIND")
+    intel_status = "FRESH" if intel["freshness"] >= FRESH_INTEL_THRESHOLD else ("STALE" if intel["freshness"] >= STALE_INTEL_THRESHOLD else "BLIND")
     
     # Intel urgency indicator (shows response thresholds)
     urgency = getattr(bot, '_intel_urgency', 0.0)
@@ -149,8 +150,10 @@ def _render_combat_sim_overlay(bot, main_army: Units) -> None:
     elif urgency >= 0.3:
         urgency_status = " →PRIORITY"
     
+    expired = intel.get('expired_count', 0)
+    exp_str = f" +{expired}exp" if expired else ""
     bot.client.debug_text_2d(
-        f"Intel: [{freshness_bar}] {intel_status} ({intel['visible_count']}vis/{intel['memory_count']}mem)", 
+        f"Intel: [{freshness_bar}] {intel_status} ({intel['visible_count']}vis/{intel['memory_count']}mem{exp_str})", 
         Point2((0.1, 0.30)), None, 12
     )
     bot.client.debug_text_2d(

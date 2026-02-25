@@ -2,8 +2,8 @@
 Utility functions for gathering intelligence about the enemy.
 
 Purpose: Track enemy intel quality and cannon rush detection
-Key Decisions: Use unit.age and unit.is_memory for staleness tracking
-Limitations: Ghost units expire after 30s in ARES UnitMemoryManager
+Key Decisions: Use unit.age for staleness tracking; filter expired ghosts (age >= 30s) from UnitCacheManager
+Limitations: UnitCacheManager never removes units, so we must filter by MEMORY_EXPIRY_TIME
 """
 from typing import TYPE_CHECKING
 
@@ -19,6 +19,7 @@ from bot.constants import (
     RAMP_CHOKE_RADIUS,
     MAP_CHOKE_RADIUS,
     CHOKE_GRID_WEIGHT,
+    MEMORY_EXPIRY_TIME,
     VISIBLE_AGE_THRESHOLD,
     STALENESS_WINDOW,
     STALE_INTEL_THRESHOLD,
@@ -128,84 +129,82 @@ def get_enemy_intel_quality(bot: "PiG_Bot") -> dict:
     """
     Analyze the freshness of our enemy army intel.
     
-    Uses unit.age and unit.is_memory from python-sc2 to determine
-    how trustworthy our combat simulation data is.
+    Uses unit.age from python-sc2 to determine how trustworthy our
+    combat simulation data is. Filters out expired ghost units that
+    UnitCacheManager retains but UnitMemoryManager has already expired.
     
     Returns:
         dict with keys:
             - has_intel: bool - have we ever seen enemy army?
-            - avg_age: float - average age of enemy unit data (seconds)
-            - visible_count: int - units we can currently see
-            - memory_count: int - units from memory (not visible)
+            - avg_age: float - average age of active enemy unit data (seconds)
+            - visible_count: int - units we can currently see (age < 3s)
+            - memory_count: int - units from recent memory (3s-30s)
+            - expired_count: int - ghost units filtered out (age >= 30s)
             - freshness: float - 0-1 score (1 = all fresh, 0 = all stale)
     """
-    # Get enemy army excluding workers from CACHED enemy (includes memory units from ARES)
-    cached_enemy = [
+    # Get all cached enemy army units (UnitCacheManager never removes units,
+    # so this includes expired ghosts with age >> 30s)
+    all_cached = [
         u for u in bot.mediator.get_cached_enemy_army
         if u.type_id not in WORKER_TYPES
     ]
     
-    # Also check currently visible enemy units (raw observation, no memory)
-    # bot.enemy_units comes directly from game observation
-    current_visible = [
-        u for u in bot.enemy_units
-        if u.type_id not in WORKER_TYPES and not u.is_structure
-    ]
-    
-    # If we have neither cached nor current visible enemies
-    if not cached_enemy and not current_visible:
-        # If we've EVER seen enemy army before, 0 enemies is GOOD intel (we know they have nothing)
-        # Only return "no intel" if we've never seen enemy army at allP
+    # No units in cache at all
+    if not all_cached:
         if bot._enemy_army_ever_seen:
             return {
-                "has_intel": True,  # We HAVE intel: enemy has no visible army!
-                "avg_age": 0.0,     # Current observation
+                "has_intel": True,  # Enemy army destroyed or never cached
+                "avg_age": 0.0,
                 "visible_count": 0,
                 "memory_count": 0,
-                "freshness": 1.0,   # 0 enemies visible = perfectly fresh intel
+                "expired_count": 0,
+                "freshness": 1.0,
             }
-        else:
-            return {
-                "has_intel": False,  # Never seen enemy army, truly blind
-                "avg_age": float('inf'),
-                "visible_count": 0,
-                "memory_count": 0,
-                "freshness": 0.0,
-            }
-    
-    # Count visible as units we've seen recently (age < VISIBLE_AGE_THRESHOLD seconds)
-    # This is forgiving for active combat where snapshots update slightly delayed
-    # This is more reliable than is_memory which can be inconsistent
-    visible = [u for u in cached_enemy if u.age < VISIBLE_AGE_THRESHOLD]
-    memory = [u for u in cached_enemy if u.age >= VISIBLE_AGE_THRESHOLD]
-    
-    # Fallback: if cached shows no visible but we have current_visible, use that count
-    if not visible and current_visible:
-        visible = current_visible
-    
-    total_count = len(visible) + len(memory)
-    if total_count == 0:
         return {
-            "has_intel": False,
+            "has_intel": False,  # Never seen enemy army
             "avg_age": float('inf'),
             "visible_count": 0,
             "memory_count": 0,
+            "expired_count": 0,
             "freshness": 0.0,
         }
     
-    # Calculate average age of all enemy units we know about
-    all_units = cached_enemy if cached_enemy else current_visible
-    avg_age = sum(u.age for u in all_units) / len(all_units) if all_units else 0.0
+    # Filter to active units only: exclude expired ghosts (age >= MEMORY_EXPIRY_TIME)
+    # UnitMemoryManager expires at 30s but UnitCacheManager retains them indefinitely.
+    # Without this filter, expired ghosts drag the freshness average toward zero.
+    active_units = [u for u in all_cached if u.age < MEMORY_EXPIRY_TIME]
     
-    # Freshness score: 1.0 = all visible now, decays over STALENESS_WINDOW seconds
-    # (matches ARES UnitMemoryManager expiration)
-    freshness = sum(max(0, 1 - u.age / STALENESS_WINDOW) for u in all_units) / len(all_units)
+    expired_count = len(all_cached) - len(active_units)
+    
+    if not active_units:
+        # All cached units expired - we lost track of the enemy army
+        return {
+            "has_intel": True,
+            "avg_age": max(u.age for u in all_cached),
+            "visible_count": 0,
+            "memory_count": 0,
+            "expired_count": expired_count,
+            "freshness": 0.0,
+        }
+    
+    # Split active units into visible (recent) and memory (older but not expired)
+    visible = [u for u in active_units if u.age < VISIBLE_AGE_THRESHOLD]
+    memory = [u for u in active_units if u.age >= VISIBLE_AGE_THRESHOLD]
+    
+    avg_age = sum(u.age for u in active_units) / len(active_units)
+    
+    # Freshness: 1.0 = all visible now, decays linearly over STALENESS_WINDOW seconds
+    # Only active (non-expired) units contribute, preventing ghost pollution
+    freshness = sum(
+        max(0.0, 1.0 - u.age / STALENESS_WINDOW) for u in active_units
+    ) / len(active_units)
     
     return {
         "has_intel": True,
         "avg_age": avg_age,
         "visible_count": len(visible),
         "memory_count": len(memory),
+        "expired_count": expired_count,
         "freshness": freshness,
     }
 
@@ -225,8 +224,10 @@ def update_enemy_intel_tracking(bot: "PiG_Bot") -> None:
         if u.type_id not in WORKER_TYPES
     ]
     
-    # Check if any enemy army is currently visible (not memory)
-    visible_army = [u for u in enemy_army if not u.is_memory]
+    # Check if any enemy army is currently visible (age-based check;
+    # is_memory is unreliable for UnitCacheManager units since snapshots
+    # were taken when visible, so is_memory is always False for them)
+    visible_army = [u for u in enemy_army if u.age < VISIBLE_AGE_THRESHOLD]
     
     if visible_army:
         # We currently see enemy army

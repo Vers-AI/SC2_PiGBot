@@ -26,6 +26,7 @@ from bot.constants import (
     UNDER_ATTACK_RATIO_THRESHOLD,
     UNDER_ATTACK_CLEAR_VALUE,
     COMMON_UNIT_IGNORE_TYPES,
+    MEMORY_EXPIRY_TIME,
 )
 
 
@@ -608,11 +609,14 @@ def threat_detection(bot, main_army: Units) -> None:
     
     # Calculate threat ratio: (threat near bases) / (total known enemy army)
     # Filters: workers, scouts (overlords/observers), and non-combat units
+    # Filter expired ghosts (age >= 30s) from threat ratio denominator;
+    # UnitCacheManager retains units indefinitely but they expire from memory at 30s
     known_enemy = bot.mediator.get_cached_enemy_army
     known_army_value = sum(
         UNIT_DATA.get(u.type_id, {}).get('army_value', 1.0) 
         for u in known_enemy 
         if u.type_id not in WORKER_TYPES and u.type_id not in COMMON_UNIT_IGNORE_TYPES
+        and u.age < MEMORY_EXPIRY_TIME
     ) if known_enemy else 0
     threat_ratio = total_threat_value / max(known_army_value, 1.0)
     

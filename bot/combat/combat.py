@@ -50,6 +50,7 @@ from bot.constants import (
     SQUAD_NEARBY_FRIENDLY_RANGE_SQ,
     FRESH_INTEL_THRESHOLD,
     STALE_INTEL_THRESHOLD,
+    MEMORY_EXPIRY_TIME,
 )
 from bot.combat.unit_micro import (
     micro_ranged_unit,
@@ -862,10 +863,11 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
                     return bot.start_location
         # For normal mode, re-evaluate fight result after minimum duration
         else:
-            # Filter enemy units to exclude workers and structures for more conservative combat simulation
+            # Filter enemy units: exclude workers, structures, and expired ghosts
             combat_enemy_units = [
                 u for u in bot.mediator.get_cached_enemy_army
                 if u.type_id not in WORKER_TYPES and not u.is_structure
+                and u.age < MEMORY_EXPIRY_TIME
             ]
             fight_result = bot.mediator.can_win_fight(
                 own_units=main_army,
@@ -908,10 +910,11 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
             # Intel is very stale - don't initiate attack, stay defensive until we scout
             return select_defensive_anchor(bot, main_army)
         
-        # Filter enemy units to exclude workers and structures for more conservative combat simulation
+        # Filter enemy units: exclude workers, structures, and expired ghosts
         combat_enemy_units = [
             u for u in bot.mediator.get_cached_enemy_army
             if u.type_id not in WORKER_TYPES and not u.is_structure
+            and u.age < MEMORY_EXPIRY_TIME
         ]
         fight_result = bot.mediator.can_win_fight(
             own_units=main_army,

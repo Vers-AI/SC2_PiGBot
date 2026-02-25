@@ -166,6 +166,9 @@ RUSH_DISTANCE_CALIBRATION = 0.833
 """Calibration factor to match official map rush distances (36s official / 43.2s calculated = 0.833)"""
 
 # ===== INTEL QUALITY & FRESHNESS =====
+MEMORY_EXPIRY_TIME = 30.0
+"""Time (seconds) after which ARES UnitMemoryManager expires ghost units - used to filter stale cache entries"""
+
 VISIBLE_AGE_THRESHOLD = 3.0
 """Age threshold (seconds) to consider a unit 'visible' vs 'memory' (forgiving for active combat)"""
 
