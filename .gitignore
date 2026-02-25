@@ -139,4 +139,5 @@ data/*.jsonl
 data/rush_detection_log.jsonl
 
 # Private plan docs
-Plan/MindMe's Weighted Scoring System.md
+Plan/
+
