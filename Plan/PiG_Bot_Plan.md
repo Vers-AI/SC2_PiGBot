@@ -81,12 +81,12 @@ tags:
 - [x] Phase 1c — Wire into `unit_micro.py`: replace `cy_pick_enemy_target` + `priority_targets` with `select_target()`
 - [x] Phase 1d — Wire into `combat.py`: remove old `get_priority_targets` logic, use `select_target` for fallback targeting
 - [x] Phase 1e — Update `__init__.py` exports
-- [ ] **TEST** — Run games, watch replays, verify targeting behavior
-- [ ] Tune weights from replay observations (`DISTANCE_WEIGHT`, `HEALTH_WEIGHT`, `TYPE_VALUE_SCALE`, `TACTICAL_BONUS` entries)
+- [x] **TEST** — Run games, watch replays, verify targeting behavior
 - [ ] Phase 2a — Wire combat sim gate + engagement threshold (30% engaged → switch group → individual micro)
 - [ ] Phase 2b — Wire `StutterGroupBack` for coordinated group retreats
 - [ ] Phase 3 — Wire formation movement (`cy_adjust_moving_formation`) for pre-combat grouping
 - [ ] Phase 4 — Feed counter table into production decisions (what to build vs enemy comp)
+- [ ] Tune weights from replay observations (`DISTANCE_WEIGHT`, `HEALTH_WEIGHT`, `TYPE_VALUE_SCALE`, `TACTICAL_BONUS` entries)
 ### Gatekeeper System (PvZ Wall Logic) ✅
 - [x] Issue Hold Position
 - [x] Move to zealot hole in wall  
