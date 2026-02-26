@@ -14,6 +14,7 @@ from ares.consts import UnitRole, UnitTreeQueryType, WORKER_TYPES
 from bot.combat import attack_target
 from bot.constants import FRESH_INTEL_THRESHOLD, MEMORY_EXPIRY_TIME, VISIBLE_AGE_THRESHOLD
 from bot.utilities.intel import get_enemy_intel_quality
+from cython_extensions import cy_distance_to
 
 # Staleness thresholds for hunt mode
 HUNT_URGENCY_THRESHOLD = 0.5  # When _intel_urgency exceeds this, start hunting
@@ -202,141 +203,197 @@ def control_observers(bot, all_observers: Units, main_army: Units) -> None:
     """
     Coordinate multiple observers with different roles, adapting to the game situation.
     
+    Waterfall priority: army (always filled) → primary (station/siege) → patrol.
+    Hunt mode picks the closest observer to the enemy base (preferring non-army).
+    
     Parameters:
     - bot: The bot instance
-    - all_observers: All observer units
+    - all_observers: All observer units (includes OBSERVERSIEGEMODE)
     - main_army: The main army units
     """
-    # Quick check if we have any observers
     if not all_observers:
         return
     
-    # Get observers by their assignment
-    primary_observer = None
-    if bot.observer_assignments.get("primary"):
-        primary_candidates = all_observers.filter(lambda o: o.tag == bot.observer_assignments.get("primary"))
-        primary_observer = primary_candidates.first if primary_candidates else None
+    # --- Phase 1: Assignment validation (army → primary → patrol) ---
+    live_tags = {o.tag for o in all_observers}
+    if bot.observer_assignments["army"] and bot.observer_assignments["army"] not in live_tags:
+        bot.observer_assignments["army"] = None
+    if bot.observer_assignments["primary"] and bot.observer_assignments["primary"] not in live_tags:
+        bot.observer_assignments["primary"] = None
+    bot.observer_assignments["patrol"] = [
+        t for t in bot.observer_assignments["patrol"] if t in live_tags
+    ]
     
-    army_observer = None
-    if bot.observer_assignments.get("army"):
-        army_candidates = all_observers.filter(lambda o: o.tag == bot.observer_assignments.get("army"))
-        army_observer = army_candidates.first if army_candidates else None
+    assigned_tags: Set[int] = set()
+    if bot.observer_assignments["army"]:
+        assigned_tags.add(bot.observer_assignments["army"])
+    if bot.observer_assignments["primary"]:
+        assigned_tags.add(bot.observer_assignments["primary"])
+    assigned_tags.update(bot.observer_assignments["patrol"])
     
-    patrol_observers = Units([], bot._game_data)
-    if bot.observer_assignments.get("patrol"):
-        patrol_observers = all_observers.filter(lambda o: o.tag in bot.observer_assignments.get("patrol", []))
+    # Auto-assign unassigned observers: army first, then primary, then patrol
+    for obs in all_observers:
+        if obs.tag in assigned_tags:
+            continue
+        if bot.observer_assignments["army"] is None:
+            bot.observer_assignments["army"] = obs.tag
+            bot.mediator.clear_role(tag=obs.tag)
+            bot.mediator.assign_role(tag=obs.tag, role=UnitRole.CONTROL_GROUP_EIGHT)
+        elif bot.observer_assignments["primary"] is None:
+            bot.observer_assignments["primary"] = obs.tag
+            bot.mediator.clear_role(tag=obs.tag)
+            bot.mediator.assign_role(tag=obs.tag, role=UnitRole.SCOUTING)
+        else:
+            bot.observer_assignments["patrol"].append(obs.tag)
+            bot.mediator.clear_role(tag=obs.tag)
+            bot.mediator.assign_role(tag=obs.tag, role=UnitRole.CONTROL_GROUP_NINE)
+        assigned_tags.add(obs.tag)
     
-    # Control each type of observer
-    control_primary_observer(bot, primary_observer, main_army)
-    control_army_observer(bot, army_observer, main_army)
-    control_patrol_observers(bot, patrol_observers)
+    # --- Phase 2: Hunt mode resolution ---
+    if bot._intel_urgency > HUNT_URGENCY_THRESHOLD:
+        bot._observer_hunt_mode = True
+    if bot._observer_hunt_mode:
+        intel = get_enemy_intel_quality(bot)
+        if intel["freshness"] >= FRESH_INTEL_THRESHOLD:
+            bot._observer_hunt_mode = False
+    
+    hunter_tag: Optional[int] = None
+    if bot._observer_hunt_mode:
+        enemy_pos = bot.enemy_start_locations[0]
+        army_tag = bot.observer_assignments["army"]
+        
+        if len(all_observers) == 1:
+            # Only one observer — it hunts (also the army observer)
+            hunter_tag = all_observers.first.tag
+        else:
+            # Prefer closest non-army observer to enemy base
+            non_army = [o for o in all_observers if o.tag != army_tag]
+            if non_army:
+                hunter_tag = min(non_army, key=lambda o: o.distance_to(enemy_pos)).tag
+            else:
+                hunter_tag = min(all_observers, key=lambda o: o.distance_to(enemy_pos)).tag
+    
+    bot._hunting_observer_tag = hunter_tag
+    
+    # --- Phase 3: Per-observer behavior dispatch ---
+    for obs in all_observers:
+        if obs.tag == hunter_tag:
+            _control_hunting_observer(bot, obs)
+        elif obs.tag == bot.observer_assignments["army"]:
+            control_army_observer(bot, obs, main_army)
+        elif obs.tag == bot.observer_assignments["primary"]:
+            control_primary_observer(bot, obs)
+        elif obs.tag in bot.observer_assignments["patrol"]:
+            _control_single_patrol_observer(bot, obs)
+        else:
+            # Safety fallback: follow army
+            control_army_observer(bot, obs, main_army)
 
 
-def control_primary_observer(bot, observer: Optional[Unit], main_army: Units) -> None:
+def control_primary_observer(bot, observer: Optional[Unit]) -> None:
     """
-    Control the primary observer with adaptive behavior based on game state.
+    Control the primary observer: station at enemy natural OL spot and siege when arrived.
+    Hunt and army-follow are handled by control_observers dispatch.
     
     Parameters:
     - bot: The bot instance
     - observer: The primary observer unit
-    - main_army: The main army units for potential following
     """
     if not observer:
         return
-        
+    
+    # If in siege mode at the station, nothing to do
+    if observer.type_id == UnitTypeId.OBSERVERSIEGEMODE:
+        return
+    
     actions = CombatManeuver()
     air_grid = bot.mediator.get_air_grid
     
-    # If we're attacking/under attack AND this is our only observer, it follows the army
-    if (bot._commenced_attack or bot._under_attack) and bot.units(UnitTypeId.OBSERVER).amount == 1:
-        # Use the army following logic with dynamic lead distance
-        if main_army:
-            target_point = attack_target(bot, main_army.center)
-            
-            # Dynamic lead distance based on threat level
-            lead_distance = 12
-            tentative_target = Point2(main_army.center.towards(target_point, lead_distance))
-            
-            try:
-                influence = air_grid[int(tentative_target.x)][int(tentative_target.y)]
-                if influence > 1:
-                    lead_distance = 6
-            except Exception:
-                lead_distance = 10
-                
-            follow_target = Point2(main_army.center.towards(target_point, lead_distance))
-            
-            actions.add(PathUnitToTarget(
-                unit=observer,
-                target=follow_target,
-                grid=air_grid
-            ))
-        else:
-            actions.add(PathUnitToTarget(
-                unit=observer,
-                target=bot.start_location,
-                grid=air_grid,
-                danger_distance=15
-            ))
-    # Otherwise, hunt or station based on intel freshness (all game states)
+    if observer.shield_percentage < 1:
+        actions.add(KeepUnitSafe(unit=observer, grid=air_grid))
     else:
-        # Hysteresis: enter hunt mode at high urgency, only exit when
-        # freshness is confirmed good enough for the combat sim
-        if bot._intel_urgency > HUNT_URGENCY_THRESHOLD:
-            bot._observer_hunt_mode = True
-        if bot._observer_hunt_mode:
-            intel = get_enemy_intel_quality(bot)
-            if intel["freshness"] >= FRESH_INTEL_THRESHOLD:
-                bot._observer_hunt_mode = False
-        
-        if bot._observer_hunt_mode:
-            # Hunt mode: actively seek enemy army until intel is fresh
-            if observer.shield_percentage < 1:
-                actions.add(KeepUnitSafe(
-                    unit=observer,
-                    grid=air_grid
-                ))
-            else:
-                hunt_target = get_hunt_target(bot, observer)
-                actions.add(PathUnitToTarget(
-                    unit=observer,
-                    target=hunt_target,
-                    grid=air_grid,
-                    danger_distance=12
-                ))
+        ol_spot = bot.mediator.get_ol_spot_near_enemy_nat
+        if ol_spot:
+            actions.add(PathUnitToTarget(
+                unit=observer,
+                target=ol_spot,
+                grid=air_grid,
+                danger_distance=15,
+            ))
+            if observer.position.distance_to(ol_spot) < 1:
+                observer(AbilityId.MORPH_SURVEILLANCEMODE)
         else:
-            # Intel is fresh — station at enemy natural OL spot
-            if observer.shield_percentage < 1:
-                actions.add(KeepUnitSafe(
-                    unit=observer,
-                    grid=air_grid
-                ))
-            else:
-                ol_spot = bot.mediator.get_ol_spot_near_enemy_nat
-                if ol_spot:
-                    actions.add(PathUnitToTarget(
-                        unit=observer,
-                        target=ol_spot,
-                        grid=air_grid,
-                        danger_distance=15
-                    ))
-                    if observer.position.distance_to(ol_spot) < 1:
-                        observer(AbilityId.MORPH_SURVEILLANCEMODE)
-                else:
-                    actions.add(PathUnitToTarget(
-                        unit=observer,
-                        target=bot.enemy_start_locations[0],
-                        grid=air_grid,
-                        danger_distance=15
-                    ))
+            actions.add(PathUnitToTarget(
+                unit=observer,
+                target=bot.enemy_start_locations[0],
+                grid=air_grid,
+                danger_distance=15,
+            ))
     
     bot.register_behavior(actions)
+
+
+def _control_hunting_observer(bot, observer: Unit) -> None:
+    """
+    Control an observer in hunt mode: actively seek enemy army.
+    If in siege mode, unmorph first to become mobile.
+    """
+    if observer.type_id == UnitTypeId.OBSERVERSIEGEMODE:
+        observer(AbilityId.MORPH_OBSERVERMODE)
+        return
+    
+    actions = CombatManeuver()
+    air_grid = bot.mediator.get_air_grid
+    
+    if observer.shield_percentage < 1:
+        actions.add(KeepUnitSafe(unit=observer, grid=air_grid))
+    else:
+        hunt_target = get_hunt_target(bot, observer)
+        actions.add(PathUnitToTarget(
+            unit=observer,
+            target=hunt_target,
+            grid=air_grid,
+            danger_distance=12,
+        ))
+    
+    bot.register_behavior(actions)
+
+
+def _get_forward_army_center(army: Units, target_point: Point2) -> Point2:
+    """Get the center of the forward third of army units closest to the attack target.
+    
+    When the army is spread out, using the full army center puts the observer
+    in between the front and back lines. This uses only the forward units as
+    the reference point so the observer stays ahead of the push.
+    """
+    if len(army) <= 3:
+        return army.center
+    
+    # Sort by distance to target, take the forward third (at least 3 units)
+    sorted_units = sorted(army, key=lambda u: u.distance_to(target_point))
+    forward_count = max(3, len(sorted_units) // 3)
+    forward_units = sorted_units[:forward_count]
+    
+    # Average position of forward units
+    x = sum(u.position.x for u in forward_units) / forward_count
+    y = sum(u.position.y for u in forward_units) / forward_count
+    return Point2((x, y))
+
+
+# Detection search radius around the forward army / observer
+_DETECT_SEARCH_RADIUS = 15.0
+_DETECT_OBS_RADIUS = 12.0
+_RAMP_PROXIMITY_RADIUS = 10.0  # Army must be within this of ramp bottom to trigger vision scout
 
 
 def control_army_observer(bot, observer: Optional[Unit], main_army: Units) -> None:
     """
     Control the army observer to follow and provide vision for the main army.
-    Prioritizes moving towards cloaked/burrowed enemies near the army if present.
+    
+    Behavior priority:
+    1. Flee if taking damage
+    2. Move to invisible enemy (is_cloaked or is_burrowed) near army for detection
+    3. Lead ahead of the forward army units toward the attack target
     
     Parameters:
     - bot: The bot instance
@@ -346,133 +403,138 @@ def control_army_observer(bot, observer: Optional[Unit], main_army: Units) -> No
     if not observer:
         return
     
-    actions = CombatManeuver()
-    air_grid = bot.mediator.get_air_grid
-    
-    # Keep the observer safe if it's taking damage
-    if observer.shield_percentage < 1:
-        actions.add(KeepUnitSafe(
-            unit=observer,
-            grid=air_grid
-        ))
-    elif main_army:
-        # Check for cloaked/burrowed enemies near the army that need detection
-        army_center = main_army.center
-        army_threat_radius = 15  # Range to check for enemies near army
-        
-        # Get enemies near the army
-        nearby_enemies = bot.enemy_units.closer_than(army_threat_radius, army_center)
-        
-        # Filter for enemies that are cloaked or burrowed (excluding drones and observer siege mode)
-        priority_enemies = nearby_enemies.filter(lambda u: 
-            u.is_cloaked or 
-            u.is_burrowed or
-            u.type_id in {
-                UnitTypeId.LURKERMPBURROWED,
-                UnitTypeId.ROACHBURROWED, UnitTypeId.ZERGLINGBURROWED,
-                UnitTypeId.HYDRALISKBURROWED, UnitTypeId.ULTRALISKBURROWED,
-                UnitTypeId.WIDOWMINEBURROWED, UnitTypeId.DARKTEMPLAR
-            }
-        )
-        
-        if priority_enemies:
-            # Priority: move towards the closest cloaked/burrowed enemy
-            closest_priority_enemy = priority_enemies.closest_to(army_center)
-            follow_target = closest_priority_enemy.position
-        else:
-            # Normal behavior: look ahead of the army
-            target_point = attack_target(bot, main_army.center)
-            
-            # Dynamic lead distance based on threat level
-            lead_distance = 12
-            tentative_target = Point2(main_army.center.towards(target_point, lead_distance))
-            
-            try:
-                # Grid is indexed in (x, y) order according to SC2 coordinate convention
-                influence = air_grid[int(tentative_target.x)][int(tentative_target.y)]
-                # If influence > 1 (enemy threat), shorten the lead distance to stay safer
-                if influence > 1:
-                    lead_distance = 6
-            except Exception:
-                # Fallback in case of index error or grid issue
-                lead_distance = 10
-            
-            # Final follow target ahead of army taking into account the adjusted lead distance
-            follow_target = Point2(main_army.center.towards(target_point, lead_distance))
-        
-        actions.add(PathUnitToTarget(
-            unit=observer,
-            target=follow_target,
-            grid=air_grid,
-            sense_danger=False
-        ))
-    else:
-        # No army to follow, stay near main base
-        actions.add(PathUnitToTarget(
-            unit=observer,
-            target=bot.start_location,
-            grid=air_grid,
-            danger_distance=15
-        ))
-    
-    bot.register_behavior(actions)
-
-
-def control_patrol_observers(bot, observers: Units) -> None:
-    """
-    Control additional observers to patrol key map positions.
-    
-    Parameters:
-    - bot: The bot instance
-    - observers: The patrol observer units
-    """
-    if not observers:
+    # Army observer should never be in siege mode — unmorph if promoted from
+    # a primary that was already sieged (see on_unit_destroyed promotion path).
+    if observer.type_id == UnitTypeId.OBSERVERSIEGEMODE:
+        observer(AbilityId.MORPH_OBSERVERMODE)
         return
     
     actions = CombatManeuver()
     air_grid = bot.mediator.get_air_grid
     
-    # Get overlord spots from mediator
+    if observer.shield_percentage < 1:
+        actions.add(KeepUnitSafe(unit=observer, grid=air_grid))
+    elif main_army:
+        target_point = attack_target(bot, main_army.center)
+        forward_center = _get_forward_army_center(main_army, target_point)
+        fwd_pos = forward_center
+        obs_pos = observer.position
+        
+        # Find invisible enemies near the forward army or the observer.
+        # Uses cy_distance_to for speed; checks unit state (is_cloaked/is_burrowed)
+        # rather than matching against a hardcoded type list.
+        closest_invis = None
+        closest_dist = float("inf")
+        for enemy in bot.enemy_units:
+            if not (enemy.is_cloaked or enemy.is_burrowed):
+                continue
+            d_fwd = cy_distance_to(enemy.position, fwd_pos)
+            d_obs = cy_distance_to(enemy.position, obs_pos)
+            if d_fwd > _DETECT_SEARCH_RADIUS and d_obs > _DETECT_OBS_RADIUS:
+                continue
+            if d_fwd < closest_dist:
+                closest_dist = d_fwd
+                closest_invis = enemy
+        
+        if closest_invis:
+            follow_target = closest_invis.position
+        else:
+            # Ramp vision: if the army is near the bottom of a ramp without
+            # vision at the top, send the observer up to scout before committing.
+            ramp_target = None
+            best_ramp_dist = _RAMP_PROXIMITY_RADIUS
+            for ramp in bot.game_info.map_ramps:
+                d = cy_distance_to(fwd_pos, ramp.bottom_center)
+                if d < best_ramp_dist and not bot.is_visible(ramp.top_center):
+                    best_ramp_dist = d
+                    ramp_target = ramp.top_center
+            
+            if ramp_target:
+                follow_target = Point2(ramp_target)
+            else:
+                # Lead ahead of the forward army toward the attack target
+                lead_distance = 10
+                tentative = Point2(forward_center.towards(target_point, lead_distance))
+                
+                try:
+                    influence = air_grid[int(tentative.x)][int(tentative.y)]
+                    if influence > 1:
+                        lead_distance = 5
+                except Exception:
+                    lead_distance = 8
+                
+                follow_target = Point2(forward_center.towards(target_point, lead_distance))
+        
+        # Use the air grid to route around static defense (spores, cannons, turrets).
+        # danger_distance=8 gives moderate avoidance without fleeing from the army area.
+        actions.add(PathUnitToTarget(
+            unit=observer,
+            target=follow_target,
+            grid=air_grid,
+            danger_distance=8,
+        ))
+    else:
+        actions.add(PathUnitToTarget(
+            unit=observer,
+            target=bot.start_location,
+            grid=air_grid,
+            danger_distance=15,
+        ))
+    
+    bot.register_behavior(actions)
+
+
+def _control_single_patrol_observer(bot, observer: Unit) -> None:
+    """
+    Control a single patrol observer to cycle through key map positions.
+    Called per-observer from control_observers dispatch.
+    """
+    # Patrol observer should never be in siege mode — unmorph first.
+    if observer.type_id == UnitTypeId.OBSERVERSIEGEMODE:
+        observer(AbilityId.MORPH_OBSERVERMODE)
+        return
+    
+    air_grid = bot.mediator.get_air_grid
+    
     ol_spots = bot.mediator.get_ol_spots
     if not ol_spots or len(ol_spots) == 0:
-        # Fallback to expansions if no overlord spots
         ol_spots = bot.expansion_locations_list[5:10] if len(bot.expansion_locations_list) > 5 else []
     
-    # Filter out the spot near enemy natural
+    # Filter out the spot near enemy natural (primary observer handles that)
     enemy_nat_spot = bot.mediator.get_ol_spot_near_enemy_nat
     if enemy_nat_spot and enemy_nat_spot in ol_spots:
         ol_spots.remove(enemy_nat_spot)
     
-    # If we still have valid patrol spots
-    if ol_spots:
-        for i, observer in enumerate(observers):
-            # Keep the observer safe if it's taking damage
-            if observer.shield_percentage < 1:
-                actions.add(KeepUnitSafe(
-                    unit=observer,
-                    grid=air_grid
-                ))
-            else:
-                tag = observer.tag
-                # Assign a spot if not already assigned
-                if tag not in bot.observer_targets or not bot.observer_targets[tag]:
-                    # Distribute observers evenly across spots
-                    spot_index = i % len(ol_spots)
-                    bot.observer_targets[tag] = ol_spots[spot_index]
-                
-                # If close to target, cycle to next spot
-                if observer.distance_to(bot.observer_targets[tag]) < 1:
-                    current_index = ol_spots.index(bot.observer_targets[tag]) if bot.observer_targets[tag] in ol_spots else 0
-                    next_index = (current_index + 1) % len(ol_spots)
-                    bot.observer_targets[tag] = ol_spots[next_index]
-                
-                # Move to assigned target
-                actions.add(PathUnitToTarget(
-                    unit=observer,
-                    target=bot.observer_targets[tag],
-                    grid=air_grid,
-                    danger_distance=12
-                ))
+    if not ol_spots:
+        return
+    
+    actions = CombatManeuver()
+    tag = observer.tag
+    
+    if observer.shield_percentage < 1:
+        actions.add(KeepUnitSafe(unit=observer, grid=air_grid))
+    else:
+        # Assign a spot if not already assigned
+        if tag not in bot.observer_targets or not bot.observer_targets[tag]:
+            # Pick the least-covered spot (simple: hash tag to distribute)
+            spot_index = hash(tag) % len(ol_spots)
+            bot.observer_targets[tag] = ol_spots[spot_index]
+        
+        # If close to target, cycle to next spot
+        if observer.distance_to(bot.observer_targets[tag]) < 1:
+            current_index = (
+                ol_spots.index(bot.observer_targets[tag])
+                if bot.observer_targets[tag] in ol_spots else 0
+            )
+            next_index = (current_index + 1) % len(ol_spots)
+            bot.observer_targets[tag] = ol_spots[next_index]
+        
+        actions.add(PathUnitToTarget(
+            unit=observer,
+            target=bot.observer_targets[tag],
+            grid=air_grid,
+            danger_distance=12,
+        ))
     
     bot.register_behavior(actions)
 

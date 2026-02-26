@@ -668,6 +668,80 @@ def render_target_scoring_debug(bot, main_army: Units) -> None:
         )
 
 
+def render_observer_debug(bot) -> None:
+    """Render 3D labels on each observer showing role and current mode.
+    
+    Uses obs.position3d for label height so labels float near flying observers.
+    Also renders a 2D summary line with assignment status and hunt mode.
+    """
+    if not bot.debug:
+        return
+    
+    observers = bot.units.filter(
+        lambda u: u.type_id in {UnitTypeId.OBSERVER, UnitTypeId.OBSERVERSIEGEMODE}
+    )
+    if not observers:
+        return
+    
+    assignments = bot.observer_assignments
+    hunt_mode = getattr(bot, '_observer_hunt_mode', False)
+    urgency = getattr(bot, '_intel_urgency', 0.0)
+    hunter_tag = getattr(bot, '_hunting_observer_tag', None)
+    
+    for obs in observers:
+        tag = obs.tag
+        is_siege = obs.type_id == UnitTypeId.OBSERVERSIEGEMODE
+        target_pos = None  # For drawing line to target
+        
+        # Hunting override takes priority over role label
+        if tag == hunter_tag:
+            label, color = "HUNT", (255, 165, 0)
+        elif tag == assignments.get("army"):
+            label, color = "ARMY", (0, 200, 255)
+        elif tag == assignments.get("primary"):
+            if is_siege:
+                label, color = "SIEGE", (100, 100, 255)
+            else:
+                label, color = "STATION", (0, 255, 0)
+        elif tag in assignments.get("patrol", []):
+            target_pos = bot.observer_targets.get(tag)
+            dist = f" D:{obs.distance_to(target_pos):.0f}" if target_pos else ""
+            label, color = f"PATROL{dist}", (200, 200, 0)
+        else:
+            label, color = "UNASSIGNED", (255, 0, 0)
+        
+        # Use actual 3D position so label appears near the flying observer
+        pos3d = obs.position3d
+        bot.client.debug_text_world(
+            label,
+            Point3((pos3d.x, pos3d.y, pos3d.z + 1.0)),
+            color=color,
+            size=14,
+        )
+        
+        # Draw line from observer to its target if we have one
+        if target_pos:
+            target_z = bot.get_terrain_z_height(target_pos)
+            bot.client.debug_line_out(
+                Point3((pos3d.x, pos3d.y, pos3d.z)),
+                Point3((target_pos.x, target_pos.y, target_z + 1.0)),
+                color=Point3(color),
+            )
+    
+    # 2D summary line
+    pri = "SIEGE" if any(
+        o.type_id == UnitTypeId.OBSERVERSIEGEMODE and o.tag == assignments.get("primary")
+        for o in observers
+    ) else ("OK" if assignments.get("primary") else "NONE")
+    army = "OK" if assignments.get("army") else "NONE"
+    patrol_count = len(assignments.get("patrol", []))
+    hunt_str = f"HUNT(closest)" if hunt_mode else "off"
+    bot.client.debug_text_2d(
+        f"Obs: ARMY:{army} PRI:{pri} PAT:{patrol_count} {hunt_str} Urg:{urgency:.2f}",
+        Point2((0.1, 0.46)), None, 12
+    )
+
+
 def log_nova_error(error: Exception) -> None:
     """
     Log NovaManager errors (always shown, not gated by debug flag).

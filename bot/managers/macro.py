@@ -410,7 +410,10 @@ def select_army_composition(bot, main_army: Units) -> dict:
 
 def _train_observers(bot) -> None:
     """Train observers to target count based on game state and matchup."""
-    observer_count = bot.units(UnitTypeId.OBSERVER).amount
+    observer_count = (
+        bot.units(UnitTypeId.OBSERVER).amount
+        + bot.units(UnitTypeId.OBSERVERSIEGEMODE).amount
+    )
     if bot.already_pending(UnitTypeId.OBSERVER) or not bot.can_afford(UnitTypeId.OBSERVER):
         return
 

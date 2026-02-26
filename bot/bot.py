@@ -132,6 +132,7 @@ class PiG_Bot(AresBot):
         self._intel_urgency = 0.0
         self._worker_scout_sent_this_stale_period = False  # Prevents spamming worker scouts
         self._observer_hunt_mode = False  # Sticky flag: stays True until freshness >= FRESH_INTEL_THRESHOLD
+        self._hunting_observer_tag = None  # Tag of observer currently hunting (set per-frame)
 
 
 
@@ -340,7 +341,9 @@ class PiG_Bot(AresBot):
 
         # Scouting actions
         from bot.managers.scouting import control_observers, control_worker_scout
-        observers = self.units(UnitTypeId.OBSERVER)
+        observers = self.units.filter(
+            lambda u: u.type_id in {UnitTypeId.OBSERVER, UnitTypeId.OBSERVERSIEGEMODE}
+        )
         control_observers(self, observers, main_army)
         control_worker_scout(self)  # Early game worker scout when intel is stale
 
@@ -396,15 +399,13 @@ class PiG_Bot(AresBot):
             return
 
         if unit.type_id == UnitTypeId.OBSERVER:
-            # First Observer - primary scout (enemy natural in mid-game)
-            if self.observer_assignments["primary"] is None:
-                self.observer_assignments["primary"] = unit.tag
-                self.mediator.assign_role(tag=unit.tag, role=UnitRole.SCOUTING)
-            # Second Observer - army follower
-            elif self.observer_assignments["army"] is None:
+            # Waterfall: army (highest priority) → primary → patrol
+            if self.observer_assignments["army"] is None:
                 self.observer_assignments["army"] = unit.tag
                 self.mediator.assign_role(tag=unit.tag, role=UnitRole.CONTROL_GROUP_EIGHT)
-            # Additional Observers - patrol key map positions
+            elif self.observer_assignments["primary"] is None:
+                self.observer_assignments["primary"] = unit.tag
+                self.mediator.assign_role(tag=unit.tag, role=UnitRole.SCOUTING)
             else:
                 self.observer_assignments["patrol"].append(unit.tag)
                 self.mediator.assign_role(tag=unit.tag, role=UnitRole.CONTROL_GROUP_NINE)
@@ -429,26 +430,40 @@ class PiG_Bot(AresBot):
         """Track when units get destroyed."""
         await super(PiG_Bot, self).on_unit_destroyed(unit_tag)
         
-        # Handle observer reassignment if destroyed
-        if unit_tag == self.observer_assignments.get("primary"):
-            self.observer_assignments["primary"] = None
-            # Try to promote a patrol observer if available
-            if self.observer_assignments["patrol"]:
-                self.observer_assignments["primary"] = self.observer_assignments["patrol"].pop(0)
-                # Update the role if the unit still exists
-                if self.observer_assignments["primary"] in [unit.tag for unit in self.units]:
-                    self.mediator.clear_role(tag=self.observer_assignments["primary"])
-                    self.mediator.assign_role(tag=self.observer_assignments["primary"], role=UnitRole.SCOUTING)
-        
-        elif unit_tag == self.observer_assignments.get("army"):
+        # Handle observer reassignment if destroyed (army is highest priority)
+        if unit_tag == self.observer_assignments.get("army"):
             self.observer_assignments["army"] = None
-            # Try to promote a patrol observer if available
+            # Promote primary → army, then backfill primary from patrol
+            if self.observer_assignments["primary"]:
+                promoted = self.observer_assignments["primary"]
+                self.observer_assignments["army"] = promoted
+                self.observer_assignments["primary"] = None
+                if promoted in {u.tag for u in self.units}:
+                    self.mediator.clear_role(tag=promoted)
+                    self.mediator.assign_role(tag=promoted, role=UnitRole.CONTROL_GROUP_EIGHT)
+                # Backfill primary from patrol
+                if self.observer_assignments["patrol"]:
+                    backfill = self.observer_assignments["patrol"].pop(0)
+                    self.observer_assignments["primary"] = backfill
+                    if backfill in {u.tag for u in self.units}:
+                        self.mediator.clear_role(tag=backfill)
+                        self.mediator.assign_role(tag=backfill, role=UnitRole.SCOUTING)
+            elif self.observer_assignments["patrol"]:
+                promoted = self.observer_assignments["patrol"].pop(0)
+                self.observer_assignments["army"] = promoted
+                if promoted in {u.tag for u in self.units}:
+                    self.mediator.clear_role(tag=promoted)
+                    self.mediator.assign_role(tag=promoted, role=UnitRole.CONTROL_GROUP_EIGHT)
+        
+        elif unit_tag == self.observer_assignments.get("primary"):
+            self.observer_assignments["primary"] = None
+            # Backfill primary from patrol
             if self.observer_assignments["patrol"]:
-                self.observer_assignments["army"] = self.observer_assignments["patrol"].pop(0)
-                # Update the role if the unit still exists
-                if self.observer_assignments["army"] in [unit.tag for unit in self.units]:
-                    self.mediator.clear_role(tag=self.observer_assignments["army"])
-                    self.mediator.assign_role(tag=self.observer_assignments["army"], role=UnitRole.CONTROL_GROUP_EIGHT)
+                promoted = self.observer_assignments["patrol"].pop(0)
+                self.observer_assignments["primary"] = promoted
+                if promoted in {u.tag for u in self.units}:
+                    self.mediator.clear_role(tag=promoted)
+                    self.mediator.assign_role(tag=promoted, role=UnitRole.SCOUTING)
         
         elif unit_tag in self.observer_assignments.get("patrol", []):
             self.observer_assignments["patrol"].remove(unit_tag)

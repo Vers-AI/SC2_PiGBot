@@ -65,6 +65,7 @@ from bot.utilities.debug import (
     render_nova_labels,
     render_base_defender_debug,
     render_target_scoring_debug,
+    render_observer_debug,
     log_nova_error,
     render_formation_debug,
 )
@@ -819,6 +820,7 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
     render_disruptor_labels(bot)
     render_nova_labels(bot, getattr(bot, 'nova_manager', None))
     render_base_defender_debug(bot)
+    render_observer_debug(bot)
 
     # Siege tank special case: Combat simulator underestimates siege tanks due to splash damage
     # and positional advantage, so require overwhelming force before engaging them
