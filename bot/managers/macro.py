@@ -26,13 +26,22 @@ from bot.combat.target_scoring import COUNTER_TABLE
 from bot.constants import (
     MEMORY_EXPIRY_TIME,
     STALE_INTEL_THRESHOLD,
+    RESOURCE_PRESSURE_MAX_NUDGE,
+    RESOURCE_IMBALANCE_RATIO,
+    FREEFLOW_INCOME_RATIO_THRESHOLD,
 )
+from ares.dicts.cost_dict import COST_DICT
 
 
 def get_freeflow_mode(bot) -> bool:
     """
-    Dynamic freeflow calculation based on current economy state and spending efficiency.
-    Freeflow mode ignores army composition proportions and spends resources freely.
+    Freeflow calculation: detects when SpawnController should `continue` past
+    unaffordable units instead of `break`ing the loop.
+    
+    Uses a layered approach:
+      1. Early-game pressure checks (one base, PvP)
+      2. Bank-imbalance checks (always active, no PM dependency)
+      3. Income-aware checks (when PerformanceMonitor data is available)
     
     Args:
         bot: The bot instance
@@ -40,27 +49,44 @@ def get_freeflow_mode(bot) -> bool:
     Returns:
         bool: True if should use freeflow mode
     """
-    # Both resources high - spend freely
-    if bot.minerals > 500 and bot.vespene > 500:
+    minerals = bot.minerals
+    vespene = bot.vespene
+    
+    # --- Early game pressure ---
+    if len(bot.townhalls) == 1 and minerals >= 280 and vespene >= 105:
         return True
     
-    # High minerals, low gas imbalance
-    if bot.minerals > 800 and bot.vespene < 200:
-        return True
-    
-    # One base with decent bank - apply pressure
-    if len(bot.townhalls) == 1 and bot.minerals >= 280 and bot.vespene >= 105:
-        return True
-    
-    # PvP special case - one base with immortal production
-    if (bot.enemy_race == Race.Protoss 
-        and len(bot.townhalls) <= 1 
+    if (bot.enemy_race == Race.Protoss
+        and len(bot.townhalls) <= 1
         and bot.unit_pending(UnitTypeId.IMMORTAL)):
         return True
     
-    # SQ-based trigger: low spending quotient means we're banking too much
-    if hasattr(bot, 'performance_monitor') and bot.performance_monitor.should_trigger_freeflow(bot):
+    # --- Bank-imbalance checks (always active, catches resource skew) ---
+    # Both resources high — just spend
+    if minerals > 500 and vespene > 500:
         return True
+    
+    # Significant bank with clear imbalance — one resource is 3x+ the other
+    # and the dominant resource exceeds 400 (enough that we should be spending it)
+    if minerals > 400 and minerals > 3 * max(vespene, 1):
+        return True
+    if vespene > 400 and vespene > 3 * max(minerals, 1):
+        return True
+    
+    # --- Income-aware checks (more precise, needs PM data) ---
+    pm = getattr(bot, 'performance_monitor', None)
+    if pm and pm.tracking_enabled and pm.samples_taken >= 5:
+        income_min = pm.avg_income_minerals
+        income_gas = pm.avg_income_vespene
+        
+        # Severe income imbalance: one resource accumulates faster than we can
+        # spend it. Trigger freeflow to keep production flowing with whatever
+        # resources we DO have. No bank threshold — the imbalance itself is
+        # the signal, and our Layer 1 priority reorder handles what gets built.
+        if income_gas > 0 and income_min / (income_gas + 1) > FREEFLOW_INCOME_RATIO_THRESHOLD:
+            return True
+        if income_min > 0 and income_gas / (income_min + 1) > FREEFLOW_INCOME_RATIO_THRESHOLD:
+            return True
     
     # Normal proportional production
     return False
@@ -273,6 +299,156 @@ def nudge_proportions(
         for info in items:
             info["proportion"] = round(info["proportion"] / total, 4)
         # Force exact 1.0 sum (ARES SpawnController asserts isclose to 1.0)
+        rounding_error = 1.0 - sum(v["proportion"] for v in items)
+        items[-1]["proportion"] = round(items[-1]["proportion"] + rounding_error, 4)
+    
+    return nudged
+
+
+def _get_gas_ratio(unit_type: UnitTypeId) -> float:
+    """Get the gas fraction of a unit's total cost using ARES COST_DICT.
+    
+    Returns 0.0 for mineral-only units, 1.0 for gas-only units,
+    ~0.5 for balanced cost units. Uses dynamic lookup — no hardcoded costs.
+    
+    Perf note: dict lookup, called once per unit type per macro cycle.
+    """
+    cost = COST_DICT.get(unit_type)
+    if cost is None:
+        return 0.5  # Unknown unit, assume balanced
+    total = cost.minerals + cost.vespene
+    if total == 0:
+        return 0.0
+    return cost.vespene / total
+
+
+def reorder_priorities_by_resources(composition: dict, bot) -> dict:
+    """Layer 1: Reorder unit priorities based on current resource balance.
+    
+    When mineral-rich/gas-poor: low-gas units (Zealots) get priority 0.
+    When gas-rich/mineral-poor: high-gas units (HT, Disruptor) get priority 0.
+    When balanced: return composition unchanged.
+    
+    This directly addresses the SpawnController break-on-unaffordable problem:
+    by putting affordable units first in priority order, the controller builds
+    them before hitting the unaffordable gas-heavy unit and breaking.
+    
+    The composition dict is never mutated — returns a new dict.
+    
+    Perf note: O(k log k) sort where k = unit types in comp (~5). Negligible.
+    
+    Args:
+        composition: Army composition dict {UnitTypeId: {"proportion": ..., "priority": ...}}
+        bot: Bot instance for resource access
+        
+    Returns:
+        New composition dict with reordered priorities (proportions unchanged)
+    """
+    minerals = bot.minerals
+    vespene = bot.vespene
+    
+    # Detect imbalance direction
+    mineral_rich = minerals > RESOURCE_IMBALANCE_RATIO * max(vespene, 1)
+    gas_rich = vespene > RESOURCE_IMBALANCE_RATIO * max(minerals, 1)
+    
+    if not mineral_rich and not gas_rich:
+        return composition  # Balanced — keep original priorities
+    
+    # Sort unit types by gas_ratio: ascending if mineral-rich (cheap-gas first),
+    # descending if gas-rich (expensive-gas first)
+    unit_types = list(composition.keys())
+    unit_types.sort(
+        key=lambda ut: _get_gas_ratio(ut),
+        reverse=gas_rich,
+    )
+    
+    # Assign new priorities: 0 = highest (first in sorted order)
+    reordered: dict = {}
+    for new_priority, unit_type in enumerate(unit_types):
+        info = composition[unit_type]
+        reordered[unit_type] = {
+            "proportion": info["proportion"],
+            "priority": new_priority,
+        }
+    
+    return reordered
+
+
+def resource_pressure_nudge(composition: dict, bot) -> dict:
+    """Layer 2: Shift proportions toward units whose cost matches available resources.
+    
+    When gas-starved (minerals >> gas): boost low-gas-ratio units, reduce high-gas ones.
+    When mineral-starved (gas >> minerals): boost high-gas-ratio units, reduce low-gas ones.
+    
+    Chained after counter-table nudge_proportions() — both nudges compose additively.
+    Max shift ±RESOURCE_PRESSURE_MAX_NUDGE (15%), clamped to PRODUCTION_MIN_PROPORTION floor,
+    re-normalized to 1.0.
+    
+    Uses COST_DICT for dynamic gas-ratio lookup — no hardcoded costs.
+    
+    Perf note: O(k) where k = unit types in comp (~5). Negligible.
+    
+    Args:
+        composition: Army composition dict (already counter-nudged)
+        bot: Bot instance for resource access
+        
+    Returns:
+        New composition dict with resource-pressure-adjusted proportions
+    """
+    minerals = bot.minerals
+    vespene = bot.vespene
+    
+    # Detect imbalance
+    gas_starved = minerals > RESOURCE_IMBALANCE_RATIO * max(vespene, 1)
+    mineral_starved = vespene > RESOURCE_IMBALANCE_RATIO * max(minerals, 1)
+    
+    if not gas_starved and not mineral_starved:
+        return composition  # Balanced — no pressure nudge needed
+    
+    # Compute gas ratios for all unit types in composition
+    gas_ratios: dict[UnitTypeId, float] = {}
+    for unit_type in composition:
+        gas_ratios[unit_type] = _get_gas_ratio(unit_type)
+    
+    if not gas_ratios:
+        return composition
+    
+    # Normalize gas ratios to [-1, +1] range for nudge direction
+    ratios = list(gas_ratios.values())
+    max_r, min_r = max(ratios), min(ratios)
+    ratio_range = max_r - min_r
+    
+    if ratio_range < 0.05:
+        return composition  # All units cost roughly the same — no nudge
+    
+    mid_r = (max_r + min_r) / 2.0
+    
+    # Build nudge per unit type
+    nudged: dict = {}
+    for unit_type, info in composition.items():
+        gas_r = gas_ratios[unit_type]
+        normalized = (gas_r - mid_r) / (ratio_range / 2.0)  # -1 to +1
+        
+        if gas_starved:
+            # Boost low-gas units (negative normalized), penalize high-gas
+            nudge = -normalized * RESOURCE_PRESSURE_MAX_NUDGE
+        else:
+            # mineral_starved: Boost high-gas units, penalize low-gas
+            nudge = normalized * RESOURCE_PRESSURE_MAX_NUDGE
+        
+        new_proportion = info["proportion"] + nudge
+        new_proportion = max(new_proportion, PRODUCTION_MIN_PROPORTION)
+        nudged[unit_type] = {
+            "proportion": new_proportion,
+            "priority": info["priority"],
+        }
+    
+    # Re-normalize to 1.0
+    total = sum(v["proportion"] for v in nudged.values())
+    if total > 0:
+        items = list(nudged.values())
+        for info in items:
+            info["proportion"] = round(info["proportion"] / total, 4)
         rounding_error = 1.0 - sum(v["proportion"] for v in items)
         items[-1]["proportion"] = round(items[-1]["proportion"] + rounding_error, 4)
     
@@ -551,21 +727,35 @@ def select_army_composition(bot, main_army: Units) -> dict:
         if archon_percentage >= threshold:
             selected_composition = army_1
     
-    # Production nudging: adjust proportions based on enemy composition
-    # Only nudge if we have enough intel to trust the data
+    # === Nudge pipeline: counter-table → resource-pressure → priority reorder ===
+    
+    # Step 1: Counter-table nudge (only if intel is fresh enough)
     intel = get_enemy_intel_quality(bot)
     if intel["has_intel"] and intel["freshness"] > STALE_INTEL_THRESHOLD:
         enemy_units = _get_enemy_combat_units(bot)
-        nudged = nudge_proportions(selected_composition, enemy_units)
-        # Cache for debug overlay
-        bot._last_base_comp = selected_composition
-        bot._last_nudged_comp = nudged
-        return nudged
+        comp = nudge_proportions(selected_composition, enemy_units)
+    else:
+        comp = selected_composition
     
-    # No nudging — intel too stale or absent
+    # Step 2: Resource-pressure nudge (shifts proportions toward affordable units)
+    comp = resource_pressure_nudge(comp, bot)
+    
+    # Step 3: Priority reorder (puts affordable unit types first in SpawnController loop)
+    comp = reorder_priorities_by_resources(comp, bot)
+    
+    # Cache for debug overlay
     bot._last_base_comp = selected_composition
-    bot._last_nudged_comp = selected_composition
-    return selected_composition
+    bot._last_nudged_comp = comp
+    # Store resource pressure state for debug display
+    minerals, vespene = bot.minerals, bot.vespene
+    if minerals > RESOURCE_IMBALANCE_RATIO * max(vespene, 1):
+        bot._resource_pressure = "GAS_STARVED"
+    elif vespene > RESOURCE_IMBALANCE_RATIO * max(minerals, 1):
+        bot._resource_pressure = "MIN_STARVED"
+    else:
+        bot._resource_pressure = "BALANCED"
+    
+    return comp
 
 
 def _train_observers(bot) -> None:
@@ -645,8 +835,10 @@ async def handle_macro(
                 facility.train(UnitTypeId.WARPPRISM)
                 break
     
-    # Scale gateways to desired count (3→5→8) - only in moderate+ economy
-    if economy_state in ("moderate", "full"):
+    # Scale gateways to desired count (3→5→8)
+    # Allow in reduced+ economy so production capacity ramps before the moderate transition,
+    # preventing a burst of 2+ gateways when economy recovers
+    if economy_state in ("reduced", "moderate", "full"):
         desired_gates = get_desired_gateway_count(bot)
         current_gates = (bot.structures(UnitTypeId.GATEWAY).amount + 
                          bot.structures(UnitTypeId.WARPGATE).amount + 
@@ -654,8 +846,9 @@ async def handle_macro(
         
         if current_gates < desired_gates and bot.can_afford(UnitTypeId.GATEWAY):
             bot.register_behavior(BuildStructure(production_location, UnitTypeId.GATEWAY))
-        
-        # Scale forges to desired count (0→1→2)
+    
+    # Scale forges to desired count (0→1→2) - moderate+ only (lower priority than gates)
+    if economy_state in ("moderate", "full"):
         desired_forges = get_desired_forge_count(bot)
         current_forges = (bot.structures(UnitTypeId.FORGE).amount + 
                          bot.already_pending(UnitTypeId.FORGE))
@@ -678,9 +871,16 @@ async def handle_macro(
         spawn_target = warp_prism[0].position if warp_prism else spawn_location
         spawn_freeflow = True if bot._used_cheese_response else freeflow
         
-        # Skip spawning if saving for expansion during reduced economy (when safe)
-        saving_for_expansion = (not bot._under_attack and economy_state == "reduced" and bot.minerals < 450)
-        if not saving_for_expansion:
+        # During reduced economy, use freeflow mode so cheap affordable units
+        # still get built (Layer 1 priority reorder puts them first).
+        # Only fully skip spawning if we genuinely need to save for an expansion
+        # that isn't already building.
+        expansion_pending = bot.already_pending(UnitTypeId.NEXUS) > 0
+        if economy_state == "reduced" and not bot._under_attack and bot.minerals < 350 and not expansion_pending:
+            # Genuinely tight and need to save for expansion — still produce in freeflow
+            # so mineral-only units (Zealots) keep flowing via priority reordering
+            macro_plan.add(SpawnController(army_composition, spawn_target=spawn_target, freeflow_mode=True))
+        else:
             macro_plan.add(SpawnController(army_composition, spawn_target=spawn_target, freeflow_mode=spawn_freeflow))
         
         # Expansion logic: moderate+ gets full expansion, reduced gets safety net to 2 bases

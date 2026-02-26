@@ -119,25 +119,36 @@ _UNIT_SHORT_NAMES: dict[UnitTypeId, str] = {
 
 
 def _render_production_nudge_overlay(bot) -> None:
-    """Render production nudging debug: base vs nudged proportions per unit type."""
+    """Render production nudging debug: base vs nudged proportions, resource pressure, priorities."""
     base = getattr(bot, '_last_base_comp', {})
     nudged = getattr(bot, '_last_nudged_comp', {})
     if not base:
         return
     
+    # Show proportions with deltas, sorted by final priority
+    sorted_types = sorted(
+        nudged.keys() if nudged else base.keys(),
+        key=lambda ut: (nudged or base).get(ut, {}).get("priority", 99),
+    )
     parts = []
-    for unit_type in base:
+    for unit_type in sorted_types:
         name = _UNIT_SHORT_NAMES.get(unit_type, unit_type.name[:3])
-        base_pct = base[unit_type]["proportion"]
-        nudged_pct = nudged.get(unit_type, base[unit_type])["proportion"] if nudged else base_pct
+        base_pct = base.get(unit_type, {}).get("proportion", 0)
+        nudged_info = nudged.get(unit_type, base.get(unit_type, {}))
+        nudged_pct = nudged_info.get("proportion", base_pct) if nudged else base_pct
+        pri = nudged_info.get("priority", "?")
         delta = nudged_pct - base_pct
         if abs(delta) > 0.005:
             arrow = "+" if delta > 0 else ""
-            parts.append(f"{name} {base_pct:.0%}->{nudged_pct:.0%}({arrow}{delta:.0%})")
+            parts.append(f"{name}[{pri}] {base_pct:.0%}->{nudged_pct:.0%}({arrow}{delta:.0%})")
         else:
-            parts.append(f"{name} {nudged_pct:.0%}")
+            parts.append(f"{name}[{pri}] {nudged_pct:.0%}")
     
-    label = "Comp: " + " ".join(parts)
+    # Resource pressure tag
+    pressure = getattr(bot, '_resource_pressure', 'BALANCED')
+    pressure_tag = f" [{pressure}]" if pressure != "BALANCED" else ""
+    
+    label = f"Comp{pressure_tag}: " + " ".join(parts)
     bot.client.debug_text_2d(label, Point2((0.1, 0.30)), None, 12)
 
 

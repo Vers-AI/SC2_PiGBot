@@ -196,3 +196,16 @@ MAP_CHOKE_RADIUS = 3.5
 
 CHOKE_GRID_WEIGHT = 10.0
 """Weight value to mark choke zones in grid (>1.0 indicates choke area)"""
+
+# ===== RESOURCE-AWARE PRODUCTION =====
+RESOURCE_PRESSURE_MAX_NUDGE = 0.15
+"""Maximum proportion shift per unit type from resource pressure (±15%). Larger than counter-table nudge since resource starvation is more urgent."""
+
+RESOURCE_IMBALANCE_RATIO = 2.0
+"""Mineral:gas (or gas:mineral) ratio threshold to trigger resource-pressure nudging."""
+
+FREEFLOW_INCOME_RATIO_THRESHOLD = 3.0
+"""Income ratio (minerals/gas or gas/minerals) threshold for income-aware freeflow."""
+
+FREEFLOW_BANK_THRESHOLD = 800
+"""Resource bank threshold for triggering freeflow when spending is inefficient."""
