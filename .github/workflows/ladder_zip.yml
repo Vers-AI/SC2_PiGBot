@@ -9,8 +9,6 @@ jobs:
       # check-out repo
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
       - name: Checkout submodules
         run: git submodule update --init --recursive
       # install poetry
