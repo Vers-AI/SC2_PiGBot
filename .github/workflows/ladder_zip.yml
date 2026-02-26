@@ -10,9 +10,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
-      - name: Checkout submodules
-        run: git submodule update --init --recursive
+          submodules: recursive
       # install poetry
       - name: Install poetry
         run: pipx install poetry
