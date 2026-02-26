@@ -112,40 +112,58 @@ class PerformanceMonitor:
         Get current Spending Quotient for real-time decision-making.
         Uses COMBINED income and unspent resources (minerals + gas together).
         
+        Note: Combined SQ with EMA values gives higher numbers than the
+        game-averaged SQ on Liquipedia (typically 100-240 vs 50-100) because
+        our EMA starts mid-game when income is already high.
+        
         Returns:
-            Current SQ score
+            Current combined SQ score
         """
         combined_income = self.avg_income_minerals + self.avg_income_vespene
         combined_unspent = self.avg_unspent_minerals + self.avg_unspent_vespene
         return self._calculate_sq(combined_income, combined_unspent)
     
-    def is_spending_efficiently(self, threshold: float = 70.0) -> bool:
+    def get_mineral_sq(self) -> float:
+        """Per-resource SQ for minerals only. More useful for detecting
+        mineral-specific banking than combined SQ."""
+        return self._calculate_sq(self.avg_income_minerals, self.avg_unspent_minerals)
+    
+    def get_gas_sq(self) -> float:
+        """Per-resource SQ for gas only. More useful for detecting
+        gas-specific banking than combined SQ."""
+        return self._calculate_sq(self.avg_income_vespene, self.avg_unspent_vespene)
+    
+    def is_spending_efficiently(self, threshold: float = 120.0) -> bool:
         """
         Check if bot is spending efficiently (for in-game decisions).
+        Uses per-resource SQ — both resources must be above threshold.
         
         Args:
-            threshold: Minimum SQ score to be considered "efficient"
+            threshold: Minimum per-resource SQ to be considered "efficient"
             
         Returns:
-            True if SQ is above threshold
+            True if both mineral and gas SQ are above threshold
         """
-        return self.get_current_sq() >= threshold
+        return self.get_mineral_sq() >= threshold and self.get_gas_sq() >= threshold
     
-    def is_banking_too_much(self, threshold: float = 50.0) -> bool:
+    def is_banking_too_much(self, threshold: float = 100.0) -> bool:
         """
-        Check if bot is banking too much (needs more production).
+        Check if banking too much of either resource.
+        Uses per-resource SQ — if EITHER resource SQ is below threshold,
+        we have a spending problem with that resource.
         
         Args:
-            threshold: Maximum SQ score before considered "banking"
+            threshold: Per-resource SQ below which we're banking
             
         Returns:
-            True if SQ is below threshold (banking problem)
+            True if either resource SQ is below threshold
         """
-        return self.get_current_sq() < threshold
+        return self.get_mineral_sq() < threshold or self.get_gas_sq() < threshold
     
     def get_efficiency_rating(self) -> str:
         """
         Get current efficiency rating (for debugging/logging).
+        Uses combined SQ with an adjusted scale for EMA-based values.
         
         Returns:
             Rating string (GRANDMASTER, MASTER, etc.)
@@ -172,29 +190,39 @@ class PerformanceMonitor:
         return 35 * (0.00137 * avg_income - math.log(avg_unspent)) + 240
     
     def _get_sq_rating(self, sq: float) -> str:
-        """Convert SQ score to skill rating."""
-        if sq >= 90:
+        """Convert combined SQ score to skill rating.
+        
+        Scale is shifted up from Liquipedia's game-average scale (GM=90+)
+        because our EMA starts tracking mid-game when income is already high,
+        giving combined SQ values typically 100-240.
+        """
+        if sq >= 200:
             return "GRANDMASTER"
-        elif sq >= 80:
+        elif sq >= 170:
             return "MASTER"
-        elif sq >= 70:
+        elif sq >= 140:
             return "DIAMOND"
-        elif sq >= 60:
+        elif sq >= 120:
             return "PLATINUM"
-        elif sq >= 50:
+        elif sq >= 100:
             return "GOLD"
         else:
             return "SILVER"
     
     def should_trigger_freeflow(self, bot) -> bool:
         """
-        Use SQ to detect if we should trigger freeflow mode (spending problem).
-        Only reliable when we have sufficient income data (>600/min).
+        Use per-resource SQ to detect if we should trigger freeflow mode.
+        Triggers when EITHER mineral or gas SQ drops below threshold,
+        indicating we're banking that resource and should spend freely.
+        
+        Per-resource SQ gives more useful thresholds than combined SQ:
+        - At 2-base (1800 income): banking 600+ → SQ ~100
+        - At 5-base (3600 income): banking 3000+ → SQ ~100
         
         Returns:
-            True if SQ indicates we're banking too much and should spend freely
+            True if per-resource SQ indicates spending problem
         """
-        # SQ unreliable below 600 income (per Liquipedia)
+        # SQ unreliable below 600 mineral income (per Liquipedia)
         if self.avg_income_minerals < 600 or self.samples_taken < 5:
             return False
         
@@ -203,5 +231,5 @@ class PerformanceMonitor:
         if economy not in ("moderate", "full"):
             return False
         
-        # Low SQ = banking too much = trigger freeflow
-        return self.get_current_sq() < 50
+        # Per-resource SQ: if either resource is being banked, spend freely
+        return self.get_mineral_sq() < 100 or self.get_gas_sq() < 100
