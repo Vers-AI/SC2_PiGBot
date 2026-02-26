@@ -21,6 +21,12 @@ from ares.consts import UnitRole, WORKER_TYPES
 from ares.consts import LOSS_MARGINAL_OR_BETTER
 
 from bot.utilities.performance_monitor import get_economy_state
+from bot.utilities.intel import get_enemy_intel_quality
+from bot.combat.target_scoring import COUNTER_TABLE
+from bot.constants import (
+    MEMORY_EXPIRY_TIME,
+    STALE_INTEL_THRESHOLD,
+)
 
 
 def get_freeflow_mode(bot) -> bool:
@@ -135,6 +141,143 @@ CHEESE_DEFENSE_ARMY = {
     
     
 }
+
+# ===== PRODUCTION NUDGING =====
+# Uses COUNTER_TABLE to shift army proportions toward unit types that are
+# effective against the observed enemy composition. See COUNTER_TABLE docstring
+# in target_scoring.py for how to extend.
+#
+# HOW IT WORKS:
+#   1. Read cached enemy army (filtered: no workers, structures, expired ghosts)
+#   2. For each unit type in our composition, sum its COUNTER_TABLE bonuses
+#      against all observed enemy units → "effectiveness score"
+#   3. Normalize effectiveness scores to a [-MAX_NUDGE, +MAX_NUDGE] range
+#   4. Add nudges to base proportions, clamp to MIN_PROPORTION, re-normalize to 1.0
+#
+# HOW TO EXTEND:
+#   - Adding a new unit to an army composition dict? Add COUNTER_TABLE entries
+#     in target_scoring.py. The nudging picks them up automatically.
+#   - Adding a new army composition dict? Pass it through select_army_composition()
+#     and nudging applies to it like any other.
+
+PRODUCTION_MAX_NUDGE = 0.10
+"""Maximum proportion shift per unit type (±10%). Keeps changes conservative."""
+
+PRODUCTION_MIN_PROPORTION = 0.05
+"""Floor: never drop a unit type below 5% proportion (prevents starvation)."""
+
+PRODUCTION_MIN_ENEMY_UNITS = 3
+"""Don't nudge if fewer than this many enemy combat units seen (too little data)."""
+
+
+def _get_enemy_combat_units(bot) -> list:
+    """Get filtered enemy combat units for production analysis.
+    
+    Excludes workers, structures, and expired ghost units (age >= MEMORY_EXPIRY_TIME).
+    """
+    cached = bot.mediator.get_cached_enemy_army or []
+    return [
+        u for u in cached
+        if u.type_id not in WORKER_TYPES
+        and not u.is_structure
+        and u.age < MEMORY_EXPIRY_TIME
+    ]
+
+
+def _compute_effectiveness(composition: dict, enemy_units: list) -> dict[UnitTypeId, float]:
+    """Score each own unit type's effectiveness against the enemy army.
+    
+    For each unit type in our composition, sums COUNTER_TABLE bonuses against
+    every observed enemy unit. Returns average bonus per enemy unit.
+    
+    Args:
+        composition: Army composition dict {UnitTypeId: {"proportion": ..., "priority": ...}}
+        enemy_units: Filtered enemy combat units
+        
+    Returns:
+        {UnitTypeId: avg_effectiveness_score} for each type in composition
+    """
+    n_enemies = len(enemy_units)
+    if n_enemies == 0:
+        return {}
+    
+    scores: dict[UnitTypeId, float] = {}
+    for own_type in composition:
+        total = sum(
+            COUNTER_TABLE.get((own_type, e.type_id), 0.0)
+            for e in enemy_units
+        )
+        scores[own_type] = total / n_enemies
+    return scores
+
+
+def nudge_proportions(
+    base_composition: dict,
+    enemy_units: list,
+) -> dict:
+    """Apply counter-table-driven proportion nudges to a base army composition.
+    
+    Returns a new composition dict with adjusted proportions. The base composition
+    is never mutated. If there's insufficient enemy data, returns base unchanged.
+    
+    Perf note: O(k * m) where k = unit types in comp (~5), m = enemy units.
+    Runs once per macro cycle — negligible frame cost.
+    
+    Args:
+        base_composition: The base army composition dict
+        enemy_units: Filtered enemy combat units
+        
+    Returns:
+        New composition dict with nudged proportions (sums to 1.0)
+    """
+    if len(enemy_units) < PRODUCTION_MIN_ENEMY_UNITS:
+        return base_composition
+    
+    effectiveness = _compute_effectiveness(base_composition, enemy_units)
+    if not effectiveness:
+        return base_composition
+    
+    # Find the range of effectiveness scores to normalize nudges
+    scores = list(effectiveness.values())
+    max_score = max(scores)
+    min_score = min(scores)
+    score_range = max_score - min_score
+    
+    # All scores equal (or only one type) → no nudge needed
+    if score_range < 0.1:
+        return base_composition
+    
+    # Normalize each score to [-1, +1] range, then scale by MAX_NUDGE
+    # Highest effectiveness → +MAX_NUDGE, lowest → -MAX_NUDGE
+    mid = (max_score + min_score) / 2.0
+    nudges: dict[UnitTypeId, float] = {}
+    for unit_type, score in effectiveness.items():
+        normalized = (score - mid) / (score_range / 2.0)  # -1 to +1
+        nudges[unit_type] = normalized * PRODUCTION_MAX_NUDGE
+    
+    # Apply nudges to base proportions
+    nudged: dict = {}
+    for unit_type, info in base_composition.items():
+        new_proportion = info["proportion"] + nudges.get(unit_type, 0.0)
+        new_proportion = max(new_proportion, PRODUCTION_MIN_PROPORTION)
+        nudged[unit_type] = {
+            "proportion": new_proportion,
+            "priority": info["priority"],
+        }
+    
+    # Re-normalize proportions to sum to exactly 1.0
+    # Round each to 4 decimal places, then fix the last to absorb rounding error
+    total = sum(v["proportion"] for v in nudged.values())
+    if total > 0:
+        items = list(nudged.values())
+        for info in items:
+            info["proportion"] = round(info["proportion"] / total, 4)
+        # Force exact 1.0 sum (ARES SpawnController asserts isclose to 1.0)
+        rounding_error = 1.0 - sum(v["proportion"] for v in items)
+        items[-1]["proportion"] = round(items[-1]["proportion"] + rounding_error, 4)
+    
+    return nudged
+
 
 # No static upgrade list - use get_desired_upgrades() instead
 
@@ -380,13 +523,16 @@ def get_desired_forge_count(bot) -> int:
 
 def select_army_composition(bot, main_army: Units) -> dict:
     """
-    Determines which army composition to use based on the current army state and enemy race.
-    For PVP: Uses PVP_ARMY_0/1 compositions
-    For other matchups: Uses STANDARD_ARMY_0/1 compositions
-    Switches between versions when Archons reach a threshold percentage.
+    Determines which army composition to use based on the current army state,
+    enemy race, and observed enemy composition.
+    
+    Steps:
+        1. Pick base composition from race + archon percentage (existing logic)
+        2. Apply counter-table-driven proportion nudges based on enemy comp
+        3. Cache the nudged result on bot._last_nudged_comp for debug display
     
     Returns:
-        dict: The selected army composition dictionary
+        dict: The selected (and possibly nudged) army composition dictionary
     """
     if bot.enemy_race == Race.Protoss:
         selected_composition = PVP_ARMY_0
@@ -405,6 +551,20 @@ def select_army_composition(bot, main_army: Units) -> dict:
         if archon_percentage >= threshold:
             selected_composition = army_1
     
+    # Production nudging: adjust proportions based on enemy composition
+    # Only nudge if we have enough intel to trust the data
+    intel = get_enemy_intel_quality(bot)
+    if intel["has_intel"] and intel["freshness"] > STALE_INTEL_THRESHOLD:
+        enemy_units = _get_enemy_combat_units(bot)
+        nudged = nudge_proportions(selected_composition, enemy_units)
+        # Cache for debug overlay
+        bot._last_base_comp = selected_composition
+        bot._last_nudged_comp = nudged
+        return nudged
+    
+    # No nudging — intel too stale or absent
+    bot._last_base_comp = selected_composition
+    bot._last_nudged_comp = selected_composition
     return selected_composition
 
 

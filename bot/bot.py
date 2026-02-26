@@ -125,6 +125,11 @@ class PiG_Bot(AresBot):
         # Enemy intel tracking (for combat sim trust)
         self._enemy_army_ever_seen = False  # Sticky flag: have we EVER seen enemy combat units?
         self._last_enemy_army_visible_time = 0.0  # Last time we had direct vision of enemy army
+        self._enemy_unit_last_seen: dict[int, float] = {}  # tag -> last time seen
+        
+        # Production nudging cache (set by select_army_composition for debug overlay)
+        self._last_base_comp: dict = {}
+        self._last_nudged_comp: dict = {}
         
         # Intel urgency system (gradual build/decay to avoid oscillation)
         # 0.0 = no urgency, 1.0 = max urgency

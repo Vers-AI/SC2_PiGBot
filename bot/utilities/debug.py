@@ -95,20 +95,50 @@ def render_combat_state_overlay(bot, main_army: Units, enemy_threat_level: int, 
         Point2((0.1, 0.28)), None, 14
     )
     
-    # Army composition info (archon percentage for comp switching)
-    if main_army and len(main_army) > 0:
-        archon_count = sum(1 for u in main_army if u.type_id == UnitTypeId.ARCHON)
-        archon_pct = archon_count / len(main_army)
-        bot.client.debug_text_2d(
-            f"Archons: {archon_count}/{len(main_army)} ({archon_pct:.0%}) [switch@15%]", 
-            Point2((0.1, 0.30)), None, 14
-        )
+    # Production nudging overlay: shows base vs nudged proportions
+    _render_production_nudge_overlay(bot)
     
     # Combat simulator results
     _render_combat_sim_overlay(bot, main_army)
     
     # Visual markers for targeting
     render_target_markers(bot, main_army)
+
+
+# Short labels for unit types in production overlay
+_UNIT_SHORT_NAMES: dict[UnitTypeId, str] = {
+    UnitTypeId.ZEALOT: "ZEA",
+    UnitTypeId.STALKER: "STK",
+    UnitTypeId.IMMORTAL: "IMM",
+    UnitTypeId.COLOSSUS: "COL",
+    UnitTypeId.DISRUPTOR: "DIS",
+    UnitTypeId.HIGHTEMPLAR: "HT",
+    UnitTypeId.ARCHON: "ARC",
+    UnitTypeId.ADEPT: "ADP",
+}
+
+
+def _render_production_nudge_overlay(bot) -> None:
+    """Render production nudging debug: base vs nudged proportions per unit type."""
+    base = getattr(bot, '_last_base_comp', {})
+    nudged = getattr(bot, '_last_nudged_comp', {})
+    if not base:
+        return
+    
+    parts = []
+    for unit_type in base:
+        name = _UNIT_SHORT_NAMES.get(unit_type, unit_type.name[:3])
+        base_pct = base[unit_type]["proportion"]
+        nudged_pct = nudged.get(unit_type, base[unit_type])["proportion"] if nudged else base_pct
+        delta = nudged_pct - base_pct
+        if abs(delta) > 0.005:
+            arrow = "+" if delta > 0 else ""
+            parts.append(f"{name} {base_pct:.0%}->{nudged_pct:.0%}({arrow}{delta:.0%})")
+        else:
+            parts.append(f"{name} {nudged_pct:.0%}")
+    
+    label = "Comp: " + " ".join(parts)
+    bot.client.debug_text_2d(label, Point2((0.1, 0.30)), None, 12)
 
 
 def _render_combat_sim_overlay(bot, main_army: Units) -> None:

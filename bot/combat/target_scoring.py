@@ -82,38 +82,98 @@ TACTICAL_BONUS: dict[UnitTypeId, float] = {
 }
 
 # ===== COUNTER TABLE =====
-# (our_type, enemy_type) -> bonus score. Encourages units to prefer targets they're effective against.
-# Only needs entries where there's a meaningful matchup advantage. Sparse is fine.
-# Add more as more units added to our build compositions
+# (our_type, enemy_type) -> bonus score.
+#
+# DUAL PURPOSE: This table drives both combat TARGETING (which enemy to shoot)
+# and PRODUCTION NUDGING (which of our unit types to build more of).
+# When adding a new unit type to army compositions, add its counter entries here
+# so the production system knows when to favor it.
+#
+# HOW TO EXTEND:
+#   1. Add (OUR_TYPE, ENEMY_TYPE): bonus entries below
+#   2. If the unit type is in an army composition dict (macro.py), production
+#      nudging will automatically pick it up — no other changes needed
+#   3. Bonus range: 5-12 typical. Higher = stronger counter signal.
+#   4. Only add entries where there's a real matchup advantage. Sparse is fine.
+#
+# DATA SOURCE: Liquipedia SC2 unit pages (Legacy of the Void versions)
+#   https://liquipedia.net/starcraft2/<UnitName>_(Legacy_of_the_Void)
+#   Check the "Competitive Usage" sections for matchup-specific info.
+#   Each entry below is annotated with "# LP:" citing the Liquipedia reasoning.
+#
 COUNTER_TABLE: dict[tuple[UnitTypeId, UnitTypeId], float] = {
-    # Stalkers are good vs air / robo units
-    (UnitTypeId.STALKER, UnitTypeId.COLOSSUS):       10.0,
-    (UnitTypeId.STALKER, UnitTypeId.IMMORTAL):        5.0,
-    (UnitTypeId.STALKER, UnitTypeId.VOIDRAY):         8.0,
-    (UnitTypeId.STALKER, UnitTypeId.MEDIVAC):         8.0,
-    (UnitTypeId.STALKER, UnitTypeId.BANSHEE):         8.0,
-    (UnitTypeId.STALKER, UnitTypeId.MUTALISK):        8.0,
-    (UnitTypeId.STALKER, UnitTypeId.WARPPRISM):      10.0,
+    # Stalkers: anti-air specialist + armored bonus (Liquipedia: "ability to counter air units")
+    (UnitTypeId.STALKER, UnitTypeId.COLOSSUS):       10.0,  # Armored tag, high-value snipe
+    (UnitTypeId.STALKER, UnitTypeId.IMMORTAL):        5.0,  # Armored tag (targeting only; Immortals hard-counter Stalkers)
+    (UnitTypeId.STALKER, UnitTypeId.VOIDRAY):         8.0,  # Anti-air
+    (UnitTypeId.STALKER, UnitTypeId.MEDIVAC):         8.0,  # Anti-air, removes healing
+    (UnitTypeId.STALKER, UnitTypeId.BANSHEE):         8.0,  # Anti-air
+    (UnitTypeId.STALKER, UnitTypeId.MUTALISK):        8.0,  # Anti-air, Blink helps chase
+    (UnitTypeId.STALKER, UnitTypeId.WARPPRISM):      10.0,  # Anti-air, high-value snipe
+    (UnitTypeId.STALKER, UnitTypeId.LIBERATOR):        8.0,  # Anti-air, Blink past defender zones
+    (UnitTypeId.STALKER, UnitTypeId.LIBERATORAG):      8.0,  # Anti-air
+    (UnitTypeId.STALKER, UnitTypeId.ORACLE):           8.0,  # Anti-air
+    (UnitTypeId.STALKER, UnitTypeId.PHOENIX):          6.0,  # Anti-air
+    (UnitTypeId.STALKER, UnitTypeId.CORRUPTOR):        8.0,  # Anti-air (LP: key vs Zerg air)
+    (UnitTypeId.STALKER, UnitTypeId.BROODLORD):       8.0,  # LP: "anti Broodlord units"
 
-    # Immortals are anti-armor
-    (UnitTypeId.IMMORTAL, UnitTypeId.ROACH):         10.0,
-    (UnitTypeId.IMMORTAL, UnitTypeId.STALKER):        8.0,
-    (UnitTypeId.IMMORTAL, UnitTypeId.MARAUDER):       8.0,
-    (UnitTypeId.IMMORTAL, UnitTypeId.SIEGETANK):     10.0,
+    # Immortals: anti-armor specialist (LP: "50 base damage against armored")
+    (UnitTypeId.IMMORTAL, UnitTypeId.ROACH):         10.0,  # LP: "strongly cost-effective against Roaches"
+    (UnitTypeId.IMMORTAL, UnitTypeId.RAVAGER):        8.0,  # Armored tag
+    (UnitTypeId.IMMORTAL, UnitTypeId.STALKER):        8.0,  # LP: "deal a large amount of damage to Stalkers"
+    (UnitTypeId.IMMORTAL, UnitTypeId.MARAUDER):       8.0,  # LP: "do quite well against...Marauders"
+    (UnitTypeId.IMMORTAL, UnitTypeId.SIEGETANK):     10.0,  # LP: "incredibly effective against...Tanks"
     (UnitTypeId.IMMORTAL, UnitTypeId.SIEGETANKSIEGED): 10.0,
-    (UnitTypeId.IMMORTAL, UnitTypeId.ULTRALISK):     12.0,
-    (UnitTypeId.IMMORTAL, UnitTypeId.THOR):          10.0,
+    (UnitTypeId.IMMORTAL, UnitTypeId.ULTRALISK):     12.0,  # LP: "shut down Ultralisk transitions"
+    (UnitTypeId.IMMORTAL, UnitTypeId.THOR):          10.0,  # LP: "effective against Thors"
+    (UnitTypeId.IMMORTAL, UnitTypeId.LURKERMPBURROWED): 10.0,  # LP: "especially key targets like burrowed Lurkers"
 
-    # Zealots are effective vs light units (only applied when Charge is researched — see score_target)
-    (UnitTypeId.ZEALOT, UnitTypeId.MARINE):           8.0,
-    (UnitTypeId.ZEALOT, UnitTypeId.HYDRALISK):        6.0,
+    # Zealots: melee + Charge vs light/slow (only with Charge — see score_target)
+    (UnitTypeId.ZEALOT, UnitTypeId.MARINE):           8.0,  # LP: Charge closes distance to ranged Terran
+    (UnitTypeId.ZEALOT, UnitTypeId.HYDRALISK):        6.0,  # LP: "+1 kills Hydra in 5 hits instead of 6"
+    (UnitTypeId.ZEALOT, UnitTypeId.ZERGLING):         6.0,  # LP: "very effective...with even surface areas"
+    (UnitTypeId.ZEALOT, UnitTypeId.SIEGETANKSIEGED):  8.0,  # LP: "effective threat against Siege Tanks...absorb 4 shots...friendly-fire"
+    (UnitTypeId.ZEALOT, UnitTypeId.MARAUDER):         6.0,  # LP: "competitive against...particularly the Marauder"
+    # NOTE: Zealot vs Baneling REMOVED — LP: "Banelings very effective against massed Zealots"
 
-    # Archons are anti-light / anti-bio
-    (UnitTypeId.ARCHON, UnitTypeId.MUTALISK):        12.0,
-    (UnitTypeId.ARCHON, UnitTypeId.ZERGLING):         8.0,
-    (UnitTypeId.ARCHON, UnitTypeId.MARINE):           8.0,
-    (UnitTypeId.ARCHON, UnitTypeId.HYDRALISK):        8.0,
-    (UnitTypeId.ARCHON, UnitTypeId.BANELING):        10.0,
+    # Archons: anti-light / anti-bio splash + high shields
+    (UnitTypeId.ARCHON, UnitTypeId.MUTALISK):        12.0,  # Premier anti-Muta unit
+    (UnitTypeId.ARCHON, UnitTypeId.ZERGLING):         8.0,  # Splash massacres lings
+    (UnitTypeId.ARCHON, UnitTypeId.MARINE):           8.0,  # Splash vs bio
+    (UnitTypeId.ARCHON, UnitTypeId.HYDRALISK):        8.0,  # Splash effective
+    (UnitTypeId.ARCHON, UnitTypeId.BANELING):        10.0,  # High shields absorb baneling hits
+
+    # Colossus: splash vs light units (LP: "bonus damage against light")
+    (UnitTypeId.COLOSSUS, UnitTypeId.MARINE):        10.0,  # LP: "good against Marine-heavy...bonus against Light"
+    (UnitTypeId.COLOSSUS, UnitTypeId.ZERGLING):      10.0,  # LP: light unit, splash
+    (UnitTypeId.COLOSSUS, UnitTypeId.HYDRALISK):      8.0,  # LP: light unit, splash
+    (UnitTypeId.COLOSSUS, UnitTypeId.ZEALOT):         6.0,  # LP: "very strong against large numbers of Zealots"
+    (UnitTypeId.COLOSSUS, UnitTypeId.ADEPT):          6.0,  # Light unit, splash
+    (UnitTypeId.COLOSSUS, UnitTypeId.BANELING):       8.0,  # Light unit, low HP — splash destroys
+    # NOTE: Colossus vs Roach REMOVED — LP: "not as cost-effective" (no armor bonus)
+
+    # Disruptor: burst splash vs immobile/clumped armies
+    (UnitTypeId.DISRUPTOR, UnitTypeId.SIEGETANKSIEGED): 10.0,  # LP: "very good against units that cannot move"
+    (UnitTypeId.DISRUPTOR, UnitTypeId.SIEGETANK):      8.0,
+    (UnitTypeId.DISRUPTOR, UnitTypeId.MARINE):         8.0,  # Nova one-shots
+    (UnitTypeId.DISRUPTOR, UnitTypeId.MARAUDER):       8.0,  # LP: "effective response to...Marauders"
+    (UnitTypeId.DISRUPTOR, UnitTypeId.ROACH):          6.0,  # LP: "Roaches...clumps is very vulnerable"
+    (UnitTypeId.DISRUPTOR, UnitTypeId.RAVAGER):        6.0,  # LP: "Ravagers...clumps is very vulnerable"
+    (UnitTypeId.DISRUPTOR, UnitTypeId.HYDRALISK):      6.0,  # Clumped hydras vulnerable
+    (UnitTypeId.DISRUPTOR, UnitTypeId.IMMORTAL):       5.0,  # Doesn't one-shot (200HP+100S), but decent
+    (UnitTypeId.DISRUPTOR, UnitTypeId.LURKERMPBURROWED): 8.0,  # LP: "Lurkers" can't move
+    # NOTE: Disruptor vs Stalker REMOVED — LP: "Stalkers can use Blink to avoid Nova"
+
+    # High Templar: Psionic Storm vs clumped armies + Feedback vs casters
+    (UnitTypeId.HIGHTEMPLAR, UnitTypeId.MARINE):      10.0,  # LP: "devastated with properly placed Storms"
+    (UnitTypeId.HIGHTEMPLAR, UnitTypeId.MARAUDER):     8.0,  # LP: "large Marine/Marauder groups"
+    (UnitTypeId.HIGHTEMPLAR, UnitTypeId.HYDRALISK):   10.0,  # LP: "storm will lower Hydras...Immortals clean up"
+    (UnitTypeId.HIGHTEMPLAR, UnitTypeId.ZERGLING):     8.0,  # LP: Storm kills Zerglings outright
+    (UnitTypeId.HIGHTEMPLAR, UnitTypeId.BANELING):     8.0,  # Storm kills Banelings outright (35 HP)
+    (UnitTypeId.HIGHTEMPLAR, UnitTypeId.ROACH):        6.0,  # Clumped Roaches take storm damage
+    (UnitTypeId.HIGHTEMPLAR, UnitTypeId.MUTALISK):     4.0,  # LP: "Mutas escape storms fairly easily...Archons fare better"
+    (UnitTypeId.HIGHTEMPLAR, UnitTypeId.GHOST):       10.0,  # LP: "Feedback...counteracted by using Feedback on Ghost"
+    (UnitTypeId.HIGHTEMPLAR, UnitTypeId.VIPER):       10.0,  # LP: "Feedback is only really useful versus Vipers"
 }
 
 
