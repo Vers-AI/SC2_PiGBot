@@ -137,13 +137,15 @@ STANDARD_ARMY_0 = {
     UnitTypeId.IMMORTAL: {"proportion": 0.15, "priority": 1},
     UnitTypeId.COLOSSUS: {"proportion": 0.15, "priority": 4},
     UnitTypeId.HIGHTEMPLAR: {"proportion": 0.4, "priority": 0},
-    UnitTypeId.DISRUPTOR: {"proportion": 0.1, "priority": 3},
-    UnitTypeId.ZEALOT: {"proportion": 0.2, "priority": 2},
+    UnitTypeId.DISRUPTOR: {"proportion": 0.1, "priority": 5},
+    UnitTypeId.STALKER: {"proportion": 0.0, "priority": 2},
+    UnitTypeId.ZEALOT: {"proportion": 0.2, "priority": 3},
 }
 STANDARD_ARMY_1 = {
     UnitTypeId.IMMORTAL: {"proportion": 0.35, "priority": 1},
     UnitTypeId.COLOSSUS: {"proportion": 0.2, "priority": 4},
     UnitTypeId.DISRUPTOR: {"proportion": 0.1, "priority": 3},
+    UnitTypeId.STALKER: {"proportion": 0.0, "priority": 2},
     UnitTypeId.ZEALOT: {"proportion": 0.35, "priority": 0},
 }
 
