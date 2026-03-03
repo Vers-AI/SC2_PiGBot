@@ -50,7 +50,15 @@ from bot.constants import (
     SQUAD_NEARBY_FRIENDLY_RANGE_SQ,
     FRESH_INTEL_THRESHOLD,
     STALE_INTEL_THRESHOLD,
-    MEMORY_EXPIRY_TIME,
+    FORMATION_AHEAD_BASE,
+    FORMATION_AHEAD_SCALE,
+    FORMATION_SPREAD_BASE,
+    FORMATION_SPREAD_SCALE,
+    FORMATION_UNIT_MULTIPLIER,
+    FORMATION_RETREAT_ANGLE,
+    ENGAGEMENT_ARMY_VALUE_THRESHOLD,
+    ACTIVE_ENGAGE_RANGE_BUFFER,
+    ACTIVE_ENGAGE_ANGLE,
 )
 from bot.combat.unit_micro import (
     micro_ranged_unit,
@@ -113,26 +121,6 @@ def get_attackable_enemies(unit: Unit, enemies: list, grid: np.ndarray) -> list:
         attackable.append(e)
     return attackable
 
-
-# Formation + cohesion constants (dynamic: base + sqrt(unit_count) * scale)
-# Small army (5) → ahead ~1.4, spread ~4.6  |  Large army (30) → ahead ~2.1, spread ~6.8
-FORMATION_AHEAD_BASE = 1.0        # Minimum ahead threshold
-FORMATION_AHEAD_SCALE = 0.2       # How much ahead threshold grows with sqrt(n)
-FORMATION_SPREAD_BASE = 3.0       # Minimum spread threshold
-FORMATION_SPREAD_SCALE = 0.7      # How much spread threshold grows with sqrt(n)
-FORMATION_UNIT_MULTIPLIER = 1.2   # How far ranged units reposition behind melee
-FORMATION_RETREAT_ANGLE = 0.3     # Diagonal spread for ranged units
-
-# Engagement gate: minimum total enemy army_value before switching from formation to full micro.
-# Below this, units stay in formation and only ShootTargetInRange. Prevents lone scouts
-# (Zergling=1.0, Overlord=0) from fragmenting the army into individual micro.
-ENGAGEMENT_ARMY_VALUE_THRESHOLD = 4.0
-
-# Active engagement fallback: if an enemy is in weapon range and facing our unit,
-# override the army_value gate. Catches the "lone Zergling attacking a Stalker" case
-# where army_value is low but our unit needs to kite.
-ACTIVE_ENGAGE_RANGE_BUFFER = 0.5  # Extra buffer beyond enemy weapon range + radii
-ACTIVE_ENGAGE_ANGLE = 0.3         # ~17° tolerance for is_facing check
 
 
 def is_near_choke_or_ramp(bot, army_center: Point2) -> bool:
@@ -865,11 +853,11 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
                     return bot.start_location
         # For normal mode, re-evaluate fight result after minimum duration
         else:
-            # Filter enemy units: exclude workers, structures, and expired ghosts
+            # Filter enemy units: exclude workers and structures
+            # Keep all cached units regardless of age - cache handles death/morph removal
             combat_enemy_units = [
                 u for u in bot.mediator.get_cached_enemy_army
                 if u.type_id not in WORKER_TYPES and not u.is_structure
-                and u.age < MEMORY_EXPIRY_TIME
             ]
             fight_result = bot.mediator.can_win_fight(
                 own_units=main_army,
@@ -912,11 +900,11 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
             # Intel is very stale - don't initiate attack, stay defensive until we scout
             return select_defensive_anchor(bot, main_army)
         
-        # Filter enemy units: exclude workers, structures, and expired ghosts
+        # Filter enemy units: exclude workers and structures
+        # Keep all cached units regardless of age - cache handles death/morph removal
         combat_enemy_units = [
             u for u in bot.mediator.get_cached_enemy_army
             if u.type_id not in WORKER_TYPES and not u.is_structure
-            and u.age < MEMORY_EXPIRY_TIME
         ]
         fight_result = bot.mediator.can_win_fight(
             own_units=main_army,

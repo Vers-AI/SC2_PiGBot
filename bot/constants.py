@@ -69,6 +69,37 @@ STAY_AGGRESSIVE_DURATION = 20.0
 TARGET_LOCK_DISTANCE = 25.0
 """Distance threshold for switching attack targets - prevents oscillation"""
 
+# ===== FORMATION & COHESION =====
+# Dynamic thresholds: base + sqrt(unit_count) * scale
+# Small army (5) → ahead ~1.4, spread ~4.6  |  Large army (30) → ahead ~2.1, spread ~6.8
+FORMATION_AHEAD_BASE = 1.0
+"""Minimum ahead threshold before unit is considered 'streaming ahead'"""
+
+FORMATION_AHEAD_SCALE = 0.2
+"""How much ahead threshold grows with sqrt(n)"""
+
+FORMATION_SPREAD_BASE = 3.0
+"""Minimum spread threshold before unit is considered 'too spread out'"""
+
+FORMATION_SPREAD_SCALE = 0.7
+"""How much spread threshold grows with sqrt(n)"""
+
+FORMATION_UNIT_MULTIPLIER = 1.2
+"""How far ranged units reposition behind melee"""
+
+FORMATION_RETREAT_ANGLE = 0.3
+"""Diagonal spread for ranged units"""
+
+# ===== ENGAGEMENT GATE =====
+ENGAGEMENT_ARMY_VALUE_THRESHOLD = 4.0
+"""Minimum total enemy army_value before switching from formation to full micro. Prevents lone scouts from fragmenting the army."""
+
+ACTIVE_ENGAGE_RANGE_BUFFER = 0.5
+"""Extra buffer beyond enemy weapon range + radii for active engagement fallback"""
+
+ACTIVE_ENGAGE_ANGLE = 0.3
+"""~17° tolerance for is_facing check in active engagement fallback"""
+
 # ===== COMBAT SIMULATOR THRESHOLDS =====
 SIEGE_TANK_SUPPLY_ADVANTAGE_REQUIRED = 2.0
 """Supply advantage multiplier needed to attack into siege tanks (combat sim often underestimates them)"""
