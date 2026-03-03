@@ -283,14 +283,25 @@ def nudge_proportions(
         normalized = (score - mid) / (score_range / 2.0)  # -1 to +1
         nudges[unit_type] = normalized * PRODUCTION_MAX_NUDGE
     
-    # Apply nudges to base proportions
+    # Reorder priorities by effectiveness: most effective → priority 0 (built first)
+    ranked_types = sorted(effectiveness, key=lambda t: effectiveness[t], reverse=True)
+    priority_map: dict[UnitTypeId, int] = {ut: i for i, ut in enumerate(ranked_types)}
+    
+    # Apply nudges to base proportions and reordered priorities
     nudged: dict = {}
     for unit_type, info in base_composition.items():
-        new_proportion = info["proportion"] + nudges.get(unit_type, 0.0)
-        new_proportion = max(new_proportion, PRODUCTION_MIN_PROPORTION)
+        nudge = nudges.get(unit_type, 0.0)
+        base_prop = info["proportion"]
+        new_proportion = base_prop + nudge
+        # Only apply min floor if unit has base proportion > 0 or got a positive nudge
+        # Units at 0.0 base with no positive nudge should stay at 0.0
+        if base_prop > 0 or nudge > 0:
+            new_proportion = max(new_proportion, PRODUCTION_MIN_PROPORTION)
+        else:
+            new_proportion = 0.0
         nudged[unit_type] = {
             "proportion": new_proportion,
-            "priority": info["priority"],
+            "priority": priority_map.get(unit_type, info["priority"]),
         }
     
     # Re-normalize proportions to sum to exactly 1.0

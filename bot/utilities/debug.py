@@ -134,15 +134,18 @@ def _render_production_nudge_overlay(bot) -> None:
     for unit_type in sorted_types:
         name = _UNIT_SHORT_NAMES.get(unit_type, unit_type.name[:3])
         base_pct = base.get(unit_type, {}).get("proportion", 0)
+        base_pri = base.get(unit_type, {}).get("priority", "?")
         nudged_info = nudged.get(unit_type, base.get(unit_type, {}))
         nudged_pct = nudged_info.get("proportion", base_pct) if nudged else base_pct
-        pri = nudged_info.get("priority", "?")
+        nudged_pri = nudged_info.get("priority", base_pri)
         delta = nudged_pct - base_pct
+        # Show priority change (e.g. [2->1]) or just current (e.g. [1])
+        pri_str = f"{base_pri}->{nudged_pri}" if nudged and nudged_pri != base_pri else f"{nudged_pri}"
         if abs(delta) > 0.005:
             arrow = "+" if delta > 0 else ""
-            parts.append(f"{name}[{pri}] {base_pct:.0%}->{nudged_pct:.0%}({arrow}{delta:.0%})")
+            parts.append(f"{name}[{pri_str}] {base_pct:.0%}->{nudged_pct:.0%}({arrow}{delta:.0%})")
         else:
-            parts.append(f"{name}[{pri}] {nudged_pct:.0%}")
+            parts.append(f"{name}[{pri_str}] {nudged_pct:.0%}")
     
     # Resource pressure tag
     pressure = getattr(bot, '_resource_pressure', 'BALANCED')
