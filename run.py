@@ -78,8 +78,8 @@ def main():
             "PersephoneAIE_v4",
             "IncorporealAIE_v4",
             "LeyLinesAIE_v3",
-            #"UltraloveAIE_v2",
-            #"MagannathaAIE_v2"
+            "UltraloveAIE_v2",
+            "MagannathaAIE_v2"
         ]
 
         print("Starting local game...")
