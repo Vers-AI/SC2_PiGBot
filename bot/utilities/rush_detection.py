@@ -151,6 +151,8 @@ def _track_enemy_timings(bot: "PiG_Bot"):
         bot._baneling_nest_seen_time = None
     if not hasattr(bot, '_ling_has_speed'):
         bot._ling_has_speed = False
+    if not hasattr(bot, '_ling_pos_history'):
+        bot._ling_pos_history = {}  # tag -> (Point2, game_time)
     if not hasattr(bot, '_last_nat_scout_time'):
         bot._last_nat_scout_time = None  # Most recent time we had vision of enemy natural location
     if not hasattr(bot, '_nat_present_on_last_scout'):
@@ -228,11 +230,36 @@ def _track_enemy_timings(bot: "PiG_Bot"):
             if lings_at_nat:
                 bot._first_ling_contact_nat_time = bot.time
         
-        # Check if lings have speed (movement speed check)
+        # Detect Metabolic Boost via observed movement speed
+        # unit.movement_speed returns base type data (ignores upgrades),
+        # so we track position deltas between frames instead.
+        # Faster-speed thresholds: base=4.13, base+creep=5.37, speed=6.58
         if not bot._ling_has_speed:
-            zergling_base_speed = bot._game_data.units[UnitTypeId.ZERGLING.value]._proto.movement_speed
-            if any(ling.movement_speed > zergling_base_speed + 0.1 for ling in enemy_lings):
-                bot._ling_has_speed = True
+            now = bot.time
+            for ling in enemy_lings:
+                if not ling.is_visible:
+                    continue
+                tag = ling.tag
+                pos = ling.position
+                if tag in bot._ling_pos_history:
+                    prev_pos, prev_time = bot._ling_pos_history[tag]
+                    dt = now - prev_time
+                    if dt >= 0.3:  # Need meaningful time gap
+                        dist = pos.distance_to(prev_pos)
+                        observed_speed = dist / dt
+                        if observed_speed > 5.5:  # Above base+creep(5.37), below speed(6.58)
+                            bot._ling_has_speed = True
+                            if bot.debug:
+                                print(f"{bot.time_formatted}: Speed detected! "
+                                      f"Ling {tag} observed speed={observed_speed:.2f}")
+                            break
+                bot._ling_pos_history[tag] = (pos, now)
+            # Prune stale entries
+            if len(bot._ling_pos_history) > 50:
+                bot._ling_pos_history = {
+                    t: v for t, v in bot._ling_pos_history.items()
+                    if now - v[1] < 10.0
+                }
     
     # Track gas workers (count workers near enemy extractors)
     extractors = [s for s in bot.enemy_structures if s.type_id == UnitTypeId.EXTRACTOR and s.is_ready]
@@ -246,8 +273,8 @@ def _track_enemy_timings(bot: "PiG_Bot"):
     # Track speed research (Metabolic Boost upgrade in progress)
     if not bot._speed_research_started and pools:
         pool = pools[0]
-        # Check if pool is researching (has orders) - Metabolic Boost
-        if pool.is_ready and pool.orders:
+        # A ready pool that is_active = researching 
+        if pool.is_ready and pool.is_active:
             bot._speed_research_started = True
             bot._speed_research_time = bot.time
     
@@ -361,13 +388,9 @@ def get_ling_rush_signals(bot: "PiG_Bot") -> dict:
         if ling.distance_to(bot.start_location) < 50
     ]
     
-    # Speed detection - check for metabolic boost buff (BuffId is not easily accessible, use movement speed check)
-    # If any ling is moving faster than base speed, speed is researched
-    zergling_base_speed = bot._game_data.units[UnitTypeId.ZERGLING.value]._proto.movement_speed
-    speed_seen = any(
-        ling.movement_speed > zergling_base_speed + 0.1  # Small epsilon for floating point
-        for ling in enemy_lings
-    )
+    # Speed detection - use tracked value from _track_enemy_timings
+    # (position-based, not unit.movement_speed which ignores upgrades)
+    speed_seen = bot._ling_has_speed
     
     return {
         'tier': tier,
