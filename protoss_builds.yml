@@ -76,7 +76,7 @@ Builds:
         AutoSupplyAtSupply: 33
         OpeningBuildOrder:
             - 14 WORKER_SCOUT:
-                [enemy_spawn, enemy_nat, map_center, fourth,third, enemy_nat]
+                [enemy_spawn, enemy_nat, map_center, fourth,third, enemy_spawn, enemy_nat]
             - 14 PYLON @ nat_wall
             - 16 GATEWAY @ nat_wall
             - 16 CHRONO @ NEXUS

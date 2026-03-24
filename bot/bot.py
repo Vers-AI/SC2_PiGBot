@@ -275,6 +275,8 @@ class PiG_Bot(AresBot):
 
         # Early game logic
         if not self.build_order_runner.build_completed:
+            from bot.utilities.rush_detection import _track_enemy_timings
+            _track_enemy_timings(self)  # Always track timings/speed during build order phase
             self.register_behavior(RestorePower()) # Restore power to depowered buildings
             if not self._under_attack:  # Still use early_threat_sensor for cheese detection
                 early_threat_sensor(self)    
