@@ -12,11 +12,11 @@ Incorporeal:
       GateKeeper:
         - [ [ 64.5, 128.5 ] ]
     VsTerran:
-      FirstPylon:
+      PylonsReaperWall:
         - [ [ 37.0, 144.0 ] ]
-      ThreeByThreesWall:
+      ThreeByThreesReaperWall:
         - [ [ 36.5, 140.5 ], [ 38.5, 149.5 ] ]
-      StaticDefencesWall:
+      StaticDefencesReaperWall:
         - [ [ 39.0, 144.0 ] ]
   LowerSpawn:
     VsAll:
@@ -31,11 +31,11 @@ Incorporeal:
       GateKeeper:
         - [ [ 91.5, 36.5 ] ]
     VsTerran:
-      FirstPylon:
+      PylonsReaperWall:
         - [ [ 119.0, 20.0 ] ]
-      ThreeByThreesWall:
+      ThreeByThreesReaperWall:
         - [ [ 119.5, 23.5 ], [ 117.5, 14.5 ] ]
-      StaticDefencesWall:
+      StaticDefencesReaperWall:
         - [ [ 117.0, 20.0 ] ]
 
 Persephone:
@@ -52,9 +52,9 @@ Persephone:
       GateKeeper:
         - [ [ 72.5, 140.5 ] ]
     VsTerran:
-      FirstPylon:
+      PylonsReaperWall:
         - [ [ 48.0, 125.0 ] ]
-      ThreeByThreesWall:
+      ThreeByThreesReaperWall:
         - [ [ 49.5, 127.5 ], [ 44.5, 127.5 ] ]
   LowerSpawn:
     VsAll:
@@ -69,9 +69,9 @@ Persephone:
       GateKeeper:
         - [ [ 73.5, 37.5 ] ]
     VsTerran:
-      FirstPylon:
+      PylonsReaperWall:
         - [ [ 48.0, 55.0 ] ]
-      ThreeByThreesWall:
+      ThreeByThreesReaperWall:
         - [ [ 49.5, 52.5 ], [ 44.5, 52.5 ] ]
 
 Pylon:
@@ -88,9 +88,9 @@ Pylon:
       GateKeeper:
         - [ [ 108.5, 166.5 ] ]
     VsTerran:
-      FirstPylon:
+      PylonsReaperWall:
         - [ [ 77.0, 176.0 ] ]
-      ThreeByThreesWall:
+      ThreeByThreesReaperWall:
         - [ [ 76.5, 172.5 ], [ 78.5, 181.5 ] ]
   LowerSpawn:
     VsAll:
@@ -105,9 +105,9 @@ Pylon:
       GateKeeper:
         - [ [ 142.5, 83.5 ] ]
     VsTerran:
-      FirstPylon:
+      PylonsReaperWall:
         - [ [ 171.0, 72.0 ] ]
-      ThreeByThreesWall:
+      ThreeByThreesReaperWall:
         - [ [ 171.5, 75.5 ], [ 169.5, 66.5 ] ]
 
 Torches:
@@ -124,11 +124,11 @@ Torches:
       GateKeeper:
         - [ [ 88.5, 152.5 ] ]
     VsTerran:
-      FirstPylon:
+      PylonsReaperWall:
         - [ [ 121.0, 164.0 ] ]
-      ThreeByThreesWall:
+      ThreeByThreesReaperWall:
         - [ [ 120.5, 160.5 ], [ 120.5, 169.5 ] ]
-      StaticDefencesWall:
+      StaticDefencesReaperWall:
         - [ [ 119.0, 164.0 ] ]
   LowerSpawn:
     VsAll:
@@ -143,11 +143,11 @@ Torches:
       GateKeeper:
         - [ [ 90.5, 57.5 ] ]
     VsTerran:
-      FirstPylon:
+      PylonsReaperWall:
         - [ [ 121.0, 44.0 ] ]
-      ThreeByThreesWall:
+      ThreeByThreesReaperWall:
         - [ [ 120.5, 47.5 ], [ 120.5, 38.5 ] ]
-      StaticDefencesWall:
+      StaticDefencesReaperWall:
         - [ [ 119.0, 44.0 ] ]
 
 LeyLines:
@@ -164,9 +164,9 @@ LeyLines:
       GateKeeper:
         - [ [ 147.5, 105.5 ] ]
     VsTerran:
-      FirstPylon:
+      PylonsReaperWall:
         - [ [ 140.0, 127.0 ] ]
-      ThreeByThreesWall:
+      ThreeByThreesReaperWall:
         - [ [ 142.5, 126.5 ], [ 144.5, 123.5 ] ]
   LowerSpawn:
     VsAll:
@@ -181,9 +181,9 @@ LeyLines:
       GateKeeper:
         - [ [ 50.5, 68.5 ] ]
     VsTerran:
-      FirstPylon:
+      PylonsReaperWall:
         - [ [ 58.0, 47.0 ] ]
-      ThreeByThreesWall:
+      ThreeByThreesReaperWall:
         - [ [ 55.5, 47.5 ], [ 53.5, 50.5 ] ]
 
 Ultralove:
@@ -200,9 +200,9 @@ Ultralove:
       GateKeeper:
         - [ [ 108.5, 136.5 ] ]
     VsTerran:
-      FirstPylon:
+      PylonsReaperWall:
         - [ [ 127.0, 124.0 ] ]
-      ThreeByThreesWall:
+      ThreeByThreesReaperWall:
         - [ [ 129.5, 123.5 ], [ 131.5, 120.5 ] ]
   LowerSpawn:
     VsAll:
@@ -217,9 +217,9 @@ Ultralove:
       GateKeeper:
         - [ [ 75.5, 47.5 ] ]
     VsTerran:
-      FirstPylon:
+      PylonsReaperWall:
         - [ [ 57.0, 60.0 ] ]
-      ThreeByThreesWall:
+      ThreeByThreesReaperWall:
         - [ [ 54.5, 60.5 ], [ 52.5, 63.5 ] ]
 
 Magannatha:
@@ -236,11 +236,11 @@ Magannatha:
       GateKeeper:
         - [ [ 34.5, 109.5 ] ]
     VsTerran:
-      FirstPylon:
+      PylonsReaperWall:
         - [ [ 48.0, 132.0 ] ]
-      ThreeByThreesWall:
+      ThreeByThreesReaperWall:
         - [ [ 50.5, 132.5 ], [ 47.5, 129.5 ] ]
-      StaticDefencesWall:
+      StaticDefencesReaperWall:
         - [ [ 44.0, 132.0 ] ]
   LowerSpawn:
     VsAll:
@@ -255,9 +255,9 @@ Magannatha:
       GateKeeper:
         - [ [ 109.5, 34.5 ] ]
     VsTerran:
-      FirstPylon:
+      PylonsReaperWall:
         - [ [ 132.0, 48.0 ] ]
-      ThreeByThreesWall:
+      ThreeByThreesReaperWall:
         - [ [ 132.5, 50.5 ], [ 129.5, 47.5 ] ]
-      StaticDefencesWall:
+      StaticDefencesReaperWall:
         - [ [ 132.0, 44.0 ] ]

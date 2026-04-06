@@ -39,14 +39,14 @@ Builds:
         # After 0 supply turn AutoSupply on
         AutoSupplyAtSupply: 33
         OpeningBuildOrder:
-            - 14 PYLON @ nat_wall
-            - 16 GATEWAY @ nat_wall
+            - 14 PYLON @ reaper_wall
+            - 16 GATEWAY @ reaper_wall
             - 16 CHRONO @ NEXUS
             - 16 WORKER_SCOUT:
                 [enemy_spawn, enemy_nat, map_center, fourth,third, enemy_nat,nat,spawn]
             - 16 GAS
             - 20 EXPAND
-            - 20 CORE @ nat_wall
+            - 20 CORE @ reaper_wall
             - 21 PYLON
             - 21 GAS
             - 22 WARPGATERESEARCH
