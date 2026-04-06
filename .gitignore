@@ -142,3 +142,6 @@ data/rush_detection_log.jsonl
 # Private plan docs
 Plan/
 example/
+
+#logs
+logs/
