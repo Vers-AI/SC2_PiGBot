@@ -137,6 +137,7 @@ class PiG_Bot(AresBot):
         # Responses trigger at thresholds: 0.3 (observer priority), 0.5 (extra observers), 0.7 (speed upgrade)
         self._intel_urgency = 0.0
         self._worker_scout_sent_this_stale_period = False  # Prevents spamming worker scouts
+        self._br_scout_waypoints: dict = {}  # {tag: {'waypoints': list[Point2], 'idx': int}}
         self._observer_hunt_mode = False  # Sticky flag: stays True until freshness >= FRESH_INTEL_THRESHOLD
         self._hunting_observer_tag = None  # Tag of observer currently hunting (set per-frame)
 
@@ -348,12 +349,15 @@ class PiG_Bot(AresBot):
         # Army cohesion is now handled proactively by the main squad coordination system
 
         # Scouting actions
-        from bot.managers.scouting import control_observers, control_worker_scout
+        from bot.managers.scouting import (
+            control_build_runner_scout, control_observers, control_worker_scout,
+        )
         observers = self.units.filter(
             lambda u: u.type_id in {UnitTypeId.OBSERVER, UnitTypeId.OBSERVERSIEGEMODE}
         )
         control_observers(self, observers, main_army)
         control_worker_scout(self)  # Early game worker scout when intel is stale
+        control_build_runner_scout(self)  # Safe pathing for build-order scout probe
 
        
         

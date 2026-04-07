@@ -10,7 +10,7 @@ from sc2.ids.unit_typeid import UnitTypeId
 
 from ares.behaviors.combat import CombatManeuver
 from ares.behaviors.combat.individual import KeepUnitSafe, PathUnitToTarget, UseAbility
-from ares.consts import UnitRole, UnitTreeQueryType, WORKER_TYPES
+from ares.consts import BuildOrderOptions, UnitRole, UnitTreeQueryType, WORKER_TYPES
 from bot.combat import attack_target
 from bot.constants import FRESH_INTEL_THRESHOLD, MEMORY_EXPIRY_TIME, VISIBLE_AGE_THRESHOLD
 from bot.utilities.intel import get_enemy_intel_quality
@@ -197,6 +197,94 @@ def control_worker_scout(bot) -> None:
         if worker:
             bot.mediator.assign_role(tag=worker.tag, role=UnitRole.SCOUTING)
             bot._worker_scout_sent_this_stale_period = True
+
+
+# --- Build runner scout safety constants ---
+BR_SCOUT_WAYPOINT_DIST = 4.0  # Distance to advance to next waypoint
+BR_SCOUT_DANGER_DISTANCE = 10.0  # Danger sensing radius for PathUnitToTarget
+
+
+def _extract_scout_waypoints(bot) -> list[Point2]:
+    """Extract WORKER_SCOUT waypoints from the build order steps."""
+    for step in bot.build_order_runner.build_order:
+        if (
+            step.command == BuildOrderOptions.WORKER_SCOUT
+            and isinstance(step.target, list)
+            and step.target
+        ):
+            return list(step.target)
+    # Fallback: just go to enemy spawn and back
+    return [bot.enemy_start_locations[0]]
+
+
+def control_build_runner_scout(bot) -> None:
+    """
+    Take over BUILD_RUNNER_SCOUT workers with safe pathing.
+
+    The ARES build runner fires-and-forgets raw move commands with no danger
+    awareness. This function overrides those commands each frame with
+    PathUnitToTarget (ground grid + sense_danger) so the scout paths around
+    enemy units, and retreats home if damaged or under attack.
+    """
+    scouts = bot.mediator.get_units_from_role(
+        role=UnitRole.BUILD_RUNNER_SCOUT, unit_type=bot.worker_type
+    )
+    if not scouts:
+        # Clean up stale waypoint entries
+        if bot._br_scout_waypoints:
+            live_tags = {s.tag for s in scouts} if scouts else set()
+            bot._br_scout_waypoints = {
+                t: v for t, v in bot._br_scout_waypoints.items() if t in live_tags
+            }
+        return
+
+    ground_grid = bot.mediator.get_ground_grid
+
+    for scout in scouts:
+        tag = scout.tag
+        actions = CombatManeuver()
+
+        # --- Initialize waypoint tracking for new scouts ---
+        if tag not in bot._br_scout_waypoints:
+            waypoints = _extract_scout_waypoints(bot)
+            bot._br_scout_waypoints[tag] = {"waypoints": waypoints, "idx": 0}
+
+        scout_data = bot._br_scout_waypoints[tag]
+        waypoints = scout_data["waypoints"]
+        idx = scout_data["idx"]
+
+        # --- All waypoints visited: return to mining ---
+        if idx >= len(waypoints):
+            bot._br_scout_waypoints.pop(tag, None)
+            bot.mediator.clear_role(tag=tag)
+            bot.mediator.assign_role(tag=tag, role=UnitRole.GATHERING)
+            continue
+
+        target = waypoints[idx]
+
+        # --- Advance to next waypoint when close ---
+        if cy_distance_to(scout.position, target) < BR_SCOUT_WAYPOINT_DIST:
+            scout_data["idx"] += 1
+            if scout_data["idx"] >= len(waypoints):
+                bot._br_scout_waypoints.pop(tag, None)
+                bot.mediator.clear_role(tag=tag)
+                bot.mediator.assign_role(tag=tag, role=UnitRole.GATHERING)
+                continue
+            target = waypoints[scout_data["idx"]]
+
+        # Priority: flee if shields damaged, then path to waypoint when safe
+        if scout.shield_percentage < 1:
+            actions.add(KeepUnitSafe(unit=scout, grid=ground_grid))
+        actions.add(
+            PathUnitToTarget(
+                unit=scout,
+                target=target,
+                grid=ground_grid,
+                sense_danger=True,
+                danger_distance=BR_SCOUT_DANGER_DISTANCE,
+            )
+        )
+        bot.register_behavior(actions)
 
 
 def control_observers(bot, all_observers: Units, main_army: Units) -> None:
