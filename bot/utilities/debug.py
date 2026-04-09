@@ -786,6 +786,110 @@ def render_observer_debug(bot) -> None:
     )
 
 
+def render_concave_formation_debug(
+    bot,
+    squad_id: str,
+    ranged_units: list,
+    squad_center,
+    enemy_center,
+    formation_active: bool,
+) -> None:
+    """Render concave fan-out debug: sub-group assignments, fan targets, spread line.
+
+    Shows:
+    - 3 fan-out target spheres (magenta left, white center, cyan right)
+    - Lines from each ranged unit to its sub-group target
+    - Perpendicular spread line across the approach axis
+    - Formation state label at squad center
+    """
+    if not bot.debug or not ranged_units:
+        return
+
+    from bot.combat.formation import split_into_fan_groups, compute_fan_targets
+
+    # Get formation state
+    state = None
+    if hasattr(bot, '_squad_formation_state'):
+        state = bot._squad_formation_state.get(squad_id)
+
+    status = "SPREADING" if formation_active else ("DONE" if state and state.get("status") == "done" else "READY")
+
+    # Squad center label
+    z = bot.get_terrain_z_height(squad_center)
+    color = (255, 0, 255) if formation_active else (128, 128, 128)
+    frames_str = ""
+    if state and "frame_start" in state:
+        elapsed = bot.state.game_loop - state["frame_start"]
+        frames_str = f" F:{elapsed}"
+    bot.client.debug_text_world(
+        f"CONCAVE:{status}{frames_str}",
+        Point3((squad_center.x, squad_center.y, z + 2.0)),
+        color=color,
+        size=14,
+    )
+
+    # Compute groups and targets
+    left_group, center_group, right_group = split_into_fan_groups(
+        ranged_units, squad_center, enemy_center
+    )
+    left_target, center_target, right_target = compute_fan_targets(
+        squad_center, enemy_center, len(ranged_units)
+    )
+
+    # Draw fan-out target spheres
+    # Left = magenta, Center = white, Right = cyan
+    targets_and_colors = [
+        (left_target, Point3((255, 0, 255)), "L"),
+        (center_target, Point3((255, 255, 255)), "C"),
+        (right_target, Point3((0, 255, 255)), "R"),
+    ]
+    for target, sphere_color, label in targets_and_colors:
+        tz = bot.get_terrain_z_height(target)
+        bot.client.debug_sphere_out(
+            Point3((target.x, target.y, tz + 0.5)),
+            0.8,
+            sphere_color,
+        )
+        bot.client.debug_text_world(
+            label,
+            Point3((target.x, target.y, tz + 1.5)),
+            color=(255, 255, 255),
+            size=12,
+        )
+
+    # Draw lines from each unit to its sub-group target
+    groups_and_targets = [
+        (left_group, left_target, Point3((255, 0, 255))),      # Magenta
+        (center_group, center_target, Point3((255, 255, 255))), # White
+        (right_group, right_target, Point3((0, 255, 255))),     # Cyan
+    ]
+    for group, target, line_color in groups_and_targets:
+        tz = bot.get_terrain_z_height(target)
+        for unit in group:
+            uz = bot.get_terrain_z_height(unit.position)
+            bot.client.debug_line_out(
+                Point3((unit.position.x, unit.position.y, uz + 0.3)),
+                Point3((target.x, target.y, tz + 0.3)),
+                color=line_color,
+            )
+
+    # Draw perpendicular spread line (yellow dashed — left target to right target)
+    lz = bot.get_terrain_z_height(left_target)
+    rz = bot.get_terrain_z_height(right_target)
+    bot.client.debug_line_out(
+        Point3((left_target.x, left_target.y, lz + 0.2)),
+        Point3((right_target.x, right_target.y, rz + 0.2)),
+        color=Point3((255, 255, 0)),  # Yellow spread line
+    )
+
+    # 2D summary
+    dist = cy_distance_to(squad_center, enemy_center)
+    bot.client.debug_text_2d(
+        f"Concave: {status} | {len(ranged_units)}rng | L:{len(left_group)} C:{len(center_group)} R:{len(right_group)} | D:{dist:.0f}",
+        Point2((0.1, 0.48)), None, 12
+    )
+
+
 def log_nova_error(error: Exception) -> None:
     """
     Log NovaManager errors (always shown, not gated by debug flag).

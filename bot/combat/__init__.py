@@ -37,6 +37,11 @@ from bot.combat.target_scoring import (
     select_target,
 )
 
+from bot.combat.formation import (
+    execute_fan_out,
+    clear_formation_state,
+)
+
 __all__ = [
     # Constants
     "ATTACKING_SQUAD_RADIUS",
@@ -64,4 +69,7 @@ __all__ = [
     # Target scoring
     "score_target",
     "select_target",
+    # Formation
+    "execute_fan_out",
+    "clear_formation_state",
 ]

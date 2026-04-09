@@ -228,6 +228,28 @@ MAP_CHOKE_RADIUS = 3.5
 CHOKE_GRID_WEIGHT = 10.0
 """Weight value to mark choke zones in grid (>1.0 indicates choke area)"""
 
+# ===== CONCAVE FORMATION =====
+CONCAVE_TRIGGER_RANGE = 25.0
+"""Distance to enemy center at which squads begin fan-out spread"""
+
+CONCAVE_MIN_RANGED_UNITS = 4
+"""Minimum ground ranged units in a squad to bother with concave formation"""
+
+CONCAVE_FAN_WIDTH_PER_UNIT = 1.0
+"""Lateral spread per ranged unit (total fan width = n * this, capped)"""
+
+CONCAVE_MAX_FAN_WIDTH = 15.0
+"""Maximum total lateral spread width regardless of unit count"""
+
+CONCAVE_SPREAD_FRAMES = 70
+"""Max frames (~3s at 22fps) to spend spreading before forcing engagement"""
+
+CONCAVE_WEAPON_RANGE_ABORT = 8.0
+"""If enemy closer than this, skip/abort formation and fight immediately"""
+
+CONCAVE_RESET_RANGE = 35.0
+"""Distance to enemy above which formation state resets (ready for next engagement)"""
+
 # ===== RESOURCE-AWARE PRODUCTION =====
 RESOURCE_PRESSURE_MAX_NUDGE = 0.15
 """Maximum proportion shift per unit type from resource pressure (±15%). Larger than counter-table nudge since resource starvation is more urgent."""

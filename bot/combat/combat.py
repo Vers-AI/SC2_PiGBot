@@ -65,6 +65,7 @@ from bot.combat.unit_micro import (
     micro_melee_unit,
     micro_disruptor,
 )
+from bot.combat.formation import execute_fan_out, clear_formation_state
 from bot.combat.target_scoring import select_target, update_upgrades
 from ares.dicts.unit_data import UNIT_DATA
 from bot.utilities.debug import (
@@ -76,6 +77,7 @@ from bot.utilities.debug import (
     render_observer_debug,
     log_nova_error,
     render_formation_debug,
+    render_concave_formation_debug,
 )
 from bot.utilities.intel import get_enemy_intel_quality
 
@@ -389,6 +391,23 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
             ranged = [u for u in units if u.ground_range > MELEE_RANGE_THRESHOLD and u.energy == 0 and u.can_attack]
             spellcasters = [u for u in units if (u.energy > 0 and not u.is_flying) or u.type_id == UnitTypeId.DISRUPTOR]
             
+            # --- Concave formation: fan out ranged units before engagement ---
+            # Compute enemy center for formation targeting
+            enemy_center_mass, _ = cy_find_units_center_mass(all_close, 20.0)
+            enemy_center = Point2(enemy_center_mass)
+            
+            # Only attempt formation when engaging (not retreating)
+            formation_active = False
+            if can_engage and ranged:
+                formation_active = execute_fan_out(
+                    bot, squad.squad_id, ranged, squad_position, enemy_center
+                )
+            
+            # Debug: visualize concave formation state
+            render_concave_formation_debug(
+                bot, squad.squad_id, ranged, squad_position, enemy_center, formation_active
+            )
+            
             # Weighted scoring: pick best target for fallback movement direction
             # Uses first squad unit as reference (any unit works — just for direction)
             enemy_target = select_target(units[0], all_close)
@@ -407,8 +426,10 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                         )
                         r_unit.move(safe_spot)
                         
-            # Ranged micro - weighted scoring handles priority targeting
+            # Ranged micro - skip if formation fan-out is handling them
             for r_unit in ranged:
+                if formation_active:
+                    continue  # Formation issued group commands — skip individual micro
                 if r_unit in ranged_on_unsafe_ground:
                     continue  # Skip units retreating to safer ground
                 
@@ -485,6 +506,9 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     bot.register_behavior(caster_maneuver)
                         
         else:
+            # No enemies — clear formation state so next engagement starts fresh
+            clear_formation_state(bot, squad.squad_id)
+            
             # Check for nearby enemy structures
             nearby_structures = bot.enemy_structures.closer_than(STRUCTURE_ATTACK_RANGE, squad_position)
             
