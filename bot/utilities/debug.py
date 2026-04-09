@@ -786,6 +786,54 @@ def render_observer_debug(bot) -> None:
     )
 
 
+def render_blind_ramp_debug(bot, unit, ramp) -> None:
+    """Render debug for units blocked by blind ramp attack check.
+
+    Shows:
+    - Orange 'BLIND RAMP' label on the affected unit
+    - Orange line from unit to the ramp bottom it's reacting to
+    - Red sphere at the ramp top (unseen enemy location)
+    """
+    if not bot.debug:
+        return
+
+    pos = unit.position
+    z = bot.get_terrain_z_height(pos)
+
+    # Find which enemy triggered this (re-check logic to get the enemy type)
+    enemy_label = "?"
+    for enemy in bot.all_enemy_units:
+        if enemy.ground_range < 2:
+            continue
+        if cy_distance_to(enemy.position, ramp.top_center) < 6.0:
+            enemy_label = enemy.type_id.name[:6]
+            break
+
+    # Orange label on unit
+    bot.client.debug_text_world(
+        f"BLIND RAMP ({enemy_label})",
+        Point3((pos.x, pos.y, z + 1.5)),
+        color=(255, 100, 0),
+        size=12,
+    )
+
+    # Orange line from unit to ramp bottom
+    ramp_z = bot.get_terrain_z_height(ramp.bottom_center)
+    bot.client.debug_line_out(
+        Point3((pos.x, pos.y, z + 0.3)),
+        Point3((ramp.bottom_center.x, ramp.bottom_center.y, ramp_z + 0.3)),
+        color=Point3((255, 100, 0)),
+    )
+
+    # Red sphere at ramp top (where we can't see)
+    top_z = bot.get_terrain_z_height(ramp.top_center)
+    bot.client.debug_sphere_out(
+        Point3((ramp.top_center.x, ramp.top_center.y, top_z + 0.5)),
+        1.0,
+        Point3((255, 0, 0)),
+    )
+
+
 def render_concave_formation_debug(
     bot,
     squad_id: str,

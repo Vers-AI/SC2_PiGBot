@@ -1,7 +1,7 @@
 import math
 import numpy as np
 
-from sc2.position import Point2
+from sc2.position import Point2, Point3
 from sc2.units import Units
 from sc2.unit import Unit
 from sc2.ids.unit_typeid import UnitTypeId
@@ -78,6 +78,7 @@ from bot.utilities.debug import (
     log_nova_error,
     render_formation_debug,
     render_concave_formation_debug,
+    render_blind_ramp_debug,
 )
 from bot.utilities.intel import get_enemy_intel_quality
 
@@ -143,7 +144,7 @@ def is_near_choke_or_ramp(bot, army_center: Point2) -> bool:
     return bot.choke_grid[x, y] > 1.0
 
 
-def is_blind_ramp_attack(bot, unit: Unit) -> bool:
+def is_blind_ramp_attack(bot, unit: Unit):
     """
     Check if unit is at the bottom of a ramp with enemy ranged units at the
     unseen top - attacking would be a blind disadvantage.
@@ -151,7 +152,7 @@ def is_blind_ramp_attack(bot, unit: Unit) -> bool:
     From anglerbot: Used to trigger KeepUnitSafe instead of attacking.
     
     Returns:
-        True if unit should NOT attack (retreat instead), False otherwise
+        The matched Ramp if unit should NOT attack, None otherwise
     """
     for ramp in bot.game_info.map_ramps:
         # Check if unit is at bottom of this ramp
@@ -168,9 +169,9 @@ def is_blind_ramp_attack(bot, unit: Unit) -> bool:
             if enemy.ground_range < 2:  # Skip melee
                 continue
             if cy_distance_to(enemy.position, ramp.top_center) < 6.0:
-                return True  # Enemy ranged at top - don't attack blind
+                return ramp  # Enemy ranged at top - don't attack blind
                 
-    return False
+    return None
 
 
 def is_unit_on_ramp(bot, unit: Unit) -> bool:
@@ -434,7 +435,9 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     continue  # Skip units retreating to safer ground
                 
                 # Ramp safety: don't attack up ramp without vision (blind disadvantage)
-                if is_blind_ramp_attack(bot, r_unit):
+                blind_ramp = is_blind_ramp_attack(bot, r_unit)
+                if blind_ramp:
+                    render_blind_ramp_debug(bot, r_unit, blind_ramp)
                     retreat_maneuver = CombatManeuver()
                     retreat_maneuver.add(KeepUnitSafe(unit=r_unit, grid=avoid_grid))
                     bot.register_behavior(retreat_maneuver)
