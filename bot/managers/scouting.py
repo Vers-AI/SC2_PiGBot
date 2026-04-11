@@ -509,12 +509,15 @@ def control_army_observer(bot, observer: Optional[Unit], main_army: Units) -> No
         obs_pos = observer.position
         
         # Find invisible enemies near the forward army or the observer.
-        # Uses cy_distance_to for speed; checks unit state (is_cloaked/is_burrowed)
-        # rather than matching against a hardcoded type list.
+        # Uses all_enemy_units (includes memory) to find cloaked/burrowed units
+        # that have disappeared from vision. Skip units already revealed.
         closest_invis = None
         closest_dist = float("inf")
-        for enemy in bot.enemy_units:
+        for enemy in bot.all_enemy_units:
             if not (enemy.is_cloaked or enemy.is_burrowed):
+                continue
+            # Skip if cloaked but already being detected
+            if enemy.is_cloaked and enemy.is_revealed:
                 continue
             d_fwd = cy_distance_to(enemy.position, fwd_pos)
             d_obs = cy_distance_to(enemy.position, obs_pos)
