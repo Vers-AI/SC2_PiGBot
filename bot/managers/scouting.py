@@ -468,9 +468,8 @@ def _get_forward_army_center(army: Units, target_point: Point2) -> Point2:
     return Point2((x, y))
 
 
-# Detection search radius around the forward army / observer
+# Detection search radius around the forward army
 _DETECT_SEARCH_RADIUS = 15.0
-_DETECT_OBS_RADIUS = 12.0
 _RAMP_PROXIMITY_RADIUS = 10.0  # Army must be within this of ramp bottom to trigger vision scout
 
 
@@ -506,23 +505,23 @@ def control_army_observer(bot, observer: Optional[Unit], main_army: Units) -> No
         target_point = attack_target(bot, main_army.center)
         forward_center = _get_forward_army_center(main_army, target_point)
         fwd_pos = forward_center
-        obs_pos = observer.position
         
-        # Find invisible enemies near the forward army or the observer.
-        # Uses all_enemy_units (includes memory) to find cloaked/burrowed units
-        # that have disappeared from vision. Skip units already revealed.
+        # Find invisible enemies near the forward army.
+        # Uses ARES KDTree query around fwd_pos for O(log n) performance,
+        # then filters for cloaked/burrowed units that need detection.
         closest_invis = None
         closest_dist = float("inf")
-        for enemy in bot.all_enemy_units:
+        enemies_near_army = bot.mediator.get_units_in_range(
+            start_positions=[fwd_pos],
+            distances=_DETECT_SEARCH_RADIUS,
+            query_type=UnitTreeQueryType.AllEnemy,
+        )[0]
+        for enemy in enemies_near_army:
             if not (enemy.is_cloaked or enemy.is_burrowed):
                 continue
-            # Skip if cloaked but already being detected
             if enemy.is_cloaked and enemy.is_revealed:
                 continue
             d_fwd = cy_distance_to(enemy.position, fwd_pos)
-            d_obs = cy_distance_to(enemy.position, obs_pos)
-            if d_fwd > _DETECT_SEARCH_RADIUS and d_obs > _DETECT_OBS_RADIUS:
-                continue
             if d_fwd < closest_dist:
                 closest_dist = d_fwd
                 closest_invis = enemy
