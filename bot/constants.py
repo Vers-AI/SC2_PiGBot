@@ -228,6 +228,27 @@ MAP_CHOKE_RADIUS = 3.5
 CHOKE_GRID_WEIGHT = 10.0
 """Weight value to mark choke zones in grid (>1.0 indicates choke area)"""
 
+CHOKE_SAMPLE_POINTS = 8
+"""Number of points to sample along the line between squad and enemy to detect chokes"""
+
+CHOKE_MELEE_DPS_THRESHOLD = 0.35
+"""Minimum enemy_melee_dps / total_enemy_dps ratio for choke to be considered favorable.
+Below this, the enemy is mostly ranged and choke doesn't help enough to suppress engagement."""
+
+CHOKE_MELEE_RANGE = 3.0
+"""Ground range threshold to classify enemy units as melee for choke DPS calculation.
+Matches MELEE_RANGE_THRESHOLD but kept separate for choke-specific tuning."""
+
+CHOKE_MAX_WIDTH = 10.0
+"""Maximum choke width (tiles) to include in the choke-width map. Wider chokes don't limit
+engagement surface area enough to matter. SC2 ramps are ~3-5 tiles, natural walls ~6-8.
+Note: This is a pre-filter only. At engagement time, the choke width is compared against
+the effective army widths — a 10-tile choke won't suppress engagement if both armies fit."""
+
+CHOKE_MIN_ARMY_WIDTH = 2.0
+"""Minimum effective army width returned by effective_army_width(). Prevents tiny squads
+(1-2 units) from trivially passing through any choke and triggering the policy."""
+
 # ===== CONCAVE FORMATION =====
 CONCAVE_TRIGGER_RANGE = 25.0
 """Distance to enemy center at which squads begin fan-out spread"""

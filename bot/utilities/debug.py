@@ -938,6 +938,143 @@ def render_concave_formation_debug(
     )
 
 
+def render_choke_policy_debug(
+    bot,
+    squad_position,
+    enemy_center,
+    melee_ratio: float,
+    choke_width: float,
+    our_width: float,
+    enemy_width: float,
+) -> None:
+    """Render debug for choke policy engagement suppression.
+
+    Shows:
+    - Yellow 'CHOKE HOLD' label at squad position with melee DPS ratio
+    - Choke width vs army widths for both sides
+    - Yellow line from squad to enemy center (crossing the choke)
+    """
+    if not bot.debug:
+        return
+
+    z = bot.get_terrain_z_height(squad_position)
+
+    # Yellow label on squad with width comparison
+    bot.client.debug_text_world(
+        f"CHOKE HOLD ({melee_ratio:.0%} melee) | choke:{choke_width:.1f} us:{our_width:.1f} them:{enemy_width:.1f}",
+        Point3((squad_position.x, squad_position.y, z + 2.0)),
+        color=(255, 255, 0),
+        size=14,
+    )
+
+    # Yellow line from squad to enemy center
+    ez = bot.get_terrain_z_height(enemy_center)
+    bot.client.debug_line_out(
+        Point3((squad_position.x, squad_position.y, z + 0.3)),
+        Point3((enemy_center.x, enemy_center.y, ez + 0.3)),
+        color=Point3((255, 255, 0)),
+    )
+
+
+def render_choke_decision_debug(
+    bot,
+    squad_position,
+    enemy_center,
+    choke_width: float,
+    our_width: float,
+    enemy_width: float,
+    decision: str,
+) -> None:
+    """Render the choke policy decision for a squad near a choke.
+
+    Shows the decision outcome even when the policy does NOT suppress engagement,
+    so you can see why the bot chose to engage or hold.
+
+    Args:
+        decision: One of 'HOLD:we_funnel', 'HOLD:lure', 'HOLD:melee_ratio',
+                  'PASS:irrelevant', 'PASS:both_fit'
+    """
+    if not bot.debug:
+        return
+
+    z = bot.get_terrain_z_height(squad_position)
+
+    # Color: yellow for HOLD, green for PASS (engaging normally)
+    if decision.startswith("HOLD"):
+        color = (255, 255, 0)  # Yellow
+    else:
+        color = (0, 200, 0)    # Green
+
+    bot.client.debug_text_world(
+        f"CHOKE {decision} | w:{choke_width:.1f} us:{our_width:.1f} them:{enemy_width:.1f}",
+        Point3((squad_position.x, squad_position.y, z + 1.5)),
+        color=color,
+        size=12,
+    )
+
+    # Line from squad to enemy center (yellow for hold, green for pass)
+    ez = bot.get_terrain_z_height(enemy_center)
+    line_color = Point3((255, 255, 0)) if decision.startswith("HOLD") else Point3((0, 200, 0))
+    bot.client.debug_line_out(
+        Point3((squad_position.x, squad_position.y, z + 0.3)),
+        Point3((enemy_center.x, enemy_center.y, ez + 0.3)),
+        color=line_color,
+    )
+
+
+def render_narrow_choke_points(bot) -> None:
+    """Render narrow choke point tiles and width labels on the map.
+    
+    Draws:
+    - Small yellow spheres at each narrow choke tile
+    - Width label at each choke's center point
+    - Side_a → side_b line showing the choke's narrowest span
+    
+    Called every frame from on_step (SC2 clears debug drawings each frame).
+    Lightweight: only iterates the pre-computed dict, no map_analyzer calls.
+    """
+    if not bot.debug:
+        return
+    
+    choke_width_map = getattr(bot, 'narrow_choke_points', None)
+    if not choke_width_map:
+        return
+    
+    # Group tiles by width (each unique width = one choke)
+    # We only need the center label per choke, not per-tile
+    width_to_tiles: dict[float, list[Point2]] = {}
+    for tile, w in choke_width_map.items():
+        width_to_tiles.setdefault(round(w, 1), []).append(tile)
+    
+    # Draw each choke group
+    for width, tiles in width_to_tiles.items():
+        # Find center of this choke's tiles for the label
+        cx = sum(t.x for t in tiles) / len(tiles)
+        cy = sum(t.y for t in tiles) / len(tiles)
+        center = Point2((cx, cy))
+        z = bot.get_terrain_z_height(center)
+        
+        # Width label at choke center
+        bot.client.debug_text_world(
+            f"CHOKE w={width:.1f}",
+            Point3((cx, cy, z + 1.5)),
+            color=(255, 255, 0),
+            size=12,
+        )
+        
+        # Draw a subset of tiles as small spheres (skip every other to reduce draw calls)
+        # For large chokes this keeps it readable
+        step = max(1, len(tiles) // 30)  # Cap at ~30 spheres per choke
+        for i in range(0, len(tiles), step):
+            tile = tiles[i]
+            tz = bot.get_terrain_z_height(tile)
+            bot.client.debug_sphere_out(
+                Point3((tile.x, tile.y, tz + 0.3)),
+                0.3,
+                Point3((255, 255, 0)),  # Yellow
+            )
+
+
 def log_nova_error(error: Exception) -> None:
     """
     Log NovaManager errors (always shown, not gated by debug flag).

@@ -40,7 +40,8 @@ from bot.combat import (
     gatekeeper_control,
     manage_defensive_unit_roles
 )
-from bot.utilities.intel import update_enemy_intel_tracking, create_choke_grid
+from bot.utilities.intel import update_enemy_intel_tracking, create_choke_grid, create_narrow_choke_points
+from bot.utilities.debug import render_narrow_choke_points
 from ares.behaviors.macro import Mining
 #debugs
 from bot.utilities.use_disruptor_nova import UseDisruptorNova
@@ -140,6 +141,7 @@ class PiG_Bot(AresBot):
         self._br_scout_waypoints: dict = {}  # {tag: {'waypoints': list[Point2], 'idx': int}}
         self._observer_hunt_mode = False  # Sticky flag: stays True until freshness >= FRESH_INTEL_THRESHOLD
         self._hunting_observer_tag = None  # Tag of observer currently hunting (set per-frame)
+        self._blind_ramp_target: Optional[Point2] = None  # Set per-frame by combat when army blocked by blind ramp
 
 
 
@@ -164,6 +166,8 @@ class PiG_Bot(AresBot):
         
         # Create choke grid for O(1) formation skip detection
         self.choke_grid = create_choke_grid(self)
+        # Pre-filtered set of choke tiles from narrow passages only (width < CHOKE_MAX_WIDTH)
+        self.narrow_choke_points: dict[Point2, float] = create_narrow_choke_points(self)
 
         self.current_base_target = self.enemy_start_locations[0]
 
@@ -231,6 +235,9 @@ class PiG_Bot(AresBot):
         """
         await super(PiG_Bot, self).on_step(iteration)
         
+        # Render narrow choke points on map (debug only, no-op when debug=False)
+        render_narrow_choke_points(self)
+        
         # Print periodic intel report (every 30 game seconds)
         print_periodic_intel_report(self, iteration)
         
@@ -261,6 +268,9 @@ class PiG_Bot(AresBot):
         
         # Update enemy intel tracking (for combat sim trust)
         update_enemy_intel_tracking(self)
+
+        # Reset per-frame flags (set by combat during this step)
+        self._blind_ramp_target = None
 
         # Retrieve roles (initial fetch)
         main_army = self.mediator.get_units_from_role(role=UnitRole.ATTACKING)

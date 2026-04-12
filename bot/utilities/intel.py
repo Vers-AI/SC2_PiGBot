@@ -19,6 +19,7 @@ from bot.constants import (
     RAMP_CHOKE_RADIUS,
     MAP_CHOKE_RADIUS,
     CHOKE_GRID_WEIGHT,
+    CHOKE_MAX_WIDTH,
     MEMORY_EXPIRY_TIME,
     VISIBLE_AGE_THRESHOLD,
     STALENESS_WINDOW,
@@ -63,6 +64,58 @@ def create_choke_grid(bot: "PiG_Bot") -> np.ndarray:
         )
     
     return grid
+
+
+def create_narrow_choke_points(bot: "PiG_Bot") -> dict[Point2, float]:
+    """
+    Build a dict mapping choke tile → choke width for chokes ≤ CHOKE_MAX_WIDTH.
+    
+    Wide-open "chokes" that map_analyzer classifies don't actually bottleneck armies,
+    so we pre-filter at game start and only keep tiles from real narrow passages.
+    
+    Width measurement per choke type:
+      - RawChoke: md_pl_choke.min_length (exact C-extension measurement)
+      - MDRamp / VisionBlockerArea: side_a ↔ side_b distance
+      - Fallback: Polygon.width (approximate, 0.5-1.5x real)
+    
+    Returns dict so is_choke_between() can look up the width of the matched choke
+    and compare it against the effective army widths at engagement time.
+    
+    Call once in on_start, store as bot.narrow_choke_points.
+    """
+    map_data: MapData = bot.mediator.get_map_data_object
+    choke_width_map: dict[Point2, float] = {}
+    total_chokes = len(map_data.map_chokes)
+    narrow_count = 0
+    
+    for choke in map_data.map_chokes:
+        # Measure choke width using the best available metric
+        width = None
+        if hasattr(choke, "md_pl_choke") and choke.md_pl_choke is not None:
+            # RawChoke: exact min distance between sides from C extension
+            width = choke.md_pl_choke.min_length
+        elif choke.side_a is not None and choke.side_b is not None:
+            # MDRamp / VisionBlockerArea: distance between computed sides
+            sa = Point2(choke.side_a) if not isinstance(choke.side_a, Point2) else choke.side_a
+            sb = Point2(choke.side_b) if not isinstance(choke.side_b, Point2) else choke.side_b
+            width = sa.distance_to(sb)
+        
+        if width is None:
+            # Fallback: approximate Polygon.width
+            width = choke.width
+        
+        label = "NARROW" if width <= CHOKE_MAX_WIDTH else "WIDE  "
+        center = getattr(choke, 'center', None)
+        center_str = f" center=({center.x:.0f},{center.y:.0f})" if center else ""
+        print(f"  [{label}] {choke!r} width={width:.1f}{center_str}")
+        
+        if width <= CHOKE_MAX_WIDTH:
+            for point in choke.points:
+                choke_width_map[point] = width
+            narrow_count += 1
+    
+    print(f"Choke policy: {narrow_count}/{total_chokes} chokes are narrow (≤{CHOKE_MAX_WIDTH} tiles), {len(choke_width_map)} tiles tracked")
+    return choke_width_map
 
 
 def is_near_choke(choke_grid: np.ndarray, position: Point2) -> bool:
