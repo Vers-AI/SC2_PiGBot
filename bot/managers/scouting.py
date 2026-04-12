@@ -470,7 +470,6 @@ def _get_forward_army_center(army: Units, target_point: Point2) -> Point2:
 
 # Detection search radius around the forward army
 _DETECT_SEARCH_RADIUS = 15.0
-_RAMP_PROXIMITY_RADIUS = 10.0  # Army must be within this of ramp bottom to trigger vision scout
 
 
 def control_army_observer(bot, observer: Optional[Unit], main_army: Units) -> None:
@@ -480,7 +479,8 @@ def control_army_observer(bot, observer: Optional[Unit], main_army: Units) -> No
     Behavior priority:
     1. Flee if taking damage
     2. Move to invisible enemy (is_cloaked or is_burrowed) near army for detection
-    3. Lead ahead of the forward army units toward the attack target
+    3. Provide vision for army blocked by blind ramp (enemies on high ground)
+    4. Lead ahead of the forward army units toward the attack target
     
     Parameters:
     - bot: The bot instance
@@ -512,9 +512,9 @@ def control_army_observer(bot, observer: Optional[Unit], main_army: Units) -> No
         closest_invis = None
         closest_dist = float("inf")
         enemies_near_army = bot.mediator.get_units_in_range(
-            start_positions=[fwd_pos],
+            start_points=[fwd_pos],
             distances=_DETECT_SEARCH_RADIUS,
-            query_type=UnitTreeQueryType.AllEnemy,
+            query_tree=UnitTreeQueryType.AllEnemy,
         )[0]
         for enemy in enemies_near_army:
             if not (enemy.is_cloaked or enemy.is_burrowed):
@@ -528,32 +528,21 @@ def control_army_observer(bot, observer: Optional[Unit], main_army: Units) -> No
         
         if closest_invis:
             follow_target = closest_invis.position
+        elif bot._blind_ramp_target:
+            follow_target = bot._blind_ramp_target
         else:
-            # Ramp vision: if the army is near the bottom of a ramp without
-            # vision at the top, send the observer up to scout before committing.
-            ramp_target = None
-            best_ramp_dist = _RAMP_PROXIMITY_RADIUS
-            for ramp in bot.game_info.map_ramps:
-                d = cy_distance_to(fwd_pos, ramp.bottom_center)
-                if d < best_ramp_dist and not bot.is_visible(ramp.top_center):
-                    best_ramp_dist = d
-                    ramp_target = ramp.top_center
+            # Lead ahead of the forward army toward the attack target
+            lead_distance = 10
+            tentative = Point2(forward_center.towards(target_point, lead_distance))
             
-            if ramp_target:
-                follow_target = Point2(ramp_target)
-            else:
-                # Lead ahead of the forward army toward the attack target
-                lead_distance = 10
-                tentative = Point2(forward_center.towards(target_point, lead_distance))
-                
-                try:
-                    influence = air_grid[int(tentative.x)][int(tentative.y)]
-                    if influence > 1:
-                        lead_distance = 5
-                except Exception:
-                    lead_distance = 8
-                
-                follow_target = Point2(forward_center.towards(target_point, lead_distance))
+            try:
+                influence = air_grid[int(tentative.x)][int(tentative.y)]
+                if influence > 1:
+                    lead_distance = 5
+            except Exception:
+                lead_distance = 8
+            
+            follow_target = Point2(forward_center.towards(target_point, lead_distance))
         
         # Use the air grid to route around static defense (spores, cannons, turrets).
         # danger_distance=8 gives moderate avoidance without fleeing from the army area.
