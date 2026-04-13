@@ -249,6 +249,13 @@ CHOKE_MIN_ARMY_WIDTH = 2.0
 """Minimum effective army width returned by effective_army_width(). Prevents tiny squads
 (1-2 units) from trivially passing through any choke and triggering the policy."""
 
+CHOKE_RETREAT_DIST = 7.0
+"""Distance (tiles) behind the choke tile to set the retreat target.
+Anchored to the specific choke tile (not squad position) so the bot retreats
+to a stable fixed point rather than continuing through multiple choke points.
+Ramp retreat uses 4.0 per-unit; group retreat uses a smaller distance since
+the anchor is the choke edge, not the current squad position."""
+
 # ===== CONCAVE FORMATION =====
 CONCAVE_TRIGGER_RANGE = 25.0
 """Distance to enemy center at which squads begin fan-out spread"""

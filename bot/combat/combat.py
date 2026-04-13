@@ -13,6 +13,7 @@ from ares.behaviors.combat import CombatManeuver
 from ares.behaviors.combat.individual import (
     KeepUnitSafe, PathUnitToTarget, StutterUnitBack, AMove, ShootTargetInRange
 )
+from ares.behaviors.combat.group import PathGroupToTarget
 from ares.managers.squad_manager import UnitSquad
 
 from ares.consts import UnitRole
@@ -63,6 +64,7 @@ from bot.constants import (
     CHOKE_MELEE_DPS_THRESHOLD,
     CHOKE_MELEE_RANGE,
     CHOKE_MIN_ARMY_WIDTH,
+    CHOKE_RETREAT_DIST,
 )
 from bot.combat.unit_micro import (
     micro_ranged_unit,
@@ -134,14 +136,14 @@ def get_attackable_enemies(unit: Unit, enemies: list, grid: np.ndarray) -> list:
 
 def is_choke_between(
     choke_width_map: dict[Point2, float], squad_pos: Point2, enemy_pos: Point2
-) -> float:
+) -> tuple[float, Point2 | None]:
     """
     Detect if a choke exists on the line between squad and enemy.
     
     Samples points along the straight line and checks against the
-    dict of choke tile → width. Returns the width of the matched choke
-    (or 0.0 if no choke found) so the caller can compare against
-    effective army widths.
+    dict of choke tile → width. Returns the width AND the specific tile
+    position of the matched choke so callers can anchor retreat logic to
+    that exact choke rather than the squad's current position.
     
     O(CHOKE_SAMPLE_POINTS) with O(1) dict lookups — fast and accurate.
     
@@ -151,7 +153,8 @@ def is_choke_between(
         enemy_pos: Enemy group center position
         
     Returns:
-        Width of the matched choke in tiles, or 0.0 if no choke detected.
+        (width, choke_tile): Width in tiles and the matched tile position,
+        or (0.0, None) if no choke detected.
     """
     dx = enemy_pos.x - squad_pos.x
     dy = enemy_pos.y - squad_pos.y
@@ -159,8 +162,8 @@ def is_choke_between(
         t = i / CHOKE_SAMPLE_POINTS
         sample = Point2((int(squad_pos.x + dx * t), int(squad_pos.y + dy * t)))
         if sample in choke_width_map:
-            return choke_width_map[sample]
-    return 0.0
+            return choke_width_map[sample], sample
+    return 0.0, None
 
 
 def effective_army_width(units: list[Unit]) -> float:
@@ -168,7 +171,9 @@ def effective_army_width(units: list[Unit]) -> float:
     Estimate how much horizontal space an army occupies.
     
     A choke narrower than this forces the army to compress/funnel.
-    Uses 2× max distance from center mass as a diameter approximation.
+    Uses 2× mean distance from center mass as a diameter approximation.
+    max_dist was too sensitive to outliers — one kiting unit far from the
+    group could flip the funnel assessment every other frame.
     
     Small armies (≤2 units) return a minimum of 2.0 to avoid
     trivially passing through any choke.
@@ -184,8 +189,8 @@ def effective_army_width(units: list[Unit]) -> float:
     
     center, _ = cy_find_units_center_mass(units, 10.0)
     center = Point2(center)
-    max_dist = max(cy_distance_to(u.position, center) for u in units)
-    return max_dist * 2
+    mean_dist = sum(cy_distance_to(u.position, center) for u in units) / len(units)
+    return mean_dist * 2
 
 
 def compute_choke_melee_ratio(enemies) -> float:
@@ -422,6 +427,7 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
         # Fallback: if any enemy is actively attacking our units (in weapon range + facing),
         # override the army_value gate so our units can micro (e.g. Stalker kites lone Ling).
         enemy_actively_engaging = False
+        decisive_victory = False  # set True below when sim result is decisive — overrides choke hold
         if all_close and enemy_army_value < ENGAGEMENT_ARMY_VALUE_THRESHOLD:
             for enemy in all_close:
                 attack_range = enemy.ground_range + enemy.radius + ACTIVE_ENGAGE_RANGE_BUFFER
@@ -455,6 +461,7 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     enemy_units=combat_enemies,
                     workers_do_no_damage=True,
                 )
+                decisive_victory = squad_fight_result in VICTORY_DECISIVE_OR_BETTER
                 
                 # Initialize squad tracking if first encounter
                 squad_id = squad.squad_id
@@ -479,62 +486,97 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
             # who actually gets funneled. A choke only matters if it compresses
             # at least one side's army below its natural width.
             choke_active = False
+            enemy_center_chk: Point2 | None = None
+            choke_tile: Point2 | None = None
             if can_engage and bot._commenced_attack:
-                enemy_center_mass_chk, _ = cy_find_units_center_mass(all_close, 20.0)
-                enemy_center_chk = Point2(enemy_center_mass_chk)
-                choke_width = is_choke_between(choke_width_map, squad_position, enemy_center_chk)
-                if choke_width > 0.0:
-                    our_width = effective_army_width(units)
-                    enemy_width = effective_army_width(all_close)
-                    we_funnel = our_width > choke_width
-                    they_funnel = enemy_width > choke_width
-                    
-                    if we_funnel and not they_funnel:
-                        # We compress, they don't — bad for us
-                        can_engage = False
-                        choke_active = True
-                        render_choke_decision_debug(
-                            bot, squad_position, enemy_center_chk,
-                            choke_width, our_width, enemy_width, "HOLD:we_funnel"
-                        )
-                    elif they_funnel and not we_funnel:
-                        # They compress, we don't — lure them through
-                        can_engage = False
-                        choke_active = True
-                        render_choke_decision_debug(
-                            bot, squad_position, enemy_center_chk,
-                            choke_width, our_width, enemy_width, "HOLD:lure"
-                        )
-                    elif we_funnel and they_funnel:
-                        # Both funnel — melee ratio decides
-                        melee_ratio = compute_choke_melee_ratio(all_close)
-                        if melee_ratio >= CHOKE_MELEE_DPS_THRESHOLD:
+                # Only ground combat units matter for choke calculations.
+                # Flying units bypass chokes entirely; workers don't fight.
+                # COMMON_UNIT_IGNORE_TYPES already removed overlords/observers from all_close.
+                choke_enemies = [u for u in all_close if not u.is_flying and u.type_id not in WORKER_TYPES]
+                if choke_enemies:
+                    enemy_center_mass_chk, _ = cy_find_units_center_mass(choke_enemies, 20.0)
+                    enemy_center_chk = Point2(enemy_center_mass_chk)
+                    choke_width, choke_tile = is_choke_between(choke_width_map, squad_position, enemy_center_chk)
+                    if choke_width > 0.0:
+                        our_width = effective_army_width(units)
+                        enemy_width = effective_army_width(choke_enemies)
+                        we_funnel = our_width > choke_width
+                        they_funnel = enemy_width > choke_width
+                        
+                        if decisive_victory:
+                            # Winning so decisively that funneling doesn't matter — push through
+                            render_choke_decision_debug(
+                                bot, squad_position, enemy_center_chk,
+                                choke_width, our_width, enemy_width, "PASS:decisive_win"
+                            )
+                        elif we_funnel and not they_funnel:
+                            # We compress, they don't — bad for us
                             can_engage = False
                             choke_active = True
                             render_choke_decision_debug(
                                 bot, squad_position, enemy_center_chk,
-                                choke_width, our_width, enemy_width, "HOLD:melee_ratio"
+                                choke_width, our_width, enemy_width, "HOLD:we_funnel"
                             )
-                        else:
+                        elif they_funnel and not we_funnel:
+                            # They compress, we don't — lure them through
+                            can_engage = False
+                            choke_active = True
                             render_choke_decision_debug(
                                 bot, squad_position, enemy_center_chk,
-                                choke_width, our_width, enemy_width, "PASS:low_melee"
+                                choke_width, our_width, enemy_width, "HOLD:lure"
                             )
-                    else:
-                        # Neither funnels, choke is irrelevant
-                        render_choke_decision_debug(
-                            bot, squad_position, enemy_center_chk,
-                            choke_width, our_width, enemy_width, "PASS:both_fit"
-                        )
-                    
-                    # Detailed HOLD label with melee ratio (only when suppressed)
-                    if choke_active:
-                        melee_ratio = compute_choke_melee_ratio(all_close)
-                        render_choke_policy_debug(
-                            bot, squad_position, enemy_center_chk,
-                            melee_ratio, choke_width, our_width, enemy_width
-                        )
-            
+                        elif we_funnel and they_funnel:
+                            # Both funnel — melee ratio decides
+                            melee_ratio = compute_choke_melee_ratio(choke_enemies)
+                            if melee_ratio >= CHOKE_MELEE_DPS_THRESHOLD:
+                                can_engage = False
+                                choke_active = True
+                                render_choke_decision_debug(
+                                    bot, squad_position, enemy_center_chk,
+                                    choke_width, our_width, enemy_width, "HOLD:melee_ratio"
+                                )
+                            else:
+                                render_choke_decision_debug(
+                                    bot, squad_position, enemy_center_chk,
+                                    choke_width, our_width, enemy_width, "PASS:low_melee"
+                                )
+                        else:
+                            # Neither funnels, choke is irrelevant
+                            render_choke_decision_debug(
+                                bot, squad_position, enemy_center_chk,
+                                choke_width, our_width, enemy_width, "PASS:both_fit"
+                            )
+                        
+                        # Detailed HOLD label with melee ratio (only when suppressed)
+                        if choke_active:
+                            melee_ratio = compute_choke_melee_ratio(choke_enemies)
+                            render_choke_policy_debug(
+                                bot, squad_position, enemy_center_chk,
+                                melee_ratio, choke_width, our_width, enemy_width
+                            )
+
+            # --- Choke retreat: pull squad back as a group ---
+            # Direction mirrors ramp retreat: away from enemy (the "dangerous side").
+            # PathGroupToTarget issues one MOVE command to all squad tags via give_same_action.
+            # Deduplication prevents spam — same as formation group commands.
+            # Ranged and melee loops below are gated so individual micro can't override this.
+            if choke_active and enemy_center_chk is not None and choke_tile is not None:
+                retreat_dir = (squad_position - enemy_center_chk).normalized
+                # Anchor to the specific choke tile, not the squad's current position.
+                # This gives a stable fixed target — prevents retreating through multiple
+                # chokes as each new choke becomes the new anchor.
+                retreat_target = Point2(choke_tile + retreat_dir * CHOKE_RETREAT_DIST)
+                choke_retreat = CombatManeuver()
+                choke_retreat.add(PathGroupToTarget(
+                    start=squad_position,
+                    group=units,
+                    group_tags={u.tag for u in units},
+                    grid=grid,
+                    target=retreat_target,
+                    success_at_distance=3.0,
+                ))
+                bot.register_behavior(choke_retreat)
+
             # Separate melee, ranged and spell casters
             # Spellcasters: ground units with energy (HT, Sentries) OR Disruptors (by ID)
             # Excludes: air units with energy (Observers)
@@ -579,8 +621,8 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                         
             # Ranged micro - skip if formation fan-out is handling them
             for r_unit in ranged:
-                if formation_active:
-                    continue  # Formation issued group commands — skip individual micro
+                if formation_active or choke_active:
+                    continue  # Group command active — skip individual micro
                 if r_unit in ranged_on_unsafe_ground:
                     continue  # Skip units retreating to safer ground
                 
@@ -613,6 +655,8 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
 
             # Melee micro - weighted scoring handles priority targeting
             for m_unit in melee:
+                if choke_active:
+                    continue  # Group retreat active — skip individual micro
                 # Filter enemies to only those this unit can attack and reach
                 unit_enemies = get_attackable_enemies(m_unit, all_close, grid)
                 if not unit_enemies:
