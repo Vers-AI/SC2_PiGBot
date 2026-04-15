@@ -198,6 +198,23 @@ PRODUCTION_MIN_ENEMY_UNITS = 3
 """Don't nudge if fewer than this many enemy combat units seen (too little data)."""
 
 
+ANTI_COLOSSUS_TYPES = {
+    UnitTypeId.VIKINGFIGHTER, UnitTypeId.VIKINGASSAULT, UnitTypeId.CORRUPTOR,
+    UnitTypeId.PHOENIX, UnitTypeId.CARRIER, UnitTypeId.TEMPEST,
+}
+"""Enemy unit types that hard-counter Colossus. Drives nudging in all matchups."""
+
+
+def _count_enemy_anti_air(bot) -> int:
+    """Count enemy anti-Colossus air units from cached intel."""
+    return sum(1 for u in _get_enemy_combat_units(bot) if u.type_id in ANTI_COLOSSUS_TYPES)
+
+
+def _count_enemy_carriers(bot) -> int:
+    """Count enemy Carriers from cached intel. Used for PvP Storm trigger."""
+    return sum(1 for u in _get_enemy_combat_units(bot) if u.type_id == UnitTypeId.CARRIER)
+
+
 def _get_enemy_combat_units(bot) -> list:
     """Get filtered enemy combat units for production analysis.
     
@@ -619,6 +636,16 @@ def get_desired_upgrades(bot) -> list[UpgradeId]:
     
     if bot.structures(UnitTypeId.TWILIGHTCOUNCIL) or (len(bot.townhalls) >= 3 and bot.supply_used >= 54):
         upgrades.append(UpgradeId.CHARGE)
+    
+    # Psi Storm: reactive trigger based on matchup.
+    # PvT/PvZ: 2+ Vikings or Corruptors = anti-Colossus commitment, pivot to HT splash.
+    # PvP: Only on Carriers — Phoenix/Tempest reduce Colossus via nudging but don't
+    #       justify Storm. Carriers are the PvP signal that Storm splash is needed.
+    if bot.structures(UnitTypeId.TEMPLARARCHIVE):
+        if bot.enemy_race in {Race.Terran, Race.Zerg} and _count_enemy_anti_air(bot) >= 2:
+            upgrades.append(UpgradeId.PSISTORMTECH)
+        elif bot.enemy_race == Race.Protoss and _count_enemy_carriers(bot) >= 1:
+            upgrades.append(UpgradeId.PSISTORMTECH)
     
     # Gate early upgrades if economy not ready (use centralized economy state)
     economy_state = get_economy_state(bot)

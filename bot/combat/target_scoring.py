@@ -151,6 +151,12 @@ COUNTER_TABLE: dict[tuple[UnitTypeId, UnitTypeId], float] = {
     (UnitTypeId.COLOSSUS, UnitTypeId.ADEPT):          6.0,  # Light unit, splash
     (UnitTypeId.COLOSSUS, UnitTypeId.BANELING):       8.0,  # Light unit, low HP — splash destroys
     # NOTE: Colossus vs Roach REMOVED — LP: "not as cost-effective" (no armor bonus)
+    # Colossus HARD-COUNTERED by anti-air: negative values reduce production via nudging
+    (UnitTypeId.COLOSSUS, UnitTypeId.VIKINGFIGHTER):  -10.0,  # LP: "Vikings...primary counter to Colossi"
+    (UnitTypeId.COLOSSUS, UnitTypeId.CORRUPTOR):      -10.0,  # LP: "Corruptors are the primary Zerg counter to Colossi"
+    (UnitTypeId.COLOSSUS, UnitTypeId.PHOENIX):        -8.0,   # PvP: Phoenix lifts Colossus, hard counter
+    (UnitTypeId.COLOSSUS, UnitTypeId.CARRIER):        -8.0,   # PvP: Carrier outranges, Colossus can't shoot air
+    (UnitTypeId.COLOSSUS, UnitTypeId.TEMPEST):       -10.0,   # PvP: Tempest outranges everything, Colossus helpless
 
     # Disruptor: burst splash vs immobile/clumped armies
     (UnitTypeId.DISRUPTOR, UnitTypeId.SIEGETANKSIEGED): 10.0,  # LP: "very good against units that cannot move"

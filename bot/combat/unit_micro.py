@@ -235,11 +235,15 @@ def merge_high_templars(bot) -> None:
     belongs with HT micro logic).
     """
     all_hts = bot.units(UnitTypeId.HIGHTEMPLAR).ready
-    count_threshold = (
-        HT_MERGE_COUNT_THRESHOLD_PVP
-        if bot.enemy_race == Race.Protoss
-        else HT_MERGE_COUNT_THRESHOLD
-    )
+    if bot.enemy_race == Race.Protoss:
+        # PvP: if enemy has Carriers, hold HTs for Storm instead of merging
+        enemy_has_carriers = any(
+            u.type_id == UnitTypeId.CARRIER
+            for u in (bot.mediator.get_cached_enemy_army or [])
+        )
+        count_threshold = HT_MERGE_COUNT_THRESHOLD if enemy_has_carriers else HT_MERGE_COUNT_THRESHOLD_PVP
+    else:
+        count_threshold = HT_MERGE_COUNT_THRESHOLD
 
     # Track which HTs are already being merged to avoid double-merging
     merging_tags: set[int] = set()
