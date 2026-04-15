@@ -305,22 +305,35 @@ def micro_sentry(
     friendly_units: List[Unit],
     enemies: List[Unit],
     avoid_grid: np.ndarray,
+    grid: np.ndarray,
     bot,
     squad_position: Point2,
+    ranged_center: Optional[Point2] = None,
 ) -> bool:
     """Handle Sentry Guardian Shield and safe army-following.
 
     Sentries spread coverage across the army — avoid overlapping shields.
     - Priority: Guardian Shield (if ranged enemies present + space from other shields)
-    - Otherwise: follow army near ranged units for coverage
+    - Otherwise: stay safe (two-layer: avoid grid + ground grid) and follow army
+
+    Uses two KeepUnitSafe layers like ranged/melee units:
+      1. avoid_grid — dodge immediate danger (biles, disruptor shots, etc.)
+      2. grid (ground influence) — kite away from enemy influence zones
+
+    During combat, follows ranged_center (center of ranged units) so the
+    sentry mirrors the ranged line's movement instead of the full squad center
+    (which includes melee units at the front). Falls back to squad_position
+    when no ranged center is available (e.g. early game, no-enemy movement).
 
     Args:
         sentry: The Sentry unit
         friendly_units: Nearby friendly units to potentially cover
         enemies: Nearby enemy units (already filtered for combat-relevant types)
-        avoid_grid: Avoidance grid for safety
+        avoid_grid: Avoidance grid for immediate danger (biles, disruptor, etc.)
+        grid: Ground grid with enemy influence (for kiting away from enemy zones)
         bot: Bot instance
-        squad_position: Center of the ground army to follow
+        squad_position: Center of the full squad (fallback when no ranged_center)
+        ranged_center: Center of ranged units during combat (preferred follow target)
 
     Returns:
         True if behavior registered
@@ -359,22 +372,26 @@ def micro_sentry(
 
         # Cast shield if no overlap and enemies present
         if not shield_overlap:
-            # Find direction away from overlapping shields / toward uncovered friendlies
-            # Default: cast at current position if reasonable coverage
             sentry(AbilityId.GUARDIANSHIELD_GUARDIANSHIELD)
             return True
 
-    # No shield opportunity — follow army safely
+    # No shield opportunity — stay safe and follow army
     maneuver = CombatManeuver()
+
+    # Layer 1: Dodge immediate danger (biles, disruptor shots, storms, etc.)
     maneuver.add(KeepUnitSafe(sentry, avoid_grid))
 
-    # Follow from behind (similar to HTs/Disruptors)
-    distance_to_squad = cy_distance_to(sentry.position, squad_position)
-    if distance_to_squad > SENTRY_SQUAD_FOLLOW_DISTANCE:
+    # Layer 2: Kite away from enemy influence zones (same pattern as ranged/melee units)
+    maneuver.add(KeepUnitSafe(sentry, grid))
+
+    # Follow the ranged center during combat, squad center otherwise
+    follow_target = ranged_center if ranged_center is not None else squad_position
+    distance_to_follow = cy_distance_to(sentry.position, follow_target)
+    if distance_to_follow > SENTRY_SQUAD_FOLLOW_DISTANCE:
         maneuver.add(PathUnitToTarget(
             unit=sentry,
             grid=bot.mediator.get_ground_grid,
-            target=squad_position,
+            target=follow_target,
             success_at_distance=SENTRY_SQUAD_TARGET_DISTANCE,
         ))
 

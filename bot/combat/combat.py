@@ -705,15 +705,24 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                         )
                 
                 # Handle Sentries - Guardian Shield + safe follow
+                # Sentry follows ranged center during combat so it mirrors the
+                # ranged line's movement (concave + stutter-back) instead of
+                # the full squad center (which includes melee at the front).
                 sentries = [c for c in other_casters if c.type_id == UnitTypeId.SENTRY]
+                ranged_center: Point2 | None = None
+                if ranged:
+                    rc, _ = cy_find_units_center_mass(ranged, 10.0)
+                    ranged_center = Point2(rc)
                 for sentry in sentries:
                     micro_sentry(
                         sentry=sentry,
                         friendly_units=units,
                         enemies=all_close,
                         avoid_grid=avoid_grid,
+                        grid=grid,
                         bot=bot,
                         squad_position=squad_position,
+                        ranged_center=ranged_center,
                     )
                 
                 # Handle other spellcasters (Observers, etc.) - stay with army, stay safe
