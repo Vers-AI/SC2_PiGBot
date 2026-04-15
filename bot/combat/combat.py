@@ -681,12 +681,22 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                 )
                 bot.register_behavior(melee_maneuver)
                 
+            # Compute ranged center for all ground spellcasters to follow
+            # during combat — mirrors the ranged line's movement (concave +
+            # stutter-back) instead of the full squad center (which includes
+            # melee at the front).
+            ranged_center: Point2 | None = None
+            if ranged:
+                rc, _ = cy_find_units_center_mass(ranged, 10.0)
+                ranged_center = Point2(rc)
+
             # Spellcasters 
             if spellcasters:
                 disruptors = [spellcaster for spellcaster in spellcasters if spellcaster.type_id == UnitTypeId.DISRUPTOR]
                 other_casters = [spellcaster for spellcaster in spellcasters if spellcaster.type_id != UnitTypeId.DISRUPTOR]
                 
                 # Handle Disruptors with nova logic
+
                 if disruptors:
                     # Filter enemies for disruptors once: exclude workers and broodlings
                     disruptor_targets = all_close.filter(lambda u: u.type_id not in DISRUPTOR_IGNORE_TYPES)
@@ -699,20 +709,15 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                             enemies=disruptor_targets,
                             friendly_units=units,
                             avoid_grid=avoid_grid,
+                            grid=grid,
                             bot=bot,
                             nova_manager=nova_manager,
-                            squad_position=squad_position
+                            squad_position=squad_position,
+                            ranged_center=ranged_center,
                         )
                 
                 # Handle Sentries - Guardian Shield + safe follow
-                # Sentry follows ranged center during combat so it mirrors the
-                # ranged line's movement (concave + stutter-back) instead of
-                # the full squad center (which includes melee at the front).
                 sentries = [c for c in other_casters if c.type_id == UnitTypeId.SENTRY]
-                ranged_center: Point2 | None = None
-                if ranged:
-                    rc, _ = cy_find_units_center_mass(ranged, 10.0)
-                    ranged_center = Point2(rc)
                 for sentry in sentries:
                     micro_sentry(
                         sentry=sentry,
@@ -739,8 +744,10 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     ht=ht,
                     enemies=all_close,
                     avoid_grid=avoid_grid,
+                    grid=grid,
                     bot=bot,
                     squad_position=squad_position,
+                    ranged_center=ranged_center,
                 )
                         
         else:

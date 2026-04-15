@@ -134,33 +134,44 @@ def micro_disruptor(
     enemies: List[Unit],
     friendly_units: List[Unit],
     avoid_grid: np.ndarray,
+    grid: np.ndarray,
     bot,
     nova_manager,
-    squad_position: Point2
+    squad_position: Point2,
+    ranged_center: Optional[Point2] = None,
 ) -> bool:
-    """
-    Handle disruptor nova firing and movement to stay with ground army.
-    
+    """Handle disruptor nova firing and movement to stay with ground army.
+
     Disruptors are special: they can't attack, only fire novas.
     - Nova ready + enemies: let nova system take FULL control (no interference)
-    - Nova on cooldown: stay safe in backlines, follow army from behind
-    
+    - Nova on cooldown: stay safe in backlines, follow ranged line
+
+    Uses two KeepUnitSafe layers like ranged/melee units:
+      1. avoid_grid — dodge immediate danger (biles, disruptor shots, etc.)
+      2. grid (ground influence) — kite away from enemy influence zones
+
+    During combat, follows ranged_center (center of ranged units) so the
+    disruptor mirrors the ranged line's movement. Falls back to squad_position
+    when no ranged center is available.
+
     Args:
         disruptor: The Disruptor unit to control
         enemies: Enemy units (filtered for disruptor targeting)
         friendly_units: Friendly units (to avoid friendly fire)
-        avoid_grid: Avoidance grid for safety
+        avoid_grid: Avoidance grid for immediate danger
+        grid: Ground grid with enemy influence (for kiting away from enemy zones)
         bot: Bot instance (for use_disruptor_nova access)
         nova_manager: NovaManager instance for coordination
-        squad_position: Center of the ground army to follow
-        
+        squad_position: Center of the full squad (fallback when no ranged_center)
+        ranged_center: Center of ranged units during combat (preferred follow target)
+
     Returns:
         True if nova fired or behavior registered, False otherwise
     """
-    
+
     # Check if nova is ready AND enemies are present
     nova_ready = AbilityId.EFFECT_PURIFICATIONNOVA in disruptor.abilities
-    
+
     if nova_ready and enemies:
         # Nova system takes FULL control - don't register any ARES maneuver
         # This avoids conflict between KeepUnitSafe and nova targeting
@@ -172,38 +183,27 @@ def micro_disruptor(
                 return True
         except Exception as e:
             print(f"DEBUG ERROR in disruptor nova firing: {e}")
-    
+
     # Nova on cooldown OR no enemies - disruptor should stay safe in backlines
     maneuver = CombatManeuver()
-    
-    # KeepUnitSafe FIRST - dodge dangerous abilities
+
+    # Layer 1: Dodge immediate danger (biles, disruptor shots, storms, etc.)
     maneuver.add(KeepUnitSafe(disruptor, avoid_grid))
-    
-    # Follow army from behind (stay with ground units, not air)
-    ground_units = [u for u in friendly_units if not u.is_flying]
-    if ground_units:
-        ground_center, _ = cy_find_units_center_mass(ground_units, 10.0)
-        distance_to_center = cy_distance_to(disruptor.position, ground_center)
-        
-        # If too far from ground army, move towards center
-        if distance_to_center > DISRUPTOR_SQUAD_FOLLOW_DISTANCE:
-            maneuver.add(PathUnitToTarget(
-                unit=disruptor,
-                grid=bot.mediator.get_ground_grid,
-                target=Point2(ground_center),
-                success_at_distance=DISRUPTOR_SQUAD_TARGET_DISTANCE
-            ))
-    else:
-        # Fallback: stay with squad position if no ground units
-        distance_to_squad = cy_distance_to(disruptor.position, squad_position)
-        if distance_to_squad > DISRUPTOR_SQUAD_FOLLOW_DISTANCE:
-            maneuver.add(PathUnitToTarget(
-                unit=disruptor,
-                grid=bot.mediator.get_ground_grid,
-                target=squad_position,
-                success_at_distance=DISRUPTOR_SQUAD_TARGET_DISTANCE
-            ))
-    
+
+    # Layer 2: Kite away from enemy influence zones (same pattern as ranged/melee units)
+    maneuver.add(KeepUnitSafe(disruptor, grid))
+
+    # Follow the ranged center during combat, squad center otherwise
+    follow_target = ranged_center if ranged_center is not None else squad_position
+    distance_to_follow = cy_distance_to(disruptor.position, follow_target)
+    if distance_to_follow > DISRUPTOR_SQUAD_FOLLOW_DISTANCE:
+        maneuver.add(PathUnitToTarget(
+            unit=disruptor,
+            grid=bot.mediator.get_ground_grid,
+            target=follow_target,
+            success_at_distance=DISRUPTOR_SQUAD_TARGET_DISTANCE,
+        ))
+
     bot.register_behavior(maneuver)
     return True
 
@@ -232,29 +232,41 @@ def micro_high_templar(
     ht: Unit,
     enemies: List[Unit],
     avoid_grid: np.ndarray,
+    grid: np.ndarray,
     bot,
     squad_position: Point2,
+    ranged_center: Optional[Point2] = None,
 ) -> bool:
     """Handle High Templar abilities and safe army-following.
-    
+
     Priority: Psi Storm > Feedback > stay safe + follow army.
     HTs are fragile casters that should stay behind the army.
     Skips HTs that are currently merging to archon (MORPH_ARCHON order).
-    
+
+    Uses two KeepUnitSafe layers like ranged/melee units:
+      1. avoid_grid — dodge immediate danger (biles, disruptor shots, etc.)
+      2. grid (ground influence) — kite away from enemy influence zones
+
+    During combat, follows ranged_center (center of ranged units) so the
+    HT mirrors the ranged line's movement. Falls back to squad_position
+    when no ranged center is available.
+
     Args:
         ht: The High Templar unit
         enemies: Nearby enemy units (all visible)
-        avoid_grid: Avoidance grid for safety
+        avoid_grid: Avoidance grid for immediate danger
+        grid: Ground grid with enemy influence (for kiting away from enemy zones)
         bot: Bot instance
-        squad_position: Center of the ground army to follow
-        
+        squad_position: Center of the full squad (fallback when no ranged_center)
+        ranged_center: Center of ranged units during combat (preferred follow target)
+
     Returns:
         True if behavior registered
     """
     # Skip if HT is currently merging to archon
     if ht.orders and ht.orders[0].ability.id == AbilityId.MORPH_ARCHON:
         return False
-    
+
     # Priority 1: Psi Storm — ARES UseAOEAbility finds optimal cast position,
     # avoids friendly fire and duplicate storms automatically
     if ht.energy >= HT_STORM_ENERGY_COST and enemies:
@@ -268,7 +280,7 @@ def micro_high_templar(
         )
         if storm_behavior.execute(bot, bot.config, bot.mediator):
             return True
-    
+
     # Priority 2: Feedback — only on high-value caster types
     if ht.energy >= HT_FEEDBACK_ENERGY_COST and enemies:
         feedback_targets = [
@@ -281,21 +293,27 @@ def micro_high_templar(
             best_target = max(feedback_targets, key=lambda e: e.energy)
             ht(AbilityId.FEEDBACK_FEEDBACK, best_target)
             return True
-    
+
     # No cast opportunity — stay safe and follow army
     maneuver = CombatManeuver()
+
+    # Layer 1: Dodge immediate danger (biles, disruptor shots, storms, etc.)
     maneuver.add(KeepUnitSafe(ht, avoid_grid))
-    
-    # Follow army from behind (same pattern as disruptors)
-    distance_to_squad = cy_distance_to(ht.position, squad_position)
-    if distance_to_squad > HT_SQUAD_FOLLOW_DISTANCE:
+
+    # Layer 2: Kite away from enemy influence zones (same pattern as ranged/melee units)
+    maneuver.add(KeepUnitSafe(ht, grid))
+
+    # Follow the ranged center during combat, squad center otherwise
+    follow_target = ranged_center if ranged_center is not None else squad_position
+    distance_to_follow = cy_distance_to(ht.position, follow_target)
+    if distance_to_follow > HT_SQUAD_FOLLOW_DISTANCE:
         maneuver.add(PathUnitToTarget(
             unit=ht,
             grid=bot.mediator.get_ground_grid,
-            target=squad_position,
+            target=follow_target,
             success_at_distance=HT_SQUAD_TARGET_DISTANCE,
         ))
-    
+
     bot.register_behavior(maneuver)
     return True
 
