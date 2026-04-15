@@ -85,8 +85,6 @@ def create_narrow_choke_points(bot: "PiG_Bot") -> dict[Point2, float]:
     """
     map_data: MapData = bot.mediator.get_map_data_object
     choke_width_map: dict[Point2, float] = {}
-    total_chokes = len(map_data.map_chokes)
-    narrow_count = 0
     
     for choke in map_data.map_chokes:
         # Measure choke width using the best available metric
@@ -104,17 +102,9 @@ def create_narrow_choke_points(bot: "PiG_Bot") -> dict[Point2, float]:
             # Fallback: approximate Polygon.width
             width = choke.width
         
-        label = "NARROW" if width <= CHOKE_MAX_WIDTH else "WIDE  "
-        center = getattr(choke, 'center', None)
-        center_str = f" center=({center.x:.0f},{center.y:.0f})" if center else ""
-        print(f"  [{label}] {choke!r} width={width:.1f}{center_str}")
-        
         if width <= CHOKE_MAX_WIDTH:
             for point in choke.points:
                 choke_width_map[point] = width
-            narrow_count += 1
-    
-    print(f"Choke policy: {narrow_count}/{total_chokes} chokes are narrow (≤{CHOKE_MAX_WIDTH} tiles), {len(choke_width_map)} tiles tracked")
     return choke_width_map
 
 
