@@ -12,6 +12,7 @@ from sc2.unit import Unit
 from sc2.position import Point2
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.ability_id import AbilityId
+from sc2.data import Race
 
 from ares.behaviors.combat import CombatManeuver
 from ares.behaviors.combat.individual import (
@@ -26,6 +27,7 @@ from bot.constants import (
     HT_STORM_ENERGY_COST, HT_STORM_MIN_TARGETS,
     HT_FEEDBACK_ENERGY_COST, HT_FEEDBACK_RANGE, HT_FEEDBACK_MIN_ENEMY_ENERGY,
     FEEDBACK_TARGET_TYPES, HT_MERGE_ENERGY_THRESHOLD,
+    HT_MERGE_COUNT_THRESHOLD, HT_MERGE_COUNT_THRESHOLD_PVP,
 )
 
 
@@ -209,23 +211,78 @@ def micro_disruptor(
 
 
 def merge_high_templars(bot) -> None:
-    """Merge pairs of low-energy HTs into Archons.
-    
-    Only merges HTs with energy < HT_MERGE_ENERGY_THRESHOLD that aren't
-    already merging. Uses request_archon_morph for a proper paired command
-    so both HTs get a single merge order (no order conflicts).
-    
+    """Merge HT pairs into Archons via two independent triggers (OR logic).
+
+    Trigger 1 — Energy: Spent HTs (energy < threshold) merge regardless
+    of total count. These HTs have done their job and should become Archons.
+
+    Trigger 2 — Count: When we have more HTs than the count threshold,
+    merge one closest pair (lowest energy first) to convert surplus into
+    Archons. Only one pair per frame to avoid over-merging.
+
+    Count threshold is per-matchup (lower in PvP where HTs are primarily
+    Archon-in-waiting). The Archon-percentage switch to army_1 handles
+    the loop brake, not the count gate.
+
+    Pairs are selected by proximity: sort candidates by energy (lowest
+    first), then find the closest neighbor. This produces Archons that
+    arrive at the fight faster than arbitrary pairing.
+
+    Uses request_archon_morph for a proper paired command so both HTs
+    get a single merge order (no order conflicts).
+
     Call once per frame from the combat loop (not macro — HT lifecycle
     belongs with HT micro logic).
     """
+    all_hts = bot.units(UnitTypeId.HIGHTEMPLAR).ready
+    count_threshold = (
+        HT_MERGE_COUNT_THRESHOLD_PVP
+        if bot.enemy_race == Race.Protoss
+        else HT_MERGE_COUNT_THRESHOLD
+    )
+
+    # Track which HTs are already being merged to avoid double-merging
+    merging_tags: set[int] = set()
+
+    # --- Trigger 1: Energy (spent HTs merge regardless of count) ---
     low_energy_hts = [
-        ht for ht in bot.units(UnitTypeId.HIGHTEMPLAR).ready
+        ht for ht in all_hts
         if ht.energy < HT_MERGE_ENERGY_THRESHOLD
         and not (ht.orders and ht.orders[0].ability.id == AbilityId.MORPH_ARCHON)
     ]
+    low_energy_hts.sort(key=lambda ht: ht.energy)
     while len(low_energy_hts) >= 2:
-        pair = [low_energy_hts.pop(0), low_energy_hts.pop(0)]
-        bot.request_archon_morph(pair)
+        ht_a = low_energy_hts.pop(0)
+        closest_idx, closest_dist = 0, float("inf")
+        for i, ht_b in enumerate(low_energy_hts):
+            dist = cy_distance_to(ht_a.position, ht_b.position)
+            if dist < closest_dist:
+                closest_dist = dist
+                closest_idx = i
+        ht_b = low_energy_hts.pop(closest_idx)
+        bot.request_archon_morph([ht_a, ht_b])
+        merging_tags.add(ht_a.tag)
+        merging_tags.add(ht_b.tag)
+
+    # --- Trigger 2: Count (over-stocked → merge one closest pair) ---
+    if len(all_hts) > count_threshold:
+        # Only consider HTs not already merging from trigger 1
+        surplus_hts = [
+            ht for ht in all_hts
+            if ht.tag not in merging_tags
+            and not (ht.orders and ht.orders[0].ability.id == AbilityId.MORPH_ARCHON)
+        ]
+        if len(surplus_hts) >= 2:
+            surplus_hts.sort(key=lambda ht: ht.energy)
+            ht_a = surplus_hts[0]
+            closest_idx, closest_dist = 1, float("inf")
+            for i, ht_b in enumerate(surplus_hts[1:], start=1):
+                dist = cy_distance_to(ht_a.position, ht_b.position)
+                if dist < closest_dist:
+                    closest_dist = dist
+                    closest_idx = i
+            ht_b = surplus_hts[closest_idx]
+            bot.request_archon_morph([ht_a, ht_b])
 
 
 def micro_high_templar(

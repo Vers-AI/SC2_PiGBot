@@ -138,6 +138,29 @@ HT_FEEDBACK_ENERGY_COST = 50
 HT_MERGE_ENERGY_THRESHOLD = 50
 """Only merge HTs to archon when both have less than this energy"""
 
+HT_MERGE_COUNT_THRESHOLD = 3
+"""Minimum HT count before considering merges (non-PvP).
+
+When we have this many or more HTs, low-energy HTs become eligible
+for merging into Archons. Below this count, HTs are preserved even
+if low on energy so the SpawnController doesn't over-produce replacements.
+
+This works with the army composition system: the SpawnController only
+builds HTs when current proportion < target proportion. By only merging
+when we're well-stocked (>= this threshold), the remaining HTs stay at
+or above the target proportion after merging, preventing an infinite
+build-merge-build loop.
+"""
+
+HT_MERGE_COUNT_THRESHOLD_PVP = 1
+"""Minimum HT count before considering merges in PvP.
+
+Lowest meaningful value: as soon as 2 HTs exist (len > 1), trigger 2
+fires and merges them. In PvP, HTs are primarily Archon-in-waiting (IAC
+composition), so we want immediate conversion. The Archon-percentage
+switch to PVP_ARMY_1 (at 30% Archons) handles the loop brake.
+"""
+
 HT_FEEDBACK_RANGE = 10.0
 """Cast range of Feedback ability"""
 
