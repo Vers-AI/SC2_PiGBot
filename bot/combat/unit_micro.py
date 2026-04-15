@@ -299,3 +299,84 @@ def micro_high_templar(
     bot.register_behavior(maneuver)
     return True
 
+
+def micro_sentry(
+    sentry: Unit,
+    friendly_units: List[Unit],
+    enemies: List[Unit],
+    avoid_grid: np.ndarray,
+    bot,
+    squad_position: Point2,
+) -> bool:
+    """Handle Sentry Guardian Shield and safe army-following.
+
+    Sentries spread coverage across the army — avoid overlapping shields.
+    - Priority: Guardian Shield (if ranged enemies present + space from other shields)
+    - Otherwise: follow army near ranged units for coverage
+
+    Args:
+        sentry: The Sentry unit
+        friendly_units: Nearby friendly units to potentially cover
+        enemies: Nearby enemy units (already filtered for combat-relevant types)
+        avoid_grid: Avoidance grid for safety
+        bot: Bot instance
+        squad_position: Center of the ground army to follow
+
+    Returns:
+        True if behavior registered
+    """
+    from bot.constants import (
+        MELEE_RANGE_THRESHOLD,
+        SENTRY_SQUAD_FOLLOW_DISTANCE,
+        SENTRY_SQUAD_TARGET_DISTANCE,
+        GUARDIAN_SHIELD_ENERGY_COST,
+        GUARDIAN_SHIELD_OVERLAP_DISTANCE,
+    )
+    from sc2.ids.buff_id import BuffId
+
+    # Skip if already shielded (can't double-cast)
+    has_shield = sentry.has_buff(BuffId.GUARDIANSHIELD)
+
+    # Guardian Shield only reduces ranged damage — skip if no ranged enemies present
+    has_ranged_enemies = any(
+        u.ground_range > MELEE_RANGE_THRESHOLD for u in enemies
+    )
+
+    # Check if another friendly sentry nearby already has shield active
+    shield_overlap = False
+    if (
+        sentry.energy >= GUARDIAN_SHIELD_ENERGY_COST
+        and has_ranged_enemies
+        and not has_shield
+    ):
+        for u in friendly_units:
+            if u.type_id == UnitTypeId.SENTRY and u.tag != sentry.tag:
+                if u.has_buff(BuffId.GUARDIANSHIELD):
+                    dist = cy_distance_to(sentry.position, u.position)
+                    if dist < GUARDIAN_SHIELD_OVERLAP_DISTANCE:
+                        shield_overlap = True
+                        break
+
+        # Cast shield if no overlap and enemies present
+        if not shield_overlap:
+            # Find direction away from overlapping shields / toward uncovered friendlies
+            # Default: cast at current position if reasonable coverage
+            sentry(AbilityId.GUARDIANSHIELD_GUARDIANSHIELD)
+            return True
+
+    # No shield opportunity — follow army safely
+    maneuver = CombatManeuver()
+    maneuver.add(KeepUnitSafe(sentry, avoid_grid))
+
+    # Follow from behind (similar to HTs/Disruptors)
+    distance_to_squad = cy_distance_to(sentry.position, squad_position)
+    if distance_to_squad > SENTRY_SQUAD_FOLLOW_DISTANCE:
+        maneuver.add(PathUnitToTarget(
+            unit=sentry,
+            grid=bot.mediator.get_ground_grid,
+            target=squad_position,
+            success_at_distance=SENTRY_SQUAD_TARGET_DISTANCE,
+        ))
+
+    bot.register_behavior(maneuver)
+    return True

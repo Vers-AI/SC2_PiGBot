@@ -32,6 +32,7 @@ from bot.combat.unit_micro import (
     micro_disruptor,
     micro_high_templar,
     merge_high_templars,
+    micro_sentry,
 )
 
 from bot.combat.target_scoring import (
@@ -70,6 +71,7 @@ __all__ = [
     "micro_disruptor",
     "micro_high_templar",
     "merge_high_templars",
+    "micro_sentry",
     # Target scoring
     "score_target",
     "select_target",

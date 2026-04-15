@@ -74,6 +74,7 @@ from bot.combat.unit_micro import (
     micro_disruptor,
     micro_high_templar,
     merge_high_templars,
+    micro_sentry,
 )
 from bot.combat.formation import execute_fan_out, clear_formation_state
 from bot.combat.target_scoring import select_target, update_upgrades
@@ -703,8 +704,21 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                             squad_position=squad_position
                         )
                 
-                # Handle other spellcasters (Sentries, etc.) - stay with army, stay safe
-                for caster in other_casters:
+                # Handle Sentries - Guardian Shield + safe follow
+                sentries = [c for c in other_casters if c.type_id == UnitTypeId.SENTRY]
+                for sentry in sentries:
+                    micro_sentry(
+                        sentry=sentry,
+                        friendly_units=units,
+                        enemies=all_close,
+                        avoid_grid=avoid_grid,
+                        bot=bot,
+                        squad_position=squad_position,
+                    )
+                
+                # Handle other spellcasters (Observers, etc.) - stay with army, stay safe
+                remaining_casters = [c for c in other_casters if c.type_id != UnitTypeId.SENTRY]
+                for caster in remaining_casters:
                     caster_maneuver = CombatManeuver()
                     caster_maneuver.add(KeepUnitSafe(unit=caster, grid=avoid_grid))
                     caster_maneuver.add(AMove(unit=caster, target=move_to))
