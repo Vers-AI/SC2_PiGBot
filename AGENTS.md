@@ -17,8 +17,6 @@
 
 - **When in doubt:** ask **1** clarifying question max, then make a best assumption and proceed.
 
-- **Tests:** add **1–2 minimal tests** (happy path + one edge). Keep them fast and deterministic.
-
 - **Docs:** add a 3-line header to changed files: Purpose | Key Decisions | Limitations.
 
 - **First Fix Principle:** When fixing an issue or bug, do not introduce a new pattern or technology without first exhausting all options for the existing implementation. If you must, remove the old implementation to avoid duplication.
