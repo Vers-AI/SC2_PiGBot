@@ -24,6 +24,7 @@ from bot.combat.combat import (
     fallback_target,
     control_base_defenders,
     manage_defensive_unit_roles,
+    try_mass_recall,
 )
 
 from bot.combat.unit_micro import (
@@ -65,6 +66,7 @@ __all__ = [
     "control_defenders",
     "control_base_defenders",
     "manage_defensive_unit_roles",
+    "try_mass_recall",
     # Unit micro functions
     "micro_ranged_unit",
     "micro_melee_unit",

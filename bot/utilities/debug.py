@@ -74,6 +74,14 @@ def render_combat_state_overlay(bot, main_army: Units, enemy_threat_level: int, 
         Point2((0.1, 0.24)), None, 14
     )
     
+    # Mass Recall state
+    recall_cd = max(0.0, bot._mass_recall_last_cast_time + 130.0 - bot.time)
+    recall_status = f"CD:{recall_cd:.0f}s" if recall_cd > 0 else "READY"
+    bot.client.debug_text_2d(
+        f"MassRecall: {recall_status} Pending: {bot._mass_recall_pending}",
+        Point2((0.1, 0.255)), None, 12
+    )
+    
     # Role counts
     attacking_units = bot.mediator.get_units_from_role(role=UnitRole.ATTACKING)
     defending_units = bot.mediator.get_units_from_role(role=UnitRole.DEFENDING) 

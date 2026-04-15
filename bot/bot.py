@@ -29,7 +29,7 @@ from sc2.data import Race
 
 # Modular imports for separated concerns
 from bot.managers.macro import handle_macro, get_optimal_gas_workers, get_freeflow_mode
-from bot.managers.structure_manager import use_chronoboost, use_recharge
+from bot.managers.structure_manager import use_chronoboost, use_recharge, use_mass_recall
 from bot.managers.reactions import defend_cannon_rush, defend_worker_rush, early_threat_sensor, cheese_reaction, threat_detection
 from bot.combat import (
     control_main_army,
@@ -146,6 +146,10 @@ class PiG_Bot(AresBot):
         self._halu_scout_waypoints: dict = {}  # {tag: {'waypoints': list[Point2], 'idx': int}} per-Phoenix waypoints
         self._halu_scout_pending_role: str = ""  # Role for next hallucinated Phoenix (set before cast, consumed on spawn)
         self._blind_ramp_target: Optional[Point2] = None  # Set per-frame by combat when army blocked by blind ramp
+
+        # Mass Recall state (Nexus emergency evacuation)
+        self._mass_recall_last_cast_time: float = -999.0  # Game time of last mass recall cast (global 130s cooldown)
+        self._mass_recall_pending: bool = False  # True when units should cluster before recall fires
 
 
 

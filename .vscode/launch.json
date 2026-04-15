@@ -11,19 +11,13 @@
             "program": "${workspaceFolder}/run.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
-            "python": "${workspaceFolder}/venv/Scripts/python.exe",
+            "python": "F:/Coding/BoC_PiGBot/venv/Scripts/python.exe",
             "env": {
-                "SC2PATH": "D:\\StarCraft II",
-                "PYTHONPATH": "${workspaceFolder}/ares-sc2/src:${workspaceFolder}",
+                "SC2PATH": "C:\\Program Files (x86)\\StarCraft II",
+                "PYTHONPATH": "${workspaceFolder}",
                 "PYTHONUNBUFFERED": "1"
-             },
-            "justMyCode": false,
-            "runtimeExecutable": "poetry",
-            "args": [
-                "run",
-                "python",
-                "${workspaceFolder}/run.py"
-            ]
+            },
+            "justMyCode": false
         },
         {
             "name": "SC2 Bot: Ladder Game",
@@ -33,10 +27,10 @@
             "args": ["--LadderServer", "127.0.0.1", "--GamePort", "5000", "--StartPort", "5001"],
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
-            "python": "${workspaceFolder}/venv/Scripts/python.exe",
+            "python": "F:/Coding/BoC_PiGBot/venv/Scripts/python.exe",
             "env": {
-                "SC2PATH": "D:\\StarCraft II",
-                "PYTHONPATH": "${workspaceFolder}/ares-sc2/src:${workspaceFolder}",
+                "SC2PATH": "C:\\Program Files (x86)\\StarCraft II",
+                "PYTHONPATH": "${workspaceFolder}",
                 "PYTHONUNBUFFERED": "1"
             }
         },

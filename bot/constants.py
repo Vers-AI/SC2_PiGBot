@@ -252,6 +252,23 @@ WARP_PRISM_POSITION_SEARCH_RANGE = 8.0
 WARP_PRISM_POSITION_SEARCH_STEP = 2.0
 """Step size when searching for valid warp-in positions"""
 
+# ===== MASS RECALL (NEXUS EMERGENCY RECALL) =====
+MASS_RECALL_RADIUS = 6.5
+"""Radius of Nexus Mass Recall effect — units within this radius are teleported to the Nexus"""
+
+MASS_RECALL_COOLDOWN = 130.0
+"""Global cooldown (seconds) for Nexus Mass Recall across all Nexuses"""
+
+MASS_RECALL_ENERGY_COST = 100
+"""Energy cost for Nexus Mass Recall ability"""
+
+MASS_RECALL_MIN_OWN_SUPPLY = 10
+"""Minimum own army supply to consider mass recall (don't recall trivial forces)"""
+
+MASS_RECALL_RETREAT_SEARCH_RADIUS = 15.0
+"""Radius to search for safe retreat spot on ARES avoidance grid.
+If no safe spot closer to base exists within this radius, retreat is considered blocked."""
+
 # ===== UNDER ATTACK DETECTION =====
 # OBSERVATION: These thresholds determine when _under_attack flag triggers
 # Adjust based on gameplay feedback

@@ -67,6 +67,9 @@ from bot.constants import (
     CHOKE_RETREAT_DIST,
     HT_SQUAD_FOLLOW_DISTANCE,
     HT_SQUAD_TARGET_DISTANCE,
+    MASS_RECALL_RADIUS,
+    MASS_RECALL_MIN_OWN_SUPPLY,
+    MASS_RECALL_RETREAT_SEARCH_RADIUS,
 )
 from bot.combat.unit_micro import (
     micro_ranged_unit,
@@ -94,6 +97,7 @@ from bot.utilities.debug import (
     render_choke_decision_debug,
 )
 from bot.utilities.intel import get_enemy_intel_quality
+from bot.managers.structure_manager import use_mass_recall
 
 from cython_extensions import (
     cy_pick_enemy_target, cy_closest_to, cy_distance_to, cy_distance_to_squared, cy_in_attack_range, cy_find_units_center_mass,
@@ -1056,6 +1060,137 @@ def warp_prism_follower(bot, warp_prisms: Units, main_army: Units) -> None:
     bot.register_behavior(maneuver)
 
 
+def _is_retreat_blocked(bot, army_center: Point2, base_position: Point2) -> bool:
+    """
+    Check if the army can safely retreat to base using ARES ground avoidance grid.
+
+    Uses find_closest_safe_spot on the avoidance grid from the army center.
+    If the nearest safe spot is NOT closer to base than the army itself,
+    the retreat direction is blocked by enemy influence.
+
+    This leverages ARES's own pathing/danger system rather than a custom
+    geometric check, so it accounts for terrain, choke points, and enemy
+    positioning naturally.
+    """
+    avoid_grid: np.ndarray = bot.mediator.get_ground_avoidance_grid
+
+    # If army center is already safe, retreat is not blocked
+    if bot.mediator.is_position_safe(grid=avoid_grid, position=army_center):
+        return False
+
+    # Find the closest safe spot from army center on the avoidance grid
+    safe_spot = bot.mediator.find_closest_safe_spot(
+        from_pos=army_center,
+        grid=avoid_grid,
+        radius=MASS_RECALL_RETREAT_SEARCH_RADIUS,
+    )
+
+    # If no safe spot found at all, retreat is definitely blocked
+    if safe_spot is None:
+        return True
+
+    # If the safe spot is further from base than the army, we can't retreat toward base
+    army_dist_to_base = cy_distance_to(army_center, base_position)
+    safe_dist_to_base = cy_distance_to(safe_spot, base_position)
+
+    return safe_dist_to_base >= army_dist_to_base
+
+
+def _find_recall_target(bot, main_army: Units) -> Point2:
+    """
+    Find the position that maximizes total army_value of trapped units within MASS_RECALL_RADIUS.
+
+    First filters army to only units on unsafe ground (can't escape via ARES avoidance grid),
+    then for each trapped unit's position, sums the army_value of all trapped units within
+    recall radius. Picks the position with the highest total value — so a cluster of zealots
+    (combined value > single colossus) wins over an isolated high-value unit.
+
+    Falls back to full army center if no units are on unsafe ground (shouldn't happen
+    since _is_retreat_blocked already passed).
+
+    O(n²) over trapped units, but n is typically small and this runs once per recall.
+    """
+    avoid_grid: np.ndarray = bot.mediator.get_ground_avoidance_grid
+
+    # Filter to only units on unsafe ground — these are the ones that can't escape
+    trapped_units = [
+        u for u in main_army
+        if not bot.mediator.is_position_safe(grid=avoid_grid, position=u.position)
+    ]
+
+    # If no trapped units (shouldn't happen), fall back to full army
+    if not trapped_units:
+        return main_army.center
+
+    # Find the position that captures the most value of trapped units
+    best_pos = main_army.center
+    best_value = 0.0
+    radius_sq = MASS_RECALL_RADIUS * MASS_RECALL_RADIUS
+
+    for candidate in trapped_units:
+        value = 0.0
+        for unit in trapped_units:
+            if cy_distance_to_squared(candidate.position, unit.position) <= radius_sq:
+                value += UNIT_DATA.get(unit.type_id, {}).get("army_value", 1.0)
+        if value > best_value:
+            best_value = value
+            best_pos = candidate.position
+
+    return best_pos
+
+
+def try_mass_recall(bot, main_army: Units, fight_result) -> bool:
+    """
+    Decide whether to trigger Nexus Mass Recall based on combat conditions.
+    Delegates actual casting to use_mass_recall() in structure_manager.
+
+    Conditions (ALL must be true):
+    1. Combat sim says LOSS_OVERWHELMING_OR_WORSE (devastating loss)
+    2. Own army has enough supply to be worth saving (≥ MASS_RECALL_MIN_OWN_SUPPLY)
+    3. Retreat path to nearest base is blocked (ARES avoidance grid check)
+    4. At least mid-game (game_state >= 1) to avoid wasting recall on early cheese
+
+    Returns True if recall was cast, False otherwise.
+    """
+    # Gate 1: Must be a devastating loss
+    if fight_result not in LOSS_OVERWHELMING_OR_WORSE:
+        bot._mass_recall_pending = False
+        return False
+
+    # Gate 2: Enough army to be worth saving
+    own_supply = sum(bot.calculate_supply_cost(u.type_id) for u in main_army)
+    if own_supply < MASS_RECALL_MIN_OWN_SUPPLY:
+        bot._mass_recall_pending = False
+        return False
+
+    # Gate 3: Must be mid-game or later (don't waste on early cheese)
+    if bot.game_state < 1:
+        bot._mass_recall_pending = False
+        return False
+
+    # Find nearest base to the army
+    if not bot.townhalls:
+        bot._mass_recall_pending = False
+        return False
+
+    army_center = main_army.center
+    nearest_base = bot.townhalls.closest_to(army_center)
+    base_position = nearest_base.position
+
+    # Gate 4: Retreat path is blocked (using ARES avoidance grid)
+    if not _is_retreat_blocked(bot, army_center, base_position):
+        # Retreat is possible — no need for recall
+        bot._mass_recall_pending = False
+        return False
+
+    # ALL COMBAT GATES PASSED — find best recall target and delegate to structure_manager
+    recall_target = _find_recall_target(bot, main_army)
+    cast_result = use_mass_recall(bot, recall_target, avoid_nexus_tag=nearest_base.tag)
+    bot._mass_recall_pending = False  # Will be used for Phase 2 clustering
+
+    return cast_result
+
+
 def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point2:
     """
     Enhanced attack toggles logic with smart threat response.
@@ -1149,6 +1284,12 @@ def handle_attack_toggles(bot, main_army: Units, attack_target: Point2) -> Point
             )
             # Disengage if situation looks bad (decisive loss or worse)
             if fight_result in LOSS_DECISIVE_OR_WORSE:
+                # Try mass recall first — if army is trapped and losing badly, recall out
+                if try_mass_recall(bot, main_army, fight_result):
+                    bot._commenced_attack = False
+                    if bot.townhalls:
+                        return bot.townhalls.closest_to(main_army.center).position
+                    return bot.start_location
                 bot._commenced_attack = False
                 if bot.townhalls:
                     nearest_base = bot.townhalls.closest_to(main_army.center)

@@ -1,9 +1,18 @@
 # bot/managers/structure_manager.py
+# Purpose: Nexus ability management (Chronoboost, Energy Recharge, Mass Recall)
+# Key Decisions: All Nexus-cast abilities consolidated here for consistent energy management
+# Limitations: Mass Recall combat-trigger logic remains in combat.py
 
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.ability_id import AbilityId
 from sc2.ids.buff_id import BuffId
+from sc2.position import Point2
 from sc2.units import Units
+
+from bot.constants import (
+    MASS_RECALL_COOLDOWN,
+    MASS_RECALL_ENERGY_COST,
+)
 
 
 def use_recharge(bot, main_army: Units) -> bool:
@@ -163,3 +172,53 @@ def get_remaining_activity_time(bot, structure) -> float:
                     return (1.0 - order.progress) * 45.0
 
     return 0.0
+
+
+def use_mass_recall(bot, target_position: Point2, avoid_nexus_tag: int | None = None) -> bool:
+    """
+    Cast Nexus Mass Recall at target_position.
+
+    Handles Nexus-side concerns: global cooldown, energy check, Nexus selection.
+    Combat-side decision (devastating loss, retreat blocked) is in combat.py.
+
+    Prefers a Nexus that is NOT the one closest to the army (safer, further from
+    enemy pressure). Falls back to any Nexus with enough energy.
+
+    Args:
+        bot: The bot instance
+        target_position: Where to cast the recall (typically army center)
+        avoid_nexus_tag: Tag of the Nexus nearest to army — prefer not to use this one
+
+    Returns:
+        bool: True if recall was cast, False otherwise
+    """
+    # Global cooldown check (130s across all Nexuses)
+    if bot.time < bot._mass_recall_last_cast_time + MASS_RECALL_COOLDOWN:
+        return False
+
+    # Find a Nexus with enough energy, preferring one NOT closest to army
+    recall_nexus = None
+    for nexus in bot.structures(UnitTypeId.NEXUS).ready:
+        if nexus.energy < MASS_RECALL_ENERGY_COST:
+            continue
+        if avoid_nexus_tag is not None and nexus.tag != avoid_nexus_tag:
+            recall_nexus = nexus
+            break
+
+    # Fallback: use the avoided Nexus if it's the only one with energy
+    if recall_nexus is None:
+        for nexus in bot.structures(UnitTypeId.NEXUS).ready:
+            if nexus.energy >= MASS_RECALL_ENERGY_COST:
+                recall_nexus = nexus
+                break
+
+    if recall_nexus is None:
+        return False
+
+    recall_nexus(AbilityId.EFFECT_MASSRECALL_NEXUS, target_position)
+    bot._mass_recall_last_cast_time = bot.time
+
+    if bot.debug:
+        print(f"[MASS RECALL] Cast at {bot.time:.1f}s | Nexus: {recall_nexus.tag} | Target: {target_position.round(1)}")
+
+    return True
