@@ -141,6 +141,10 @@ class PiG_Bot(AresBot):
         self._br_scout_waypoints: dict = {}  # {tag: {'waypoints': list[Point2], 'idx': int}}
         self._observer_hunt_mode = False  # Sticky flag: stays True until freshness >= FRESH_INTEL_THRESHOLD
         self._hunting_observer_tag = None  # Tag of observer currently hunting (set per-frame)
+        self._hallucination_scout_last_cast = 0.0  # Game time of last hallucination cast (cooldown tracking)
+        self._halu_scout_roles: dict = {}  # {tag: role_str} per-Phoenix role tracking
+        self._halu_scout_waypoints: dict = {}  # {tag: {'waypoints': list[Point2], 'idx': int}} per-Phoenix waypoints
+        self._halu_scout_pending_role: str = ""  # Role for next hallucinated Phoenix (set before cast, consumed on spawn)
         self._blind_ramp_target: Optional[Point2] = None  # Set per-frame by combat when army blocked by blind ramp
 
 
@@ -360,7 +364,8 @@ class PiG_Bot(AresBot):
 
         # Scouting actions
         from bot.managers.scouting import (
-            control_build_runner_scout, control_observers, control_worker_scout,
+            control_build_runner_scout, control_hallucination_scout,
+            control_hallucination_scouts, control_observers, control_worker_scout,
         )
         observers = self.units.filter(
             lambda u: u.type_id in {UnitTypeId.OBSERVER, UnitTypeId.OBSERVERSIEGEMODE}
@@ -368,6 +373,8 @@ class PiG_Bot(AresBot):
         control_observers(self, observers, main_army)
         control_worker_scout(self)  # Early game worker scout when intel is stale
         control_build_runner_scout(self)  # Safe pathing for build-order scout probe
+        control_hallucination_scout(self)  # Cast hallucinated Phoenix when blind and low on observers
+        control_hallucination_scouts(self)  # Path hallucinated Phoenixes to hunt targets
 
        
         
@@ -442,6 +449,15 @@ class PiG_Bot(AresBot):
         if unit.type_id == UnitTypeId.DISRUPTORPHASED:
             # When a DISRUPTORPHASED unit (the nova) is created, send it to the NovaManager
             self.nova_manager.add_nova(unit)
+            return
+
+        # Hallucinated units are scouts — keep them out of army squads
+        if unit.is_hallucination:
+            halu_role = self._halu_scout_roles.get(unit.tag, self._halu_scout_pending_role)
+            if halu_role == "high_ground" or (not halu_role and self._blind_ramp_target):
+                self.mediator.assign_role(tag=unit.tag, role=UnitRole.HIGH_GROUND_SPOTTER)
+            else:
+                self.mediator.assign_role(tag=unit.tag, role=UnitRole.SCOUTING)
             return
 
         # Default: Attacking role

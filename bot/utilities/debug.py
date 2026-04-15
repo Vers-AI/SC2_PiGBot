@@ -724,8 +724,6 @@ def render_observer_debug(bot) -> None:
     observers = bot.units.filter(
         lambda u: u.type_id in {UnitTypeId.OBSERVER, UnitTypeId.OBSERVERSIEGEMODE}
     )
-    if not observers:
-        return
     
     assignments = bot.observer_assignments
     hunt_mode = getattr(bot, '_observer_hunt_mode', False)
@@ -780,8 +778,28 @@ def render_observer_debug(bot) -> None:
     army = "OK" if assignments.get("army") else "NONE"
     patrol_count = len(assignments.get("patrol", []))
     hunt_str = f"HUNT(closest)" if hunt_mode else "off"
+    
+    # Hallucinated Phoenix labels
+    hallu_phoenixes = bot.units(UnitTypeId.PHOENIX).filter(lambda u: u.is_hallucination)
+    hallu_count = len(hallu_phoenixes)
+    for phoenix in hallu_phoenixes:
+        halu_role = bot._halu_scout_roles.get(phoenix.tag, '')
+        if halu_role == "high_ground":
+            label, color = "HALU:HIGH_GND", (255, 100, 255)
+        elif halu_role == "base_scout":
+            label, color = "HALU:BASE_SCOUT", (255, 200, 100)
+        else:
+            label, color = "HALU:SCOUT", (200, 255, 100)
+        pos3d = phoenix.position3d
+        bot.client.debug_text_world(
+            label,
+            Point3((pos3d.x, pos3d.y, pos3d.z + 1.0)),
+            color=color,
+            size=14,
+        )
+    
     bot.client.debug_text_2d(
-        f"Obs: ARMY:{army} PRI:{pri} PAT:{patrol_count} {hunt_str} Urg:{urgency:.2f}",
+        f"Obs: ARMY:{army} PRI:{pri} PAT:{patrol_count} {hunt_str} Halu:{hallu_count} Urg:{urgency:.2f}",
         Point2((0.1, 0.46)), None, 12
     )
 

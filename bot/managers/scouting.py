@@ -1,5 +1,6 @@
 # scouting
 
+import math
 import numpy as np
 from typing import Dict, List, Optional, Set
 from sc2.data import AbilityId
@@ -147,6 +148,10 @@ def control_worker_scout(bot) -> None:
     # Only if we don't have observers
     if bot.units(UnitTypeId.OBSERVER).amount > 0:
         return
+
+    # Don't send worker scout if a hallucinated Phoenix is already scouting
+    if bot.units(UnitTypeId.PHOENIX).filter(lambda u: u.is_hallucination):
+        return
     
     # Don't send intel scout if build runner already has a worker scout
     build_runner_scouts = bot.mediator.get_units_from_role(role=UnitRole.BUILD_RUNNER_SCOUT)
@@ -215,6 +220,78 @@ def _extract_scout_waypoints(bot) -> list[Point2]:
             return list(step.target)
     # Fallback: just go to enemy spawn and back
     return [bot.enemy_start_locations[0]]
+
+
+def _generate_base_scout_waypoints(bot) -> list[Point2]:
+    """Generate waypoints: enemy nat → enemy main perimeter → enemy third.
+
+    Purpose: Hallucinated base_scout follows a logical scouting route — check
+    the natural first, then sweep the main base, then the third expansion.
+    Key Decisions: Perimeter points sorted by angle for a clean circular path.
+    Enemy third chosen over fourth as it's typically closest to the main.
+    Limitations: Perimeter shape depends on map; unusual maps may have sparse points.
+    """
+    enemy_spawn = bot.enemy_start_locations[0]
+
+    try:
+        waypoints: list[Point2] = []
+
+        # 1. Enemy natural — check for expand timing
+        enemy_nat = bot.mediator.get_enemy_nat
+        waypoints.append(enemy_nat)
+
+        # 2. Enemy main — behind mineral line + perimeter sweep
+        behind_minerals = bot.mediator.get_behind_mineral_positions(
+            th_pos=enemy_spawn
+        )
+        behind_min_point = behind_minerals[1] if len(behind_minerals) > 1 else None
+
+        map_data = bot.mediator.get_map_data_object
+        region = map_data.in_region_p(enemy_spawn)
+        perimeter = region.perimeter
+
+        # Filter out points near ramp (already scouted on the way in)
+        ramp_top = region.region_ramps[0].top_center.rounded
+        ramp_arr = np.array([ramp_top.x, ramp_top.y])
+        dists_ramp = np.linalg.norm(perimeter - ramp_arr, axis=1)
+        filtered = perimeter[dists_ramp > 8.0]
+
+        # Filter out points near mineral line (covered by behind_min_point)
+        if behind_min_point:
+            min_arr = np.array([behind_min_point.x, behind_min_point.y])
+            dists_min = np.linalg.norm(filtered - min_arr, axis=1)
+            filtered = filtered[dists_min > 10.0]
+
+        # Sort perimeter points by angle from enemy spawn for a clean circle
+        center = np.array([enemy_spawn.x, enemy_spawn.y])
+        if len(filtered) > 0:
+            angles = np.arctan2(
+                filtered[:, 1] - center[1], filtered[:, 0] - center[0]
+            )
+            sorted_idx = np.argsort(angles)
+            filtered = filtered[sorted_idx]
+
+        n = len(filtered)
+        if n > 0:
+            if behind_min_point:
+                waypoints.append(behind_min_point)
+            step = max(1, n // 5)
+            indices = [(i * step) % n for i in range(5)]
+            for pt in filtered[indices]:
+                waypoints.append(Point2(pt))
+
+        # 3. Enemy third — closest expansion to main after natural
+        try:
+            enemy_third = bot.mediator.get_enemy_expansions[1][0]
+            waypoints.append(enemy_third)
+        except (IndexError, KeyError):
+            pass
+
+        return waypoints if waypoints else [enemy_spawn]
+
+    except Exception:
+        # Map data unavailable — simple fallback
+        return [enemy_spawn]
 
 
 def control_build_runner_scout(bot) -> None:
@@ -628,3 +705,253 @@ def control_scout(bot, scout_units: Units, main_army: Units) -> None:
     
     # Use the new observer control system
     control_observers(bot, observers, main_army)
+
+
+def control_hallucination_scout(bot) -> None:
+    """
+    Cast hallucinated Phoenix scouts for three scenarios:
+    
+    1. BLIND RAMP (high priority): Army is blocked at a ramp with no vision,
+       and no army observer available. Cast Phoenix to provide high ground vision.
+    2. EARLY GAME BASE SCOUT: In early game with no observers, cast Phoenix
+       to scout enemy base along the standard probe scout route instead of
+       sending a worker. Saves the probe for mining.
+    3. INTEL URGENCY (lower priority): Intel is stale and we lack observers.
+       Cast Phoenix to scout for the enemy army.
+    
+    Only one hallucinated scout alive at a time. Cooldown between casts.
+    """
+    from bot.constants import (
+        HALLUCINATION_ENERGY_COST,
+        HALLUCINATION_SCOUT_MIN_OBSERVERS,
+        HALLUCINATION_SCOUT_COOLDOWN,
+        GUARDIAN_SHIELD_ENERGY_COST,
+    )
+
+    # Don't cast if a hallucinated scout is still alive
+    if bot.units(UnitTypeId.PHOENIX).filter(lambda u: u.is_hallucination):
+        return
+
+    # Check if hallucination is researched by seeing if any sentry has the ability
+    sentries = bot.units(UnitTypeId.SENTRY).ready
+    if not sentries:
+        return
+    has_hallucination = any(
+        AbilityId.HALLUCINATION_PHOENIX in s.abilities
+        for s in sentries
+    )
+    if not has_hallucination:
+        return
+
+    # Cooldown check — don't spam hallucination
+    if hasattr(bot, '_hallucination_scout_last_cast'):
+        if bot.time - bot._hallucination_scout_last_cast < HALLUCINATION_SCOUT_COOLDOWN:
+            return
+
+    # Determine if we should cast and what role
+    should_cast = False
+    scout_role = ""
+
+    # Priority 1: Blind ramp — army needs vision at ramp top, no army observer
+    army_observer_tag = bot.observer_assignments.get("army")
+    all_observer_tags = (
+        {u.tag for u in bot.units(UnitTypeId.OBSERVER)}
+        | {u.tag for u in bot.units(UnitTypeId.OBSERVERSIEGEMODE)}
+    )
+    army_observer_exists = (
+        army_observer_tag is not None
+        and army_observer_tag in all_observer_tags
+    )
+    if bot._blind_ramp_target and not army_observer_exists:
+        should_cast = True
+        scout_role = "high_ground"
+
+    # Priority 2: Early game base scout — replace worker scout with hallucinated Phoenix
+    if not should_cast:
+        observer_count = (
+            bot.units(UnitTypeId.OBSERVER).amount
+            + bot.units(UnitTypeId.OBSERVERSIEGEMODE).amount
+        )
+        br_scouts = bot.mediator.get_units_from_role(
+            role=UnitRole.BUILD_RUNNER_SCOUT, unit_type=bot.worker_type
+        )
+        if (
+            bot.game_state == 0
+            and bot._intel_urgency > HUNT_URGENCY_THRESHOLD
+            and observer_count == 0
+            and not br_scouts
+        ):
+            should_cast = True
+            scout_role = "base_scout"
+
+    # Priority 3: Intel urgency — stale intel and not enough observers
+    if not should_cast:
+        observer_count = (
+            bot.units(UnitTypeId.OBSERVER).amount
+            + bot.units(UnitTypeId.OBSERVERSIEGEMODE).amount
+        )
+        if bot._intel_urgency > HUNT_URGENCY_THRESHOLD and observer_count < HALLUCINATION_SCOUT_MIN_OBSERVERS:
+            should_cast = True
+            scout_role = "intel"
+
+    if not should_cast:
+        return
+
+    # Find a sentry with enough energy (reserve energy for Guardian Shield)
+    available_sentries = [
+        s for s in sentries
+        if s.energy >= HALLUCINATION_ENERGY_COST + GUARDIAN_SHIELD_ENERGY_COST
+    ]
+    if not available_sentries:
+        # Try sentries with just enough for hallucination (no shield reserve)
+        available_sentries = [s for s in sentries if s.energy >= HALLUCINATION_ENERGY_COST]
+    if not available_sentries:
+        return
+
+    # Pick the sentry with the most energy (least likely to need it for shield)
+    caster = max(available_sentries, key=lambda s: s.energy)
+
+    # Cast hallucinated Phoenix
+    caster(AbilityId.HALLUCINATION_PHOENIX)
+    bot._hallucination_scout_last_cast = bot.time
+    # Role will be assigned in on_unit_created and control_hallucination_scouts
+    # Store the intended role so on_unit_created can pick it up
+    # (tag not known yet — will be matched in control_hallucination_scouts)
+    bot._halu_scout_pending_role = scout_role
+
+
+def control_hallucination_scouts(bot) -> None:
+    """
+    Control hallucinated Phoenix scouts — path them based on their role.
+    
+    Roles:
+    - high_ground: Hold position at ramp top for persistent army vision
+    - base_scout: Follow standard probe scout waypoints (enemy_spawn → nat → etc.)
+    - intel: Hunt for enemy army using get_hunt_target()
+    
+    Pure move — no attack, no danger avoidance (hallucinations are expendable).
+    """
+    air_grid = bot.mediator.get_air_grid
+
+    # Find our hallucinated Phoenixes
+    hallu_phoenixes = bot.units(UnitTypeId.PHOENIX).filter(
+        lambda u: u.is_hallucination
+    )
+
+    # Assign roles to new Phoenixes that don't have one yet
+    pending_role = getattr(bot, '_halu_scout_pending_role', '')
+    for phoenix in hallu_phoenixes:
+        if phoenix.tag not in bot._halu_scout_roles:
+            # New Phoenix — assign the pending role (set when cast)
+            bot._halu_scout_roles[phoenix.tag] = pending_role
+            # Also assign the correct ARES UnitRole
+            if pending_role == "high_ground":
+                bot.mediator.assign_role(tag=phoenix.tag, role=UnitRole.HIGH_GROUND_SPOTTER)
+            else:
+                bot.mediator.assign_role(tag=phoenix.tag, role=UnitRole.SCOUTING)
+
+    # Clean up stale role entries for dead Phoenixes
+    live_tags = {p.tag for p in hallu_phoenixes}
+    bot._halu_scout_roles = {
+        t: r for t, r in bot._halu_scout_roles.items() if t in live_tags
+    }
+    bot._halu_scout_waypoints = {
+        t: v for t, v in bot._halu_scout_waypoints.items() if t in live_tags
+    }
+
+    for phoenix in hallu_phoenixes:
+        role = bot._halu_scout_roles.get(phoenix.tag, 'intel')
+
+        if role == "high_ground":
+            # Use live ramp target if available, otherwise keep last known
+            tag = phoenix.tag
+            if bot._blind_ramp_target:
+                bot._halu_scout_waypoints[tag] = {
+                    "stored_target": bot._blind_ramp_target,
+                    "orbit_angle": bot._halu_scout_waypoints.get(
+                        tag, {}
+                    ).get("orbit_angle", 0.0),
+                }
+            wp_data = bot._halu_scout_waypoints.get(tag, {})
+            center = wp_data.get("stored_target")
+            if not center:
+                center = bot.start_location
+
+            # Orbit in a small circle (radius 3) around the ramp top
+            orbit_radius = 3.0
+            angle = wp_data.get("orbit_angle", 0.0)
+            target = Point2((
+                center.x + orbit_radius * math.cos(angle),
+                center.y + orbit_radius * math.sin(angle),
+            ))
+            # Advance angle when close to current orbit point
+            if cy_distance_to(phoenix.position, target) < 1.5:
+                wp_data["orbit_angle"] = (angle + 1.0) % (2 * math.pi)
+                if tag in bot._halu_scout_waypoints:
+                    bot._halu_scout_waypoints[tag] = wp_data
+
+            actions = CombatManeuver()
+            actions.add(PathUnitToTarget(
+                unit=phoenix,
+                target=target,
+                grid=air_grid,
+                sense_danger=False,
+            ))
+            bot.register_behavior(actions)
+
+        elif role == "base_scout":
+            # Circle the enemy main base, then switch to intel hunting.
+            tag = phoenix.tag
+            if tag not in bot._halu_scout_waypoints:
+                waypoints = _generate_base_scout_waypoints(bot)
+                bot._halu_scout_waypoints[tag] = {
+                    "waypoints": waypoints, "idx": 0
+                }
+
+            wp_data = bot._halu_scout_waypoints[tag]
+            waypoints = wp_data.get("waypoints", [])
+            idx = wp_data.get("idx", 0)
+
+            if idx < len(waypoints):
+                target = waypoints[idx]
+                # Advance to next waypoint when close
+                if cy_distance_to(phoenix.position, target) < 1:
+                    wp_data["idx"] += 1
+                    if wp_data["idx"] < len(waypoints):
+                        target = waypoints[wp_data["idx"]]
+                    else:
+                        # Done with waypoints — switch to intel hunting
+                        bot._halu_scout_roles[tag] = "intel"
+                        target = get_hunt_target(bot, phoenix)
+                actions = CombatManeuver()
+                actions.add(PathUnitToTarget(
+                    unit=phoenix,
+                    target=target,
+                    grid=air_grid,
+                    sense_danger=False,
+                ))
+                bot.register_behavior(actions)
+            else:
+                # All waypoints visited — behave as intel scout
+                bot._halu_scout_roles[tag] = "intel"
+                target = get_hunt_target(bot, phoenix)
+                actions = CombatManeuver()
+                actions.add(PathUnitToTarget(
+                    unit=phoenix,
+                    target=target,
+                    grid=air_grid,
+                    sense_danger=False,
+                ))
+                bot.register_behavior(actions)
+
+        else:
+            # Intel scout — hunt for enemy army
+            target = get_hunt_target(bot, phoenix)
+            actions = CombatManeuver()
+            actions.add(PathUnitToTarget(
+                unit=phoenix,
+                target=target,
+                grid=air_grid,
+                sense_danger=False,
+            ))
+            bot.register_behavior(actions)

@@ -192,6 +192,16 @@ GUARDIAN_SHIELD_OVERLAP_DISTANCE = 8.0
 """If another shielded sentry is within this range, skip casting (avoid overlap).
 Roughly 2x radius — so shields cover different areas instead of stacking."""
 
+HALLUCINATION_ENERGY_COST = 75
+"""Energy cost of Hallucination ability"""
+
+HALLUCINATION_SCOUT_MIN_OBSERVERS = 3
+"""Only hallucinate a scout if we have fewer than this many observers.
+If we have 3+ observers, they provide enough scouting coverage."""
+
+HALLUCINATION_SCOUT_COOLDOWN = 30.0
+"""Minimum seconds between hallucination scout casts (prevents energy waste)"""
+
 STRUCTURE_ATTACK_RANGE = 12.0
 """Range to detect nearby enemy structures"""
 
