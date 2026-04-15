@@ -65,11 +65,15 @@ from bot.constants import (
     CHOKE_MELEE_RANGE,
     CHOKE_MIN_ARMY_WIDTH,
     CHOKE_RETREAT_DIST,
+    HT_SQUAD_FOLLOW_DISTANCE,
+    HT_SQUAD_TARGET_DISTANCE,
 )
 from bot.combat.unit_micro import (
     micro_ranged_unit,
     micro_melee_unit,
     micro_disruptor,
+    micro_high_templar,
+    merge_high_templars,
 )
 from bot.combat.formation import execute_fan_out, clear_formation_state
 from bot.combat.target_scoring import select_target, update_upgrades
@@ -373,6 +377,9 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
     # Cache upgrades once per frame for target scoring (Charge check, etc.)
     update_upgrades(bot.state.upgrades)
     
+    # HT archon merge: once per frame, merge low-energy HT pairs
+    merge_high_templars(bot)
+    
     # ARES requires get_squads() to be called before get_position_of_main_squad()
     if not squads:
         squads = bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=ATTACKING_SQUAD_RADIUS)
@@ -577,12 +584,14 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                 ))
                 bot.register_behavior(choke_retreat)
 
-            # Separate melee, ranged and spell casters
-            # Spellcasters: ground units with energy (HT, Sentries) OR Disruptors (by ID)
+            # Separate melee, ranged, spell casters, and high templars
+            # HTs get their own control (like disruptors) - Feedback + safe follow
+            # Other spellcasters: Sentries, etc.
             # Excludes: air units with energy (Observers)
+            high_templars = [u for u in units if u.type_id == UnitTypeId.HIGHTEMPLAR]
             melee = [u for u in units if u.ground_range <= MELEE_RANGE_THRESHOLD and u.energy == 0 and u.can_attack]
             ranged = [u for u in units if u.ground_range > MELEE_RANGE_THRESHOLD and u.energy == 0 and u.can_attack]
-            spellcasters = [u for u in units if (u.energy > 0 and not u.is_flying) or u.type_id == UnitTypeId.DISRUPTOR]
+            spellcasters = [u for u in units if (u.energy > 0 and not u.is_flying and u.type_id != UnitTypeId.HIGHTEMPLAR) or u.type_id == UnitTypeId.DISRUPTOR]
             
             # --- Concave formation: fan out ranged units before engagement ---
             # Compute enemy center for formation targeting
@@ -694,17 +703,22 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                             squad_position=squad_position
                         )
                 
-                # Handle other spellcasters (HTs, Sentries) - stay with army, stay safe
-                # Skip HTs that should be merging to archons (2+ HTs exist)
-                ht_count = sum(1 for c in other_casters if c.type_id == UnitTypeId.HIGHTEMPLAR)
+                # Handle other spellcasters (Sentries, etc.) - stay with army, stay safe
                 for caster in other_casters:
-                    # Skip HTs when archon merge is possible - let macro.py handle them
-                    if caster.type_id == UnitTypeId.HIGHTEMPLAR and ht_count >= 2:
-                        continue
                     caster_maneuver = CombatManeuver()
                     caster_maneuver.add(KeepUnitSafe(unit=caster, grid=avoid_grid))
                     caster_maneuver.add(AMove(unit=caster, target=move_to))
                     bot.register_behavior(caster_maneuver)
+            
+            # High Templars: Feedback + safe follow (separate from other casters)
+            for ht in high_templars:
+                micro_high_templar(
+                    ht=ht,
+                    enemies=all_close,
+                    avoid_grid=avoid_grid,
+                    bot=bot,
+                    squad_position=squad_position,
+                )
                         
         else:
             # No enemies — clear formation state so next engagement starts fresh
@@ -752,6 +766,20 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     # Otherwise stay put (close enough to target)
                     bot.register_behavior(no_enemy_maneuver)
                     continue  # Skip rest of movement logic for disruptors
+                
+                # High Templars follow army safely (like disruptors) — skip merging HTs
+                if unit.type_id == UnitTypeId.HIGHTEMPLAR:
+                    if unit.orders and unit.orders[0].ability.id == AbilityId.MORPH_ARCHON:
+                        continue  # Let merge complete
+                    ht_target = pos_of_main_squad
+                    distance_to_ht_target = cy_distance_to(unit.position, ht_target)
+                    if distance_to_ht_target > HT_SQUAD_FOLLOW_DISTANCE:
+                        no_enemy_maneuver.add(PathUnitToTarget(
+                            unit=unit, grid=grid, target=ht_target,
+                            success_at_distance=HT_SQUAD_TARGET_DISTANCE
+                        ))
+                    bot.register_behavior(no_enemy_maneuver)
+                    continue  # Skip rest of movement logic for HTs
                 
                 should_wait = False  # Flag to skip fallback movement when unit should wait
                 

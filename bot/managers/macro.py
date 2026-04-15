@@ -915,7 +915,3 @@ async def handle_macro(
     
     bot.register_behavior(macro_plan)
     _train_observers(bot)
-    
-    if bot.units(UnitTypeId.HIGHTEMPLAR).amount >= 2:
-        for templar in bot.units(UnitTypeId.HIGHTEMPLAR).ready:
-            templar(AbilityId.MORPH_ARCHON)

@@ -11,13 +11,22 @@ import numpy as np
 from sc2.unit import Unit
 from sc2.position import Point2
 from sc2.ids.unit_typeid import UnitTypeId
+from sc2.ids.ability_id import AbilityId
 
 from ares.behaviors.combat import CombatManeuver
 from ares.behaviors.combat.individual import (
-    KeepUnitSafe, StutterUnitBack, AMove, ShootTargetInRange
+    KeepUnitSafe, StutterUnitBack, AMove, ShootTargetInRange, PathUnitToTarget,
+    UseAOEAbility,
 )
 from cython_extensions import cy_closest_to, cy_in_attack_range, cy_distance_to, cy_find_units_center_mass
 from bot.combat.target_scoring import select_target
+from bot.constants import (
+    DISRUPTOR_SQUAD_FOLLOW_DISTANCE, DISRUPTOR_SQUAD_TARGET_DISTANCE,
+    HT_SQUAD_FOLLOW_DISTANCE, HT_SQUAD_TARGET_DISTANCE,
+    HT_STORM_ENERGY_COST, HT_STORM_MIN_TARGETS,
+    HT_FEEDBACK_ENERGY_COST, HT_FEEDBACK_RANGE, HT_FEEDBACK_MIN_ENEMY_ENERGY,
+    FEEDBACK_TARGET_TYPES, HT_MERGE_ENERGY_THRESHOLD,
+)
 
 
 def micro_ranged_unit(
@@ -148,9 +157,6 @@ def micro_disruptor(
     Returns:
         True if nova fired or behavior registered, False otherwise
     """
-    from sc2.ids.ability_id import AbilityId
-    from ares.behaviors.combat.individual import PathUnitToTarget
-    from bot.constants import DISRUPTOR_SQUAD_FOLLOW_DISTANCE, DISRUPTOR_SQUAD_TARGET_DISTANCE
     
     # Check if nova is ready AND enemies are present
     nova_ready = AbilityId.EFFECT_PURIFICATIONNOVA in disruptor.abilities
@@ -201,4 +207,95 @@ def micro_disruptor(
     bot.register_behavior(maneuver)
     return True
 
+
+def merge_high_templars(bot) -> None:
+    """Merge pairs of low-energy HTs into Archons.
+    
+    Only merges HTs with energy < HT_MERGE_ENERGY_THRESHOLD that aren't
+    already merging. Uses request_archon_morph for a proper paired command
+    so both HTs get a single merge order (no order conflicts).
+    
+    Call once per frame from the combat loop (not macro — HT lifecycle
+    belongs with HT micro logic).
+    """
+    low_energy_hts = [
+        ht for ht in bot.units(UnitTypeId.HIGHTEMPLAR).ready
+        if ht.energy < HT_MERGE_ENERGY_THRESHOLD
+        and not (ht.orders and ht.orders[0].ability.id == AbilityId.MORPH_ARCHON)
+    ]
+    while len(low_energy_hts) >= 2:
+        pair = [low_energy_hts.pop(0), low_energy_hts.pop(0)]
+        bot.request_archon_morph(pair)
+
+
+def micro_high_templar(
+    ht: Unit,
+    enemies: List[Unit],
+    avoid_grid: np.ndarray,
+    bot,
+    squad_position: Point2,
+) -> bool:
+    """Handle High Templar abilities and safe army-following.
+    
+    Priority: Psi Storm > Feedback > stay safe + follow army.
+    HTs are fragile casters that should stay behind the army.
+    Skips HTs that are currently merging to archon (MORPH_ARCHON order).
+    
+    Args:
+        ht: The High Templar unit
+        enemies: Nearby enemy units (all visible)
+        avoid_grid: Avoidance grid for safety
+        bot: Bot instance
+        squad_position: Center of the ground army to follow
+        
+    Returns:
+        True if behavior registered
+    """
+    # Skip if HT is currently merging to archon
+    if ht.orders and ht.orders[0].ability.id == AbilityId.MORPH_ARCHON:
+        return False
+    
+    # Priority 1: Psi Storm — ARES UseAOEAbility finds optimal cast position,
+    # avoids friendly fire and duplicate storms automatically
+    if ht.energy >= HT_STORM_ENERGY_COST and enemies:
+        storm_behavior = UseAOEAbility(
+            unit=ht,
+            ability_id=AbilityId.PSISTORM_PSISTORM,
+            targets=enemies,
+            min_targets=HT_STORM_MIN_TARGETS,
+            avoid_own_ground=True,
+            avoid_own_flying=True,
+        )
+        if storm_behavior.execute(bot, bot.config, bot.mediator):
+            return True
+    
+    # Priority 2: Feedback — only on high-value caster types
+    if ht.energy >= HT_FEEDBACK_ENERGY_COST and enemies:
+        feedback_targets = [
+            e for e in enemies
+            if e.type_id in FEEDBACK_TARGET_TYPES
+            and e.energy >= HT_FEEDBACK_MIN_ENEMY_ENERGY
+            and cy_distance_to(ht.position, e.position) <= HT_FEEDBACK_RANGE
+        ]
+        if feedback_targets:
+            best_target = max(feedback_targets, key=lambda e: e.energy)
+            ht(AbilityId.FEEDBACK_FEEDBACK, best_target)
+            return True
+    
+    # No cast opportunity — stay safe and follow army
+    maneuver = CombatManeuver()
+    maneuver.add(KeepUnitSafe(ht, avoid_grid))
+    
+    # Follow army from behind (same pattern as disruptors)
+    distance_to_squad = cy_distance_to(ht.position, squad_position)
+    if distance_to_squad > HT_SQUAD_FOLLOW_DISTANCE:
+        maneuver.add(PathUnitToTarget(
+            unit=ht,
+            grid=bot.mediator.get_ground_grid,
+            target=squad_position,
+            success_at_distance=HT_SQUAD_TARGET_DISTANCE,
+        ))
+    
+    bot.register_behavior(maneuver)
+    return True
 

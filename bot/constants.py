@@ -120,6 +120,55 @@ DISRUPTOR_SQUAD_TARGET_DISTANCE = 4.0
 DISRUPTOR_FORWARD_OFFSET = 8.0
 """Distance Disruptor positions ahead of army toward target"""
 
+HT_SQUAD_FOLLOW_DISTANCE = 5.0
+"""Maximum distance HT should be from squad center (mirrors disruptor)"""
+
+HT_SQUAD_TARGET_DISTANCE = 4.0
+"""Target distance for HT to maintain from squad"""
+
+HT_STORM_ENERGY_COST = 75
+"""Energy cost of Psi Storm ability"""
+
+HT_STORM_MIN_TARGETS = 4
+"""Minimum enemies clumped to justify casting Psi Storm"""
+
+HT_FEEDBACK_ENERGY_COST = 50
+"""Energy cost of Feedback ability"""
+
+HT_MERGE_ENERGY_THRESHOLD = 50
+"""Only merge HTs to archon when both have less than this energy"""
+
+HT_FEEDBACK_RANGE = 10.0
+"""Cast range of Feedback ability"""
+
+HT_FEEDBACK_MIN_ENEMY_ENERGY = 50
+"""Minimum enemy energy to be worth Feedbacking (damage = enemy energy)"""
+
+FEEDBACK_TARGET_TYPES: set[UnitTypeId] = {
+    UnitTypeId.GHOST,
+    UnitTypeId.VIPER,
+    UnitTypeId.HIGHTEMPLAR,
+    UnitTypeId.INFESTOR,
+    UnitTypeId.RAVEN,
+}
+"""Unit types worth casting Feedback on — high-value casters only"""
+
+SENTRY_SQUAD_FOLLOW_DISTANCE = 5.0
+"""Maximum distance sentry should be from squad center"""
+
+SENTRY_SQUAD_TARGET_DISTANCE = 4.0
+"""Target distance for sentry to maintain from squad"""
+
+GUARDIAN_SHIELD_ENERGY_COST = 75
+"""Energy cost of Guardian Shield"""
+
+GUARDIAN_SHIELD_RADIUS = 4.5
+"""Radius of Guardian Shield effect"""
+
+GUARDIAN_SHIELD_OVERLAP_DISTANCE = 8.0
+"""If another shielded sentry is within this range, skip casting (avoid overlap).
+Roughly 2x radius — so shields cover different areas instead of stacking."""
+
 STRUCTURE_ATTACK_RANGE = 12.0
 """Range to detect nearby enemy structures"""
 
