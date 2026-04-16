@@ -5,6 +5,8 @@ Key Decisions: All debug calls gated by bot.debug, minimal performance impact wh
 Limitations: Requires bot.debug=True in bot.py to activate
 """
 
+import math
+
 from sc2.position import Point2, Point3
 from sc2.units import Units
 from sc2.ids.unit_typeid import UnitTypeId
@@ -108,39 +110,50 @@ def render_combat_state_overlay(bot, main_army: Units, enemy_threat_level: int, 
     except Exception:
         pass
 
-    # Gate 3: retreat blocked (corridor sampling + safe spot check)
+    # Gate 3: retreat blocked (escape zone with ground_grid — matches _is_retreat_blocked)
     retreat_blocked = False
+    blocked_reason = ""
     if army_center and base_position:
         ground_grid = bot.mediator.get_ground_grid
-        avoid_grid = bot.mediator.get_ground_avoidance_grid
-        if not (cy_in_pathing_grid_ma(ground_grid, army_center) and cy_point_below_value(avoid_grid, army_center)):
+        if not cy_point_below_value(ground_grid, army_center):
             army_dist = cy_distance_to(army_center, base_position)
-            num_samples = 8
+            escape_distance = min(20.0, army_dist * 0.5)
+            dx = base_position.x - army_center.x
+            dy = base_position.y - army_center.y
+            path_len = max(math.sqrt(dx * dx + dy * dy), 0.01)
+            dx_norm = dx / path_len
+            dy_norm = dy / path_len
+            num_samples = 6
             blocked_count = 0
             for i in range(1, num_samples + 1):
-                t = i / (num_samples + 1)
-                sample = Point2((
-                    army_center.x + (base_position.x - army_center.x) * t,
-                    army_center.y + (base_position.y - army_center.y) * t,
-                ))
-                if not cy_in_pathing_grid_ma(ground_grid, sample) or not cy_point_below_value(avoid_grid, sample):
+                dist = escape_distance * i / num_samples
+                sample = Point2((army_center.x + dx_norm * dist, army_center.y + dy_norm * dist))
+                if not cy_in_pathing_grid_ma(ground_grid, sample) or not cy_point_below_value(ground_grid, sample):
                     blocked_count += 1
-            if blocked_count > num_samples // 2:
+            if blocked_count >= num_samples // 2:
                 retreat_blocked = True
+                blocked_reason = f"esc:{blocked_count}/{num_samples}"
             else:
                 safe_spot = bot.mediator.find_closest_safe_spot(
-                    from_pos=army_center, grid=avoid_grid, radius=MASS_RECALL_RETREAT_SEARCH_RADIUS,
+                    from_pos=army_center, grid=ground_grid, radius=MASS_RECALL_RETREAT_SEARCH_RADIUS,
                 )
                 if safe_spot is None:
                     retreat_blocked = True
-                else:
-                    retreat_blocked = cy_distance_to(safe_spot, base_position) >= army_dist
+                    blocked_reason = "no_safe"
+                elif cy_distance_to(safe_spot, base_position) >= army_dist:
+                    retreat_blocked = True
+                    blocked_reason = "safe_away"
 
     g1 = "Y" if fight_result in LOSS_DECISIVE_OR_WORSE else "N"
     g2 = "Y" if own_supply >= MASS_RECALL_MIN_OWN_SUPPLY else "N"
     g3 = "Y" if retreat_blocked else "N"
     fr_name = fight_result.name if fight_result and hasattr(fight_result, 'name') else "N/A"
-    gate_str = f"loss{g1} supply{g2}({own_supply:.0f}) blocked{g3}"
+    blk_detail = f"({blocked_reason})" if blocked_reason else ""
+    # Show trapped squad size from actual per-squad check (stored by try_mass_recall)
+    gates = getattr(bot, '_mass_recall_gates', {})
+    sq_size = gates.get("trapped_squad_size", 0)
+    sq_info = f" sq:{sq_size}" if sq_size else ""
+    gate_str = f"loss{g1} supply{g2}({own_supply:.0f}) blocked{g3}{blk_detail}{sq_info}"
 
     # Nexus energy check — shows why recall didn't cast even when gates pass
     nexus_energy_info = ""
@@ -431,6 +444,76 @@ def render_target_markers(bot, main_army: Units) -> None:
     bot._debug_y = _y
 
 
+def render_mass_recall_debug(bot, main_army: Units) -> None:
+    """Render 3D Mass Recall debug: escape zone samples, trapped/influenced units, recall target.
+
+    Reads per-frame data stored by _is_retreat_blocked and _find_recall_target in combat.py.
+    Shows escape zone sample points (green=safe, red=blocked), unit influence state,
+    and recall target with radius circle when all gates pass.
+    """
+    if not bot.debug or not main_army:
+        return
+
+    from bot.constants import MASS_RECALL_RADIUS
+
+    # --- Escape zone samples (stored by _is_retreat_blocked) ---
+    escape_samples = getattr(bot, '_recall_escape_samples', [])
+    for sample_pos, is_blocked in escape_samples:
+        z = bot.get_terrain_z_height(sample_pos)
+        color = Point3((255, 50, 50)) if is_blocked else Point3((50, 255, 50))
+        bot.client.debug_sphere_out(
+            Point3((sample_pos.x, sample_pos.y, z + 0.4)), 0.4, color
+        )
+
+    # --- Trapped / influenced unit labels (stored by _find_recall_target) ---
+    trapped_tags = getattr(bot, '_recall_trapped_tags', set())
+    influenced_tags = getattr(bot, '_recall_influenced_tags', set())
+    if trapped_tags or influenced_tags:
+        for u in main_army:
+            if u.tag in trapped_tags:
+                z = bot.get_terrain_z_height(u.position)
+                bot.client.debug_text_world(
+                    "TRAPPED", Point3((u.position.x, u.position.y, z + 1.2)),
+                    color=(255, 50, 50), size=10,
+                )
+            elif u.tag in influenced_tags:
+                z = bot.get_terrain_z_height(u.position)
+                bot.client.debug_text_world(
+                    "INFL", Point3((u.position.x, u.position.y, z + 1.2)),
+                    color=(255, 165, 0), size=10,
+                )
+
+    # --- Recall target marker + radius circle (only when gates passed) ---
+    recall_target = getattr(bot, '_recall_target_pos', None)
+    if recall_target is not None:
+        z = bot.get_terrain_z_height(recall_target)
+        # Purple sphere at target center
+        bot.client.debug_sphere_out(
+            Point3((recall_target.x, recall_target.y, z + 0.5)), 1.0,
+            Point3((200, 0, 255)),
+        )
+        bot.client.debug_text_world(
+            "RECALL TARGET", Point3((recall_target.x, recall_target.y, z + 2.0)),
+            color=(200, 0, 255), size=14,
+        )
+        # Draw recall radius circle on ground
+        num_circle = 24
+        for i in range(num_circle):
+            a1 = 2 * math.pi * i / num_circle
+            a2 = 2 * math.pi * (i + 1) / num_circle
+            p1 = Point2((recall_target.x + MASS_RECALL_RADIUS * math.cos(a1),
+                         recall_target.y + MASS_RECALL_RADIUS * math.sin(a1)))
+            p2 = Point2((recall_target.x + MASS_RECALL_RADIUS * math.cos(a2),
+                         recall_target.y + MASS_RECALL_RADIUS * math.sin(a2)))
+            z1 = bot.get_terrain_z_height(p1)
+            z2 = bot.get_terrain_z_height(p2)
+            bot.client.debug_line_out(
+                Point3((p1.x, p1.y, z1 + 0.2)),
+                Point3((p2.x, p2.y, z2 + 0.2)),
+                color=Point3((200, 0, 255)),
+            )
+
+
 def render_disruptor_labels(bot) -> None:
     """Render 3D labels on Disruptors showing ability status and target info."""
     if not bot.debug:
@@ -539,8 +622,6 @@ def render_formation_debug(bot, squad_units: list, target) -> None:
         MELEE_RANGE_THRESHOLD
     )
     from sc2.position import Point2
-    
-    import math
     
     # Compute dynamic thresholds (must match get_formation_move_target)
     n_sqrt = math.sqrt(len(squad_units))
@@ -675,7 +756,6 @@ def render_base_defender_debug(bot) -> None:
     
     from bot.constants import UNIT_ENEMY_DETECTION_RANGE, COMMON_UNIT_IGNORE_TYPES
     from ares.consts import UnitTreeQueryType
-    import math
     
     # Get BASE_DEFENDER units
     defender_units = bot.mediator.get_units_from_role(role=UnitRole.BASE_DEFENDER)

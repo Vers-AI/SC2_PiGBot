@@ -341,13 +341,13 @@ class PiG_Bot(AresBot):
         if main_army and squads:
             self.main_army_position = self.mediator.get_position_of_main_squad(role=UnitRole.ATTACKING)
             # handle_attack_toggles decides target (attack/retreat/rally) and sets _commenced_attack flag
-            final_target = handle_attack_toggles(self, main_army, attack_target(self, main_army_position=self.main_army_position))
+            final_target = handle_attack_toggles(self, main_army, attack_target(self, main_army_position=self.main_army_position), squads=squads)
             control_main_army(self, main_army, final_target, squads)
         elif main_army:
             # Fallback: use main army center if no squads can be formed
             self.main_army_position = main_army.center
             # Still run decision logic to set flags
-            handle_attack_toggles(self, main_army, attack_target(self, main_army_position=self.main_army_position))
+            handle_attack_toggles(self, main_army, attack_target(self, main_army_position=self.main_army_position), squads=None)
 
         # Control BASE_DEFENDER units every frame (separated from allocation in threat_detection)
         control_defenders(self)
