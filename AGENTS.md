@@ -122,3 +122,166 @@ Output a short **Impact Map**:
 - Risk of regression (low/med/high) and why:
 
 If risk ≥ medium, add/adjust tests accordingly.
+
+
+
+# SC2 AI Bot Development Rules
+
+- You are a **StarCraft II AI Bot developer** using **python-sc2 (Burny)** + **ARES**.
+- When interacting with ARES systems **read the docs** located in `ares-sc2/docs/`. Key tutorials:
+  - `tutorials/combat_maneuver_example.md` — CombatManeuver usage
+  - `tutorials/unit_squads_group_behaviors.md` — squad system + group behaviors
+  - `tutorials/assigning_unit_roles.md` — UnitRole assignment patterns
+  - `tutorials/influence_and_pathing.md` — grid/pathing APIs
+  - `tutorials/gotchas.md` — known ARES footguns
+  - `api_reference/` — mediator API surface
+- Integrate with existing ARES conventions; keep logic **deterministic** and **cheap** (frame-time safe).
+- Don't modify the ares source code found in `ares-sc2/src`
+- Favor **simple, data-driven heuristics** over heavy abstractions.
+- **Don’t change strategy/builds** unless asked. Scope to the task.
+- **Creativity policy for SC2:** You may propose at most **2 gameplay ideas** under `Suggestions:`  
+  (e.g., “threat-map smoothing,” “cooldown-aware kiting,” “wall-off validator”),  
+  but only **auto-apply** if **low-cost** (no deps, ≤15 LOC, no new files, no config).
+- **Performance guardrail:** avoid per-unit O(n²); target **O(n log n)** or batched ops.  
+  Emit a 1-line perf note if you add any loop over units.
+
+### Cython Extensions
+
+The `cython_extensions` package ships with ARES and provides fast C-compiled helpers. **Always prefer `cy_*` over plain Python equivalents** for any hot-path geometry or unit-query work.
+
+| Function | Import | Purpose |
+|---|---|---|
+| `cy_distance_to` | `cython_extensions` | Euclidean distance between two positions |
+| `cy_distance_to_squared` | `cython_extensions` | Squared distance (cheaper, avoids sqrt) |
+| `cy_closest_to` | `cython_extensions` | Nearest unit to a point |
+| `cy_pick_enemy_target` | `cython_extensions` | Priority target selection |
+| `cy_in_attack_range` | `cython_extensions` | Check if unit can attack target |
+| `cy_find_units_center_mass` | `cython_extensions` | Center-of-mass of a unit list |
+| `cy_adjust_moving_formation` | `cython_extensions` | Melee-forward formation offsets |
+| `cy_in_pathing_grid_ma` | `cython_extensions.general_utils` | Check if position is walkable |
+| `cy_point_below_value` | `cython_extensions.numpy_helper` | Grid value threshold check |
+
+### Bot Data & Performance
+
+- **Competition safety:** Any data collection must be **off by default** in competition builds. No blocking I/O in the game loop.
+- **Async + batched I/O:** Buffer logs/metrics; flush asynchronously outside the frame-critical path. Never do per-unit disk writes.
+- **Replay & memory files:** Store under `data/` with run-stamped folders. Include `map`, `opponent_race`, `build`, `commit`, `seed`.
+- **Deterministic runs:** Persist and log the RNG seed for each match; provide a simple command to re-run a match with the same seed.
+- **Schema/versioning:** Tag all bot “memory”/knowledge files with `schema_version`. Add a migrator when changing format.
+- **Corruption handling:** On load failure, fall back to safe defaults and emit a single, clear error (no crash loops).
+- **Frame-time budget:** Any data read/write must be ≤ your per-frame budget (target sub-millisecond). If exceeded, degrade gracefully (drop sample, defer write).
+- **Sampling policy:** In dev, default to **sampled telemetry** (e.g., 1 in N events) to avoid I/O storms. Make N configurable.
+- **Feature gating:** Guard new data features with a config flag (`data.enable_*`). Flags must default to **off** in competition.
+- **Storage caps:** Enforce rolling caps (e.g., max replays per run, max MB for memory/metrics). Oldest-first eviction.
+- **Validation:** Validate memory/knowledge files at startup (keys present, value ranges sane). Refuse to load if unsafe.
+- **Explain when useful:** If adding a new dataset/metric, provide a 2–3 sentence note: purpose, collection rate, and read path.
+
+### Acceptance Criteria for Data Tasks
+- [ ] No blocking I/O in frame loop; async/batched writes only.
+- [ ] Deterministic: seed + config + commit hash recorded with outputs.
+- [ ] Schema versioned + validation on read; safe fallback on failure.
+- [ ] Competition-safe defaults (collection off; flags documented).
+- [ ] Storage/sampling caps documented and enforced.
+
+
+
+## Example Behavior
+**Task:** “Add safe path helper that avoids enemy splash zones.”
+
+**Suggestions:**
+1. **Why:** 10–20% fewer probe losses in early game. **Cost:** +1 (one helper fn). **Plan:** Precompute splash circles, inflate with 0.5, mark blocked grid. **Auto-apply:** Yes (≤15 LOC).  
+2. **Why:** Slightly better mining uptime via smarter retreat. **Cost:** +2 (new file). **Plan:** Micro policy table. **Auto-apply:** No (needs approval).
+
+Then it implements the **first** only, with tests, and lists the second under `Backlog:`.
+
+---
+
+## Project Structure
+
+```
+bot/
+  bot.py                    # Main AresBot subclass; wires all modules together
+  constants.py              # All tunable numeric constants (squad radii, thresholds, etc.)
+  combat/
+    __init__.py             # Re-exports public API (control_main_army, control_defenders, …)
+    combat.py               # Core army control logic (squads, roles, engagement decisions)
+    unit_micro.py           # Per-unit micro: ranged, melee, disruptor, HT, sentry
+    formation.py            # Formation geometry helpers
+    target_scoring.py       # Priority target selection
+  managers/
+    macro.py                # Economy, production, build order execution
+    reactions.py            # Threat detection, assess_threat(), cheese reactions
+    scouting.py             # Scout management and intel gathering
+    structure_manager.py    # Chrono, recharge, mass recall, building management
+  utilities/
+    intel.py                # Enemy intel tracking, choke grid creation
+    debug.py                # Visual debug overlays
+    nova_manager.py         # Disruptor nova tracking
+    use_disruptor_nova.py   # Disruptor nova behavior
+    natural_wall_manager.py # Natural wall placement logic
+    rush_detection.py       # ML-based rush detector
+    performance_monitor.py  # Frame-time profiling
+    game_report.py          # End-of-game reporting
+ares-sc2/                   # Git submodule — do NOT modify src/
+config.yml                  # Runtime config (feature flags, build selection)
+data/                       # Match replays, memory files, telemetry
+```
+
+---
+
+## Dependency Management (Poetry 2.x)
+
+- **Poetry version:** 2.2.0. The `--no-update` flag was removed; use plain `poetry lock`.
+- **Always commit** both `pyproject.toml` and `poetry.lock` together.
+- **After pulling or updating the submodule:** run `git submodule update --init --recursive` **before** any `poetry` commands.
+- Primary machine workflow: `poetry add <pkg>` → `poetry lock` → commit both files.
+- Secondary machine workflow: `git pull` → `git submodule update --init --recursive` → `poetry lock` → `poetry install`.
+- **Root cause of sync failures:** Poetry version mismatches produce incompatible metadata; always align Poetry versions across machines.
+
+---
+
+## ARES Combat Patterns & Known Anti-Patterns
+
+### Example pattern — individual behaviors per unit
+One proven approach: each unit gets its own `CombatManeuver()` with a priority-ordered behavior chain:
+
+```python
+for unit in units:
+    maneuver = CombatManeuver()
+    maneuver.add(KeepUnitSafe(...))
+    maneuver.add(ShootTargetInRange(...))
+    maneuver.add(PathUnitToTarget(...))
+    maneuver.add(AMove(...))
+    bot.register_behavior(maneuver)
+```
+
+Group behaviors (e.g. `PathGroupToTarget`, `AMoveGroup`) are also valid — choose based on what the squad needs. The key constraint is **consistency within a maneuver** (see anti-patterns below).
+
+- **ATTACKING role:** `squad_radius=9.0`
+- **BASE_DEFENDER role:** `squad_radius=6.0`
+
+### Anti-patterns that caused real bugs
+- **Mixing individual + group behaviors in the same maneuver** → units orphan and stop responding.
+- **Registering multiple CombatManeuver objects for the same unit** → behavior conflicts.
+- **Binary army-wide role switches** (whole army → defend → attack) → army bouncing when small threats appear repeatedly.
+- **No role-transition stability buffer** → units oscillate between ATTACKING ↔ BASE_DEFENDER every few seconds during skirmishes.
+
+### Role transition stability
+- Add a **grace period (~5 s)** before returning a defender to ATTACKING after the threat clears.
+- Use `manage_defensive_unit_roles()` to centralize this logic; call it once per step in `bot.py`.
+
+---
+
+## Threat Response Architecture
+
+**Principle:** allocate the *minimum* force required — never redirect the whole army for a small threat.
+
+| Threat class | Example | Response |
+|---|---|---|
+| Harassment | Reapers, Adepts | 2–4 fast units; main army continues attacking |
+| Combat | Enemy army ≥ threshold | Up to 60 % of army defends |
+| Overwhelming | Major push | Full army responds |
+
+- **Main army redirects only for major threats** (severity ≥ level 7 in `assess_threat()`).
+- `assess_threat()` lives in `bot/managers/reactions.py`; keep classification logic there.
+- Graduated response prevents the oscillation loop: small threat appears → entire army retreats → threat gone → entire army advances → repeat.

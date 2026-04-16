@@ -39,8 +39,6 @@ trigger: always_on
 - [ ] Storage/sampling caps documented and enforced.
 
 
-### Testing behavior
-- before trying to do python run.py , you need to use  "$env:SC2PATH="D:\StarCraft II" for the path
 
 ## Example Behavior
 **Task:** “Add safe path helper that avoids enemy splash zones.”
