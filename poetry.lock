@@ -204,7 +204,7 @@ files = [
 
 [[package]]
 name = "ares-sc2"
-version = "3.5.3"
+version = "3.6.0"
 description = ""
 optional = false
 python-versions = ">=3.11, <3.13"
@@ -214,7 +214,7 @@ develop = false
 
 [package.dependencies]
 burnysc2 = {git = "https://github.com/august-k/python-sc2", branch = "develop"}
-cython-extensions-sc2 = "^0.13.3"
+cython-extensions-sc2 = "^0.15.0"
 map-analyzer = {git = "https://github.com/spudde123/SC2MapAnalysis", branch = "develop"}
 PyYAML = "^6.0.2"
 scikit-learn = "^1.2.2"
@@ -743,27 +743,27 @@ test = ["pytest"]
 
 [[package]]
 name = "cython-extensions-sc2"
-version = "0.13.4"
+version = "0.15.0"
 description = ""
 optional = false
 python-versions = "<3.14,>=3.11"
 groups = ["main"]
 files = [
-    {file = "cython_extensions_sc2-0.13.4-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:9a2cc129dccca10f6500f199ec27cb73ec7211a5934891f77a42404f57f25e45"},
-    {file = "cython_extensions_sc2-0.13.4-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:585aaade705b3743ff7ee9f4a59f68f586a9b3babdfd9b8ad69dd0bfe81b95cc"},
-    {file = "cython_extensions_sc2-0.13.4-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:bf9ac4a3fca6aba101dc41aaefda9efefce27c509053543ede8aee7c3394c4f7"},
-    {file = "cython_extensions_sc2-0.13.4-cp311-cp311-win32.whl", hash = "sha256:406d31b780447aadc65e6ff1b3710e1f864ba3a30046ca0794216d867a3c1a4a"},
-    {file = "cython_extensions_sc2-0.13.4-cp311-cp311-win_amd64.whl", hash = "sha256:73e6aa63a03504fd658481de71a141511f5a39812c879022403c915401185f7a"},
-    {file = "cython_extensions_sc2-0.13.4-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:50a93ace88315a4861aa2f088e1216e1a522f44783f7848fbfe650c1e4331fd7"},
-    {file = "cython_extensions_sc2-0.13.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:98b4ff05c74cfb0c4f7b82def5582f9590f2a684c6e6ecdc6b97872f400bc69b"},
-    {file = "cython_extensions_sc2-0.13.4-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:22bf33dbaceb4efb4e87f559cff70c1f7c1a76eaad88d1a0dd91f593aa71e649"},
-    {file = "cython_extensions_sc2-0.13.4-cp312-cp312-win32.whl", hash = "sha256:6abf28c7a66a19a18a3d65ee97316c46fddf2d01f20ff959d21b5117617bf691"},
-    {file = "cython_extensions_sc2-0.13.4-cp312-cp312-win_amd64.whl", hash = "sha256:3c10bced647f2df32e765ee3205aa0d523d62bc776308ddf3d98aa8ed9b44d5c"},
-    {file = "cython_extensions_sc2-0.13.4-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:dfd8f709b6de0e5008d5b6fc950133b5fa7b356344b5ea659368c1912031718e"},
-    {file = "cython_extensions_sc2-0.13.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:0ccb2eeeb7a9d4e38b8258bac551cd0c68e6e6d48b3356886de511110df4de9a"},
-    {file = "cython_extensions_sc2-0.13.4-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:37ff323cfa6668d771111fe94917094c57e93683f0a53e0d8014a5c60c38206e"},
-    {file = "cython_extensions_sc2-0.13.4-cp313-cp313-win32.whl", hash = "sha256:f0a94986f2dd793fa4587c24d75da67653d0aa3fe39e259b061aa4c9cd7fe930"},
-    {file = "cython_extensions_sc2-0.13.4-cp313-cp313-win_amd64.whl", hash = "sha256:2113c1fa85a2d76c628b3013a7c1ed8f98c356bcb17575cdcb444731589334f4"},
+    {file = "cython_extensions_sc2-0.15.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:4fa2fa9fee28ea1421b0906b0cef4c3da83c5681c3509d1f064df58b1a215aa8"},
+    {file = "cython_extensions_sc2-0.15.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:9652d9b6819857f6f80c34829b198f3095d9a15b4f6a21e4fc881cfc5e1ac114"},
+    {file = "cython_extensions_sc2-0.15.0-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:cac61687924d1bffd558007e4c131b31523ab3a79d4d0dbb9464df07c6eb2448"},
+    {file = "cython_extensions_sc2-0.15.0-cp311-cp311-win32.whl", hash = "sha256:112b2986623eb950ec7233dc87c7912444a56d84a8bd7b611de0ea11280424c3"},
+    {file = "cython_extensions_sc2-0.15.0-cp311-cp311-win_amd64.whl", hash = "sha256:dd56386904b472c8e2ee2a1308ceb297a993bbaf07966cead3a3380a3dd03615"},
+    {file = "cython_extensions_sc2-0.15.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:6ea9bb08d7201c8a9dd71b8d82c3b6193071ba938a50259121cee6f302d78241"},
+    {file = "cython_extensions_sc2-0.15.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:ecb42d9342929b7eb011c47c6abe5902ebedddf1ae2b4302f9020e689795c594"},
+    {file = "cython_extensions_sc2-0.15.0-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:86fb7b7ba9c449372bb7461c842d8ae6c80986ec40aca427d745c609cf1ca9e6"},
+    {file = "cython_extensions_sc2-0.15.0-cp312-cp312-win32.whl", hash = "sha256:00fc1e154d8ea2c651ea8d6f2c7676bb78317601187d607ae6d1792c279488ab"},
+    {file = "cython_extensions_sc2-0.15.0-cp312-cp312-win_amd64.whl", hash = "sha256:feaaf02a93b843e50392e19244e0bbc08c38020fefd8b853fdb7090808a2c460"},
+    {file = "cython_extensions_sc2-0.15.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:9b92a7b4e3f3f9e05360c5199958f9fcbffc0f2f4fdc99f01358392d4374bc2a"},
+    {file = "cython_extensions_sc2-0.15.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:f917023a83ca2ef62774f38f4a745355ee45c01b0a54645d307ef939e5df2bb4"},
+    {file = "cython_extensions_sc2-0.15.0-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:d4c0ce78693ee3d987e67869b9f7938df11c66a070418a06e5098743bf35ddc1"},
+    {file = "cython_extensions_sc2-0.15.0-cp313-cp313-win32.whl", hash = "sha256:1aafae47af12dd696244087e47ac2f529f995346c44e6047f6889820a65b8c69"},
+    {file = "cython_extensions_sc2-0.15.0-cp313-cp313-win_amd64.whl", hash = "sha256:d0c8374c5a9733f8fa54b9e8e1b10782f4546891c6e7ef86fef00c457fb90a73"},
 ]
 
 [package.dependencies]
@@ -2211,14 +2211,14 @@ psutil = "*"
 
 [[package]]
 name = "prometheus-client"
-version = "0.24.1"
+version = "0.25.0"
 description = "Python client for the Prometheus monitoring system."
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "prometheus_client-0.24.1-py3-none-any.whl", hash = "sha256:150db128af71a5c2482b36e588fc8a6b95e498750da4b17065947c16070f4055"},
-    {file = "prometheus_client-0.24.1.tar.gz", hash = "sha256:7e0ced7fbbd40f7b84962d5d2ab6f17ef88a72504dcf7c0b40737b43b2a461f9"},
+    {file = "prometheus_client-0.25.0-py3-none-any.whl", hash = "sha256:d5aec89e349a6ec230805d0df882f3807f74fd6c1a2fa86864e3c2279059fed1"},
+    {file = "prometheus_client-0.25.0.tar.gz", hash = "sha256:5e373b75c31afb3c86f1a52fa1ad470c9aace18082d39ec0d2f918d11cc9ba28"},
 ]
 
 [package.extras]
