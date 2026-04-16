@@ -15,6 +15,27 @@ from bot.constants import (
 )
 
 
+def _get_recall_nexus_tag(bot) -> int | None:
+    """Return the tag of the Nexus designated to preserve energy for Mass Recall.
+
+    Only designates a recall Nexus once we've expanded (2+ Nexuses), since
+    the first Nexus needs to spend freely early on. Uses the main/starting
+    Nexus so it preserves 50 energy for emergency recall.
+    Returns None if we haven't expanded yet or no suitable Nexus exists.
+    """
+    # Only designate a recall Nexus after expansion
+    if len(bot.townhalls.ready) < 2:
+        return None
+    for nexus in bot.townhalls.ready:
+        if nexus.type_id == UnitTypeId.NEXUS and nexus.position == bot.start_location:
+            return nexus.tag
+    # Fallback: first available Nexus
+    for nexus in bot.townhalls.ready:
+        if nexus.type_id == UnitTypeId.NEXUS:
+            return nexus.tag
+    return None
+
+
 def use_recharge(bot, main_army: Units) -> bool:
     """
     Uses Energy Recharge on the unit with the lowest energy percentage within range of the closest Nexus.
@@ -41,10 +62,13 @@ def use_recharge(bot, main_army: Units) -> bool:
     ]
 
     # Find the closest Nexus to the army center
+    # Recall Nexus requires 100 energy (50 reserve + 50 cost) to spend
+    recall_nexus_tag = _get_recall_nexus_tag(bot)
     closest_nexus = None
     closest_distance = float("inf")
     for nexus in bot.structures(UnitTypeId.NEXUS).ready:
-        if nexus.energy < 50:
+        min_energy = 100 if nexus.tag == recall_nexus_tag else 50
+        if nexus.energy < min_energy:
             continue
         distance = main_army.center.distance_to(nexus.position)
         if distance < closest_distance:
@@ -94,9 +118,12 @@ def use_chronoboost(bot) -> bool:
     Returns:
         bool: True if Chronoboost was used, False otherwise
     """
+    # Recall Nexus requires 100 energy (50 reserve + 50 cost) to spend
+    recall_nexus_tag = _get_recall_nexus_tag(bot)
     available_nexuses = [
         nexus for nexus in bot.townhalls.ready
-        if nexus.energy >= 50 and nexus.type_id == UnitTypeId.NEXUS
+        if nexus.type_id == UnitTypeId.NEXUS
+        and nexus.energy >= (100 if nexus.tag == recall_nexus_tag else 50)
     ]
 
     if not available_nexuses:
@@ -194,27 +221,42 @@ def use_mass_recall(bot, target_position: Point2, avoid_nexus_tag: int | None = 
     """
     # Global cooldown check (130s across all Nexuses)
     if bot.time < bot._mass_recall_last_cast_time + MASS_RECALL_COOLDOWN:
+        if bot.debug:
+            print(f"[MASS RECALL] Blocked by cooldown at {bot.time:.1f}s (last cast {bot._mass_recall_last_cast_time:.1f}s)")
         return False
 
-    # Find a Nexus with enough energy, preferring one NOT closest to army
+    # Prefer the designated recall Nexus (guaranteed to have energy)
+    designated_tag = _get_recall_nexus_tag(bot)
     recall_nexus = None
-    for nexus in bot.structures(UnitTypeId.NEXUS).ready:
-        if nexus.energy < MASS_RECALL_ENERGY_COST:
-            continue
-        if avoid_nexus_tag is not None and nexus.tag != avoid_nexus_tag:
-            recall_nexus = nexus
-            break
-
-    # Fallback: use the avoided Nexus if it's the only one with energy
-    if recall_nexus is None:
+    if designated_tag is not None:
         for nexus in bot.structures(UnitTypeId.NEXUS).ready:
-            if nexus.energy >= MASS_RECALL_ENERGY_COST:
+            if nexus.tag == designated_tag and nexus.energy >= MASS_RECALL_ENERGY_COST:
                 recall_nexus = nexus
                 break
 
+    # Fallback: any Nexus with enough energy (prefer not the one closest to army)
     if recall_nexus is None:
+        for nexus in bot.structures(UnitTypeId.NEXUS).ready:
+            if nexus.energy < MASS_RECALL_ENERGY_COST:
+                continue
+            if avoid_nexus_tag is not None and nexus.tag != avoid_nexus_tag:
+                recall_nexus = nexus
+                break
+        # Last resort: use the avoided Nexus
+        if recall_nexus is None:
+            for nexus in bot.structures(UnitTypeId.NEXUS).ready:
+                if nexus.energy >= MASS_RECALL_ENERGY_COST:
+                    recall_nexus = nexus
+                    break
+
+    if recall_nexus is None:
+        if bot.debug:
+            nexus_info = [(n.tag, f"{n.energy:.0f}e") for n in bot.structures(UnitTypeId.NEXUS).ready]
+            print(f"[MASS RECALL] No nexus with {MASS_RECALL_ENERGY_COST} energy | Nexuses: {nexus_info}")
         return False
 
+    if bot.debug:
+        print(f"[MASS RECALL] Casting from nexus {recall_nexus.tag} (energy={recall_nexus.energy:.0f}) at {bot.time:.1f}s -> {target_position.round(1)}")
     recall_nexus(AbilityId.EFFECT_MASSRECALL_NEXUS, target_position)
     bot._mass_recall_last_cast_time = bot.time
 

@@ -259,7 +259,7 @@ MASS_RECALL_RADIUS = 6.5
 MASS_RECALL_COOLDOWN = 130.0
 """Global cooldown (seconds) for Nexus Mass Recall across all Nexuses"""
 
-MASS_RECALL_ENERGY_COST = 100
+MASS_RECALL_ENERGY_COST = 50
 """Energy cost for Nexus Mass Recall ability"""
 
 MASS_RECALL_MIN_OWN_SUPPLY = 10

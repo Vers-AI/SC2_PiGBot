@@ -64,24 +64,99 @@ def render_combat_state_overlay(bot, main_army: Units, enemy_threat_level: int, 
     if not bot.debug:
         return
     
+    # --- Unified y-position layout (0.018 spacing) ---
+    # All 2D debug lines use sequential y to avoid overlaps
+    _y = 0.220
+    _step = 0.018
+
     # Combat state overlay
     bot.client.debug_text_2d(
         f"Attack: {bot._commenced_attack} Threat: {enemy_threat_level} Under Attack: {bot._under_attack}", 
-        Point2((0.1, 0.22)), None, 14
+        Point2((0.1, _y)), None, 14
     )
+    _y += _step
     bot.client.debug_text_2d(
         f"EarlyDefMode: {is_early_defensive_mode} Cheese: {bot._used_cheese_response}", 
-        Point2((0.1, 0.24)), None, 14
+        Point2((0.1, _y)), None, 14
     )
-    
-    # Mass Recall state
+    _y += _step
+
+    # Mass Recall — always compute gates fresh each frame
+    from bot.constants import MASS_RECALL_MIN_OWN_SUPPLY, MASS_RECALL_RETREAT_SEARCH_RADIUS, MASS_RECALL_ENERGY_COST
+    from ares.consts import LOSS_DECISIVE_OR_WORSE
+    from cython_extensions.general_utils import cy_in_pathing_grid_ma
+    from cython_extensions.numpy_helper import cy_point_below_value
+    from cython_extensions import cy_distance_to
+
     recall_cd = max(0.0, bot._mass_recall_last_cast_time + 130.0 - bot.time)
     recall_status = f"CD:{recall_cd:.0f}s" if recall_cd > 0 else "READY"
+
+    # Compute gates fresh
+    own_supply = sum(bot.calculate_supply_cost(u.type_id) for u in main_army) if main_army else 0
+    army_center = main_army.center if main_army else None
+    nearest_base = bot.townhalls.closest_to(army_center) if army_center and bot.townhalls else None
+    base_position = nearest_base.position if nearest_base else None
+
+    # Gate 1: fight result
+    fight_result = None
+    try:
+        cached_enemy = bot.mediator.get_cached_enemy_army or []
+        combat_enemies = [u for u in cached_enemy if u.type_id not in WORKER_TYPES and u.age < MEMORY_EXPIRY_TIME]
+        fight_result = bot.mediator.can_win_fight(
+            own_units=main_army, enemy_units=combat_enemies, workers_do_no_damage=True,
+        )
+    except Exception:
+        pass
+
+    # Gate 3: retreat blocked (corridor sampling + safe spot check)
+    retreat_blocked = False
+    if army_center and base_position:
+        ground_grid = bot.mediator.get_ground_grid
+        avoid_grid = bot.mediator.get_ground_avoidance_grid
+        if not (cy_in_pathing_grid_ma(ground_grid, army_center) and cy_point_below_value(avoid_grid, army_center)):
+            army_dist = cy_distance_to(army_center, base_position)
+            num_samples = 8
+            blocked_count = 0
+            for i in range(1, num_samples + 1):
+                t = i / (num_samples + 1)
+                sample = Point2((
+                    army_center.x + (base_position.x - army_center.x) * t,
+                    army_center.y + (base_position.y - army_center.y) * t,
+                ))
+                if not cy_in_pathing_grid_ma(ground_grid, sample) or not cy_point_below_value(avoid_grid, sample):
+                    blocked_count += 1
+            if blocked_count > num_samples // 2:
+                retreat_blocked = True
+            else:
+                safe_spot = bot.mediator.find_closest_safe_spot(
+                    from_pos=army_center, grid=avoid_grid, radius=MASS_RECALL_RETREAT_SEARCH_RADIUS,
+                )
+                if safe_spot is None:
+                    retreat_blocked = True
+                else:
+                    retreat_blocked = cy_distance_to(safe_spot, base_position) >= army_dist
+
+    g1 = "Y" if fight_result in LOSS_DECISIVE_OR_WORSE else "N"
+    g2 = "Y" if own_supply >= MASS_RECALL_MIN_OWN_SUPPLY else "N"
+    g3 = "Y" if retreat_blocked else "N"
+    fr_name = fight_result.name if fight_result and hasattr(fight_result, 'name') else "N/A"
+    gate_str = f"loss{g1} supply{g2}({own_supply:.0f}) blocked{g3}"
+
+    # Nexus energy check — shows why recall didn't cast even when gates pass
+    nexus_energy_info = ""
+    ready_nexuses = list(bot.structures(UnitTypeId.NEXUS).ready)
+    if ready_nexuses:
+        max_energy = max(n.energy for n in ready_nexuses)
+        nexus_energy_info = f" NxMaxE:{max_energy:.0f}/{MASS_RECALL_ENERGY_COST}"
+    else:
+        nexus_energy_info = " NoNexus"
+
     bot.client.debug_text_2d(
-        f"MassRecall: {recall_status} Pending: {bot._mass_recall_pending}",
-        Point2((0.1, 0.255)), None, 12
+        f"Recall: {recall_status} Pend:{bot._mass_recall_pending} | {gate_str} [{fr_name}]{nexus_energy_info}",
+        Point2((0.1, _y)), None, 12
     )
-    
+    _y += _step
+
     # Role counts
     attacking_units = bot.mediator.get_units_from_role(role=UnitRole.ATTACKING)
     defending_units = bot.mediator.get_units_from_role(role=UnitRole.DEFENDING) 
@@ -89,9 +164,10 @@ def render_combat_state_overlay(bot, main_army: Units, enemy_threat_level: int, 
     
     bot.client.debug_text_2d(
         f"ROLES: ATK:{len(attacking_units)} DEF:{len(defending_units)} BASE:{len(base_defender_units)}", 
-        Point2((0.1, 0.26)), None, 14
+        Point2((0.1, _y)), None, 12
     )
-    
+    _y += _step
+
     # Squad counts (use constants for squad radii)
     from bot.constants import ATTACKING_SQUAD_RADIUS, DEFENDER_SQUAD_RADIUS
     attacking_squads = bot.mediator.get_squads(role=UnitRole.ATTACKING, squad_radius=ATTACKING_SQUAD_RADIUS)
@@ -100,8 +176,12 @@ def render_combat_state_overlay(bot, main_army: Units, enemy_threat_level: int, 
     
     bot.client.debug_text_2d(
         f"SQUADS: ATK:{len(attacking_squads)} DEF:{len(defending_squads)} BASE:{len(base_defender_squads)}", 
-        Point2((0.1, 0.28)), None, 14
+        Point2((0.1, _y)), None, 12
     )
+    _y += _step
+
+    # Pass current y to sub-renderers so they continue from here
+    bot._debug_y = _y
     
     # Production nudging overlay: shows base vs nudged proportions
     _render_production_nudge_overlay(bot)
@@ -133,6 +213,9 @@ def _render_production_nudge_overlay(bot) -> None:
     if not base:
         return
     
+    _y = min(getattr(bot, '_debug_y', 0.30), 0.95)
+    _step = 0.018
+    
     # Show proportions with deltas, sorted by final priority
     sorted_types = sorted(
         nudged.keys() if nudged else base.keys(),
@@ -160,15 +243,69 @@ def _render_production_nudge_overlay(bot) -> None:
     pressure_tag = f" [{pressure}]" if pressure != "BALANCED" else ""
     
     label = f"Comp{pressure_tag}: " + " ".join(parts)
-    bot.client.debug_text_2d(label, Point2((0.1, 0.30)), None, 12)
+    bot.client.debug_text_2d(label, Point2((0.1, _y)), None, 12)
+    bot._debug_y = _y + _step
 
 
 def _render_combat_sim_overlay(bot, main_army: Units) -> None:
     """Render combat simulator results (global and squad-level)."""
+    _y = min(getattr(bot, '_debug_y', 0.30), 0.95)
+    _step = 0.018
+
     # Get enemy army (filter workers and expired ghosts) - use cached enemy
     cached_enemy = bot.mediator.get_cached_enemy_army or []
     combat_enemies = [u for u in cached_enemy if u.type_id not in WORKER_TYPES and u.age < MEMORY_EXPIRY_TIME]
     
+    # Scout status (any unit with SCOUTING role)
+    scout_tags = bot.mediator.get_unit_role_dict.get(UnitRole.SCOUTING, set())
+    valid_tags = {u.tag for u in bot.all_own_units}
+    live_scout_tags = scout_tags & valid_tags
+    
+    if live_scout_tags:
+        scouts = bot.all_own_units.tags_in(live_scout_tags)
+        scout = scouts.first
+        scout_type = scout.type_id.name
+        scout_hp = f"{int(scout.health_percentage * 100)}%"
+        bot.client.debug_text_2d(
+            f"Scout: {scout_type} #{scout.tag} HP:{scout_hp} ({len(scouts)} total)", 
+            Point2((0.1, _y)), None, 12
+        )
+    elif bot._worker_scout_sent_this_stale_period:
+        bot.client.debug_text_2d(
+            f"Scout: Dead/Missing (flag set)", 
+            Point2((0.1, _y)), None, 12
+        )
+    _y += _step
+
+    # Intel quality display
+    intel = get_enemy_intel_quality(bot)
+    freshness_bar = "\u2588" * int(intel["freshness"] * 10) + "\u2591" * (10 - int(intel["freshness"] * 10))
+    intel_status = "FRESH" if intel["freshness"] >= FRESH_INTEL_THRESHOLD else ("STALE" if intel["freshness"] >= STALE_INTEL_THRESHOLD else "BLIND")
+    
+    expired = intel.get('expired_count', 0)
+    exp_str = f" +{expired}exp" if expired else ""
+    bot.client.debug_text_2d(
+        f"Intel: [{freshness_bar}] {intel_status} ({intel['visible_count']}vis/{intel['memory_count']}mem{exp_str})", 
+        Point2((0.1, _y)), None, 12
+    )
+    _y += _step
+
+    # Intel urgency indicator (shows response thresholds)
+    urgency = getattr(bot, '_intel_urgency', 0.0)
+    urgency_bar = "\u2588" * int(urgency * 10) + "\u2591" * (10 - int(urgency * 10))
+    urgency_status = ""
+    if urgency >= 0.7:
+        urgency_status = " \u2192UPGRADE"
+    elif urgency >= 0.5:
+        urgency_status = " \u2192+OBS"
+    elif urgency >= 0.3:
+        urgency_status = " \u2192PRIORITY"
+    bot.client.debug_text_2d(
+        f"Urgency: [{urgency_bar}]{urgency_status}", 
+        Point2((0.1, _y)), None, 12
+    )
+    _y += _step
+
     # Global fight result
     try:
         global_result = bot.mediator.can_win_fight(
@@ -178,77 +315,30 @@ def _render_combat_sim_overlay(bot, main_army: Units) -> None:
         )
         bot.client.debug_text_2d(
             f"Global Fight: {global_result.name}", 
-            Point2((0.1, 0.32)), None, 14
+            Point2((0.1, _y)), None, 14
         )
     except Exception:
         bot.client.debug_text_2d(
             "Global Fight: N/A", 
-            Point2((0.1, 0.32)), None, 14
+            Point2((0.1, _y)), None, 14
         )
-    
-    # Intel quality display
-    intel = get_enemy_intel_quality(bot)
-    freshness_bar = "█" * int(intel["freshness"] * 10) + "░" * (10 - int(intel["freshness"] * 10))
-    intel_status = "FRESH" if intel["freshness"] >= FRESH_INTEL_THRESHOLD else ("STALE" if intel["freshness"] >= STALE_INTEL_THRESHOLD else "BLIND")
-    
-    # Intel urgency indicator (shows response thresholds)
-    urgency = getattr(bot, '_intel_urgency', 0.0)
-    urgency_bar = "█" * int(urgency * 10) + "░" * (10 - int(urgency * 10))
-    urgency_status = ""
-    if urgency >= 0.7:
-        urgency_status = " →UPGRADE"
-    elif urgency >= 0.5:
-        urgency_status = " →+OBS"
-    elif urgency >= 0.3:
-        urgency_status = " →PRIORITY"
-    
-    expired = intel.get('expired_count', 0)
-    exp_str = f" +{expired}exp" if expired else ""
-    bot.client.debug_text_2d(
-        f"Intel: [{freshness_bar}] {intel_status} ({intel['visible_count']}vis/{intel['memory_count']}mem{exp_str})", 
-        Point2((0.1, 0.30)), None, 12
-    )
-    bot.client.debug_text_2d(
-        f"Urgency: [{urgency_bar}]{urgency_status}", 
-        Point2((0.1, 0.28)), None, 12
-    )
-    
-    # Scout status (any unit with SCOUTING role)
-    # Get tags directly from role dictionary to avoid stale Units objects
-    scout_tags = bot.mediator.get_unit_role_dict.get(UnitRole.SCOUTING, set())
-    # Filter to only tags that still exist
-    valid_tags = {u.tag for u in bot.all_own_units}
-    live_scout_tags = scout_tags & valid_tags
-    
-    if live_scout_tags:
-        # Get the actual units
-        scouts = bot.all_own_units.tags_in(live_scout_tags)
-        scout = scouts.first
-        scout_type = scout.type_id.name
-        scout_hp = f"{int(scout.health_percentage * 100)}%"
-        bot.client.debug_text_2d(
-            f"Scout: {scout_type} #{scout.tag} HP:{scout_hp} ({len(scouts)} total)", 
-            Point2((0.1, 0.26)), None, 12
-        )
-    elif bot._worker_scout_sent_this_stale_period:
-        bot.client.debug_text_2d(
-            f"Scout: Dead/Missing (flag set)", 
-            Point2((0.1, 0.26)), None, 12
-        )
-    
+    _y += _step
+
     # Army compositions
     own_types = _get_unit_type_summary(main_army or [])
     enemy_types = _get_unit_type_summary(combat_enemies)
     
     bot.client.debug_text_2d(
         f"Own: {len(main_army) if main_army else 0}u [{own_types}]", 
-        Point2((0.1, 0.34)), None, 12
+        Point2((0.1, _y)), None, 12
     )
+    _y += _step
     bot.client.debug_text_2d(
         f"Enemy: {len(combat_enemies)}u [{enemy_types}]", 
-        Point2((0.1, 0.36)), None, 12
+        Point2((0.1, _y)), None, 12
     )
-    
+    _y += _step
+
     # Squad engagement tracker summary
     tracker = getattr(bot, '_squad_engagement_tracker', {})
     if tracker:
@@ -256,11 +346,15 @@ def _render_combat_sim_overlay(bot, main_army: Units) -> None:
         total = len(tracker)
         bot.client.debug_text_2d(
             f"Squad Engage: {engaged}/{total} squads", 
-            Point2((0.1, 0.38)), None, 14
+            Point2((0.1, _y)), None, 14
         )
-    
+    _y += _step
+
     # 3D squad labels at squad positions
     _render_squad_labels(bot, tracker)
+
+    # Pass y to next renderer
+    bot._debug_y = _y
 
 
 def _render_squad_labels(bot, tracker: dict) -> None:
@@ -302,12 +396,16 @@ def render_target_markers(bot, main_army: Units) -> None:
     if not bot.debug:
         return
     
+    _y = min(getattr(bot, '_debug_y', 0.40), 0.95)
+    _step = 0.018
+
     # Current attack target marker (red sphere)
     if hasattr(bot, 'current_attack_target') and bot.current_attack_target:
         bot.client.debug_text_2d(
             f"Current Target: {bot.current_attack_target}", 
-            Point2((0.1, 0.40)), None, 14
+            Point2((0.1, _y)), None, 14
         )
+        _y += _step
         target_3d = Point3((
             bot.current_attack_target.x, 
             bot.current_attack_target.y, 
@@ -320,14 +418,17 @@ def render_target_markers(bot, main_army: Units) -> None:
         army_center = main_army.center
         bot.client.debug_text_2d(
             f"Army Center: {army_center}", 
-            Point2((0.1, 0.42)), None, 14
+            Point2((0.1, _y)), None, 14
         )
+        _y += _step
         army_center_3d = Point3((
             army_center.x, 
             army_center.y, 
             bot.get_terrain_z_height(army_center)
         ))
         bot.client.debug_sphere_out(army_center_3d, 3, Point3((0, 255, 0)))
+
+    bot._debug_y = _y
 
 
 def render_disruptor_labels(bot) -> None:
@@ -552,10 +653,12 @@ def render_formation_debug(bot, squad_units: list, target) -> None:
             )
     
     # Summary text
+    _y = min(getattr(bot, '_debug_y', 0.44), 0.95)
     bot.client.debug_text_2d(
         f"Formation: {ahead_count} ahead, {spread_count} spread, {adjusted_count} form",
-        Point2((0.1, 0.44)), None, 14
+        Point2((0.1, _y)), None, 14
     )
+    bot._debug_y = _y + 0.018
 
 
 def render_base_defender_debug(bot) -> None:
@@ -806,10 +909,12 @@ def render_observer_debug(bot) -> None:
             size=14,
         )
     
+    _y = min(getattr(bot, '_debug_y', 0.46), 0.95)
     bot.client.debug_text_2d(
         f"Obs: ARMY:{army} PRI:{pri} PAT:{patrol_count} {hunt_str} Halu:{hallu_count} Urg:{urgency:.2f}",
-        Point2((0.1, 0.46)), None, 12
+        Point2((0.1, _y)), None, 12
     )
+    bot._debug_y = _y + 0.018
 
 
 def render_blind_ramp_debug(bot, unit, ramp) -> None:
@@ -958,10 +1063,12 @@ def render_concave_formation_debug(
 
     # 2D summary
     dist = cy_distance_to(squad_center, enemy_center)
+    _y = min(getattr(bot, '_debug_y', 0.48), 0.95)
     bot.client.debug_text_2d(
         f"Concave: {status} | {len(ranged_units)}rng | L:{len(left_group)} C:{len(center_group)} R:{len(right_group)} | D:{dist:.0f}",
-        Point2((0.1, 0.48)), None, 12
+        Point2((0.1, _y)), None, 12
     )
+    bot._debug_y = _y + 0.018
 
 
 def render_choke_policy_debug(
