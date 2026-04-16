@@ -23,5 +23,5 @@ if __name__ == "__main__":
         contents = "".join(contents)
         f.write(contents)
 
-    run("poetry lock --no-update", shell=True)
+    run("poetry lock", shell=True)
     run("poetry install", shell=True)
