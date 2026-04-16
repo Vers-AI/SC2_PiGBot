@@ -165,16 +165,9 @@ The `cython_extensions` package ships with ARES and provides fast C-compiled hel
 | `cy_in_pathing_grid_ma` | `cython_extensions.general_utils` | Check if position is walkable |
 | `cy_point_below_value` | `cython_extensions.numpy_helper` | Grid value threshold check |
 
-### `cy_structure_pending` vs `cy_structure_pending_ares`
+### `cy_structure_pending_ares`
 
-These are **not interchangeable**. Pick based on what you need to know:
-
-| Function | Counts | Use when |
-|---|---|---|
-| `cy_structure_pending(bot, type)` | Buildings under construction or in `unit.order_queue` only | You need **ground-truth** — e.g., "should I cancel this physical Nexus?" (cheese reactions, cancel logic) |
-| `cy_structure_pending_ares(bot, type)` | Same + buildings **planned by the ARES build order runner** but not yet started (default `include_planned=True`) | **Macro decisions** — e.g., "should I queue another Pylon?" where you want to avoid double-ordering |
-
-> **Common pitfall:** Using `cy_structure_pending_ares` in cancel/reaction code. After switching build orders, the old plan's structures may still be counted as "planned," inflating the count and silently skipping cancels.
+**Always use `cy_structure_pending_ares` instead of `cy_structure_pending`**. The plain `cy_structure_pending` only sees structures physically under construction or in a unit's order queue — it has no awareness of what ARES and the build runner are planning. `cy_structure_pending_ares` with the default `include_planned=True` also checks what the build runner has planned, preventing double-orders (e.g., reactions code ordering a CyberCore when the build runner is already going to build one).
 
 ### Bot Data & Performance
 
