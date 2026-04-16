@@ -3,6 +3,8 @@ from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.ability_id import AbilityId
 from sc2.ids.upgrade_id import UpgradeId
 
+from cython_extensions import cy_upgrade_pending, cy_unit_pending, cy_structure_pending_ares
+
 from sc2.position import Point2
 from sc2.units import Units
 
@@ -627,15 +629,24 @@ def get_desired_upgrades(bot) -> list[UpgradeId]:
     """
     upgrades: list[UpgradeId] = []
     
-    if not bot.already_pending_upgrade(UpgradeId.WARPGATERESEARCH):
+    if not cy_upgrade_pending(bot, UpgradeId.WARPGATERESEARCH):
         upgrades.append(UpgradeId.WARPGATERESEARCH)
     
     if (bot.structures(UnitTypeId.ROBOTICSBAY) 
-        and (bot.units(UnitTypeId.COLOSSUS) or bot.already_pending(UnitTypeId.COLOSSUS))):
+        and (bot.units(UnitTypeId.COLOSSUS) or cy_unit_pending(bot, UnitTypeId.COLOSSUS))):
         upgrades.append(UpgradeId.EXTENDEDTHERMALLANCE)
     
     if bot.structures(UnitTypeId.TWILIGHTCOUNCIL) or (len(bot.townhalls) >= 3 and bot.supply_used >= 54):
         upgrades.append(UpgradeId.CHARGE)
+    
+    # Blink: PvP gets it as soon as Twilight Council is up (Stalker-heavy comp).
+    # PvT/PvZ get it after Thermal Lance is researched (Colossus range first).
+    has_thermal_lance = cy_upgrade_pending(bot, UpgradeId.EXTENDEDTHERMALLANCE)
+    if bot.enemy_race == Race.Protoss:
+        if bot.structures(UnitTypeId.TWILIGHTCOUNCIL):
+            upgrades.append(UpgradeId.BLINKTECH)
+    elif has_thermal_lance:
+        upgrades.append(UpgradeId.BLINKTECH)
     
     # Psi Storm: reactive trigger based on matchup.
     # PvT/PvZ: 2+ Vikings or Corruptors = anti-Colossus commitment, pivot to HT splash.
@@ -674,7 +685,7 @@ def require_warp_prism(bot) -> bool:
     # Check both forms: transport mode and phasing mode
     total_prisms = (bot.units(UnitTypeId.WARPPRISM).amount + 
                     bot.units(UnitTypeId.WARPPRISMPHASING).amount +
-                    bot.already_pending(UnitTypeId.WARPPRISM))
+                    cy_unit_pending(bot, UnitTypeId.WARPPRISM))
     return (bot.structures(UnitTypeId.ROBOTICSFACILITY).ready
             and bot.structures(UnitTypeId.TEMPLARARCHIVE).ready
             and bot.structures(UnitTypeId.ROBOTICSBAY).ready
@@ -688,7 +699,7 @@ def require_shield_battery(bot) -> bool:
     Limits to one battery total. Tech requirements checked by BuildStructure.
     """
     total_batteries = (bot.structures(UnitTypeId.SHIELDBATTERY).amount + 
-                      bot.already_pending(UnitTypeId.SHIELDBATTERY))
+                      cy_structure_pending_ares(bot, UnitTypeId.SHIELDBATTERY))
     
     return bot._used_cheese_response and total_batteries == 0
 
@@ -804,7 +815,7 @@ def _train_observers(bot) -> None:
         bot.units(UnitTypeId.OBSERVER).amount
         + bot.units(UnitTypeId.OBSERVERSIEGEMODE).amount
     )
-    if bot.already_pending(UnitTypeId.OBSERVER) or not bot.can_afford(UnitTypeId.OBSERVER):
+    if cy_unit_pending(bot, UnitTypeId.OBSERVER) or not bot.can_afford(UnitTypeId.OBSERVER):
         return
 
     robotics_facilities = bot.structures(UnitTypeId.ROBOTICSFACILITY).ready
@@ -882,7 +893,7 @@ async def handle_macro(
         desired_gates = get_desired_gateway_count(bot)
         current_gates = (bot.structures(UnitTypeId.GATEWAY).amount + 
                          bot.structures(UnitTypeId.WARPGATE).amount + 
-                         bot.already_pending(UnitTypeId.GATEWAY))
+                         cy_structure_pending_ares(bot, UnitTypeId.GATEWAY))
         
         if current_gates < desired_gates and bot.can_afford(UnitTypeId.GATEWAY):
             bot.register_behavior(BuildStructure(production_location, UnitTypeId.GATEWAY))
@@ -891,7 +902,7 @@ async def handle_macro(
     if economy_state in ("moderate", "full"):
         desired_forges = get_desired_forge_count(bot)
         current_forges = (bot.structures(UnitTypeId.FORGE).amount + 
-                         bot.already_pending(UnitTypeId.FORGE))
+                         cy_structure_pending_ares(bot, UnitTypeId.FORGE))
         
         if current_forges < desired_forges and bot.can_afford(UnitTypeId.FORGE):
             bot.register_behavior(BuildStructure(production_location, UnitTypeId.FORGE))
@@ -915,7 +926,7 @@ async def handle_macro(
         # still get built (Layer 1 priority reorder puts them first).
         # Only fully skip spawning if we genuinely need to save for an expansion
         # that isn't already building.
-        expansion_pending = bot.already_pending(UnitTypeId.NEXUS) > 0
+        expansion_pending = cy_structure_pending_ares(bot, UnitTypeId.NEXUS) > 0
         if economy_state == "reduced" and not bot._under_attack and bot.minerals < 350 and not expansion_pending:
             # Genuinely tight and need to save for expansion — still produce in freeflow
             # so mineral-only units (Zealots) keep flowing via priority reordering
