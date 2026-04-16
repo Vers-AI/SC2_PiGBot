@@ -1,7 +1,8 @@
 """Unit-level micro management functions.
 
 Purpose: Reusable micro control logic for individual units in combat
-Key Decisions: Pure functions that create and return CombatManeuver instances
+Key Decisions: Pure functions that create and return CombatManeuver instances;
+    Stalker blink uses concave-aware positioning when available
 Limitations: Assumes individual behavior pattern (one CombatManeuver per unit)
 """
 
@@ -17,9 +18,9 @@ from sc2.data import Race
 from ares.behaviors.combat import CombatManeuver
 from ares.behaviors.combat.individual import (
     KeepUnitSafe, StutterUnitBack, AMove, ShootTargetInRange, PathUnitToTarget,
-    UseAOEAbility,
+    UseAOEAbility, UseAbility,
 )
-from cython_extensions import cy_closest_to, cy_in_attack_range, cy_distance_to, cy_find_units_center_mass
+from cython_extensions import cy_closest_to, cy_in_attack_range, cy_distance_to, cy_find_units_center_mass, cy_towards
 from bot.combat.target_scoring import select_target
 from bot.constants import (
     DISRUPTOR_SQUAD_FOLLOW_DISTANCE, DISRUPTOR_SQUAD_TARGET_DISTANCE,
@@ -28,7 +29,179 @@ from bot.constants import (
     HT_FEEDBACK_ENERGY_COST, HT_FEEDBACK_RANGE, HT_FEEDBACK_MIN_ENEMY_ENERGY,
     FEEDBACK_TARGET_TYPES, HT_MERGE_ENERGY_THRESHOLD,
     HT_MERGE_COUNT_THRESHOLD, HT_MERGE_COUNT_THRESHOLD_PVP,
+    STALKER_BLINK_HEALTH_THRESHOLD, STALKER_BLINK_RANGE,
 )
+
+
+def micro_stalker(
+    stalker: Unit,
+    enemies: List[Unit],
+    grid: np.ndarray,
+    avoid_grid: np.ndarray,
+    aggressive: bool = True,
+    squad_center: Optional[Point2] = None,
+    enemy_center: Optional[Point2] = None,
+    ranged_units: Optional[List[Unit]] = None,
+) -> CombatManeuver:
+    """Stalker micro with blink-when-low behavior.
+
+    When a Stalker's combined health+shields drop below the threshold and
+    Blink is off cooldown, the Stalker blinks along the concave line
+    (perpendicular to the approach direction) toward the far edge of the
+    formation. This keeps the Stalker in the fight at a safer position
+    instead of stutter-stepping back (which is slower and still takes hits).
+
+    If no concave geometry is available (no squad/enemy center), falls back
+    to blinking directly away from the closest enemy.
+
+    When blink isn't needed (healthy or on cooldown), delegates to
+    micro_ranged_unit for standard stutter-step behavior.
+
+    Args:
+        stalker: The Stalker unit to control
+        enemies: All enemy units in range (pre-filtered to attackable/reachable)
+        grid: Ground grid for pathfinding
+        avoid_grid: Avoidance grid for safety checks
+        aggressive: Whether to fight aggressively or defensively
+        squad_center: Center of the squad (for concave direction)
+        enemy_center: Center of nearby enemies (for concave direction)
+        ranged_units: Other ranged units in the squad (for concave edge calculation)
+
+    Returns:
+        CombatManeuver with appropriate behaviors added
+    """
+    # Check if blink is available and stalker is low health
+    # shield_health_percentage = (health + shield) / (health_max + shield_max), includes build progress
+    health_ratio = stalker.shield_health_percentage
+    blink_ready = AbilityId.EFFECT_BLINK_STALKER in stalker.abilities
+
+    if blink_ready and health_ratio < STALKER_BLINK_HEALTH_THRESHOLD and enemies:
+        # Compute blink direction: along the concave line toward the far edge
+        blink_target = _compute_blink_target(
+            stalker, enemies, squad_center, enemy_center, ranged_units
+        )
+
+        if blink_target is not None:
+            maneuver = CombatManeuver()
+            # Blink is the priority action — UseAbility checks cooldown internally
+            # and returns True if executed, short-circuiting the rest of the maneuver.
+            # If blink fails (e.g. target unpathable), falls through to KeepUnitSafe.
+            maneuver.add(UseAbility(
+                ability=AbilityId.EFFECT_BLINK_STALKER,
+                unit=stalker,
+                target=blink_target,
+            ))
+            # Safety fallback if blink doesn't execute
+            maneuver.add(KeepUnitSafe(stalker, avoid_grid))
+            return maneuver
+
+    # No blink needed — fall through to standard ranged micro
+    return micro_ranged_unit(
+        unit=stalker,
+        enemies=enemies,
+        grid=grid,
+        avoid_grid=avoid_grid,
+        aggressive=aggressive,
+    )
+
+
+def _compute_blink_target(
+    stalker: Unit,
+    enemies: List[Unit],
+    squad_center: Optional[Point2],
+    enemy_center: Optional[Point2],
+    ranged_units: Optional[List[Unit]],
+) -> Optional[Point2]:
+    """Compute where a low-health Stalker should blink to.
+
+    Strategy: blink along the concave line (perpendicular to approach
+    direction) toward the far edge of the formation. This keeps the
+    Stalker contributing DPS from a safer position at the concave edge
+    rather than retreating entirely.
+
+    Falls back to blinking away from the closest enemy when concave
+    geometry isn't available.
+
+    Args:
+        stalker: The Stalker unit that will blink
+        enemies: Nearby enemy units
+        squad_center: Center of the squad (for approach direction)
+        enemy_center: Center of nearby enemies (for approach direction)
+        ranged_units: Other ranged units in the squad (for edge calculation)
+
+    Returns:
+        Point2 blink target, or None if no valid target found
+    """
+    pos = stalker.position
+
+    # Determine approach direction (squad → enemy) for concave line
+    if squad_center is not None and enemy_center is not None:
+        length = cy_distance_to(squad_center, enemy_center)
+
+        if length > 0.01:
+            # Approach direction unit vector
+            dx = enemy_center.x - squad_center.x
+            dy = enemy_center.y - squad_center.y
+            approach_x = dx / length
+            approach_y = dy / length
+
+            # Perpendicular axis (left/right relative to approach)
+            perp_x = -approach_y
+            perp_y = approach_x
+
+            # Find which side of the concave the stalker is on,
+            # then blink toward the far edge of the formation
+            if ranged_units and len(ranged_units) >= 2:
+                # Compute lateral offsets for all ranged units
+                offsets = []
+                for u in ranged_units:
+                    rel_x = u.position.x - squad_center.x
+                    rel_y = u.position.y - squad_center.y
+                    lateral = rel_x * perp_x + rel_y * perp_y
+                    offsets.append(lateral)
+
+                # The stalker's own lateral offset
+                stalker_lateral = (pos.x - squad_center.x) * perp_x + (pos.y - squad_center.y) * perp_y
+                # Stalker's depth along the approach axis (positive = toward enemy)
+                stalker_depth = (pos.x - squad_center.x) * approach_x + (pos.y - squad_center.y) * approach_y
+
+                # Blink toward the far edge of the formation from the stalker's position
+                # If stalker is on the left side, blink further left; if right, further right
+                min_offset = min(offsets)
+                max_offset = max(offsets)
+
+                if stalker_lateral >= 0:
+                    # Stalker is on the right side — blink toward right edge
+                    target_lateral = max_offset
+                else:
+                    # Stalker is on the left side — blink toward left edge
+                    target_lateral = min_offset
+
+                # Target point: on the concave edge, at the stalker's depth,
+                # shifted slightly back (away from enemy) for safety
+                retreat_tiles = 2.0
+                target_x = squad_center.x + perp_x * target_lateral + approach_x * (stalker_depth - retreat_tiles)
+                target_y = squad_center.y + perp_y * target_lateral + approach_y * (stalker_depth - retreat_tiles)
+                blink_target = Point2((target_x, target_y))
+
+                # Clamp to blink range from current position
+                dist = cy_distance_to(pos, blink_target)
+                if dist > STALKER_BLINK_RANGE:
+                    blink_target = Point2(cy_towards(pos, blink_target, STALKER_BLINK_RANGE))
+
+                return blink_target
+
+    # Fallback: blink directly away from closest enemy
+    closest_enemy = cy_closest_to(pos, enemies)
+    if closest_enemy is not None:
+        # Point away from enemy at blink range
+        away_point = Point2((
+            2 * pos.x - closest_enemy.position.x,
+            2 * pos.y - closest_enemy.position.y,
+        ))
+        return Point2(cy_towards(pos, away_point, STALKER_BLINK_RANGE))
+
+    return None
 
 
 def micro_ranged_unit(

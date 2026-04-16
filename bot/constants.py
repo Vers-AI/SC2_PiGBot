@@ -377,6 +377,15 @@ CONCAVE_WEAPON_RANGE_ABORT = 8.0
 CONCAVE_RESET_RANGE = 35.0
 """Distance to enemy above which formation state resets (ready for next engagement)"""
 
+# ===== STALKER BLINK =====
+STALKER_BLINK_HEALTH_THRESHOLD = 0.4
+"""Health ratio (health+shields / max) below which Stalker considers blinking back.
+At 0.4 a Stalker (160hp+80sh=240 total) triggers at ~96 combined HP.
+Low enough to be in real danger, high enough to still have time to blink."""
+
+STALKER_BLINK_RANGE = 8.0
+"""Blink ability range in tiles (standard SC2 value)."""
+
 # ===== RESOURCE-AWARE PRODUCTION =====
 RESOURCE_PRESSURE_MAX_NUDGE = 0.15
 """Maximum proportion shift per unit type from resource pressure (±15%). Larger than counter-table nudge since resource starvation is more urgent."""

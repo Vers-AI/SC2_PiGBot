@@ -78,6 +78,7 @@ from bot.combat.unit_micro import (
     micro_high_templar,
     merge_high_templars,
     micro_sentry,
+    micro_stalker,
 )
 from bot.combat.formation import execute_fan_out, clear_formation_state
 from bot.combat.target_scoring import select_target, update_upgrades
@@ -659,13 +660,26 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                 if not unit_enemies:
                     continue
                     
-                ranged_maneuver = micro_ranged_unit(
-                    unit=r_unit,
-                    enemies=unit_enemies,
-                    grid=grid,
-                    avoid_grid=avoid_grid,
-                    aggressive=can_engage
-                )
+                # Stalkers get blink-aware micro when low health
+                if r_unit.type_id == UnitTypeId.STALKER:
+                    ranged_maneuver = micro_stalker(
+                        stalker=r_unit,
+                        enemies=unit_enemies,
+                        grid=grid,
+                        avoid_grid=avoid_grid,
+                        aggressive=can_engage,
+                        squad_center=squad_position,
+                        enemy_center=enemy_center,
+                        ranged_units=ranged,
+                    )
+                else:
+                    ranged_maneuver = micro_ranged_unit(
+                        unit=r_unit,
+                        enemies=unit_enemies,
+                        grid=grid,
+                        avoid_grid=avoid_grid,
+                        aggressive=can_engage
+                    )
                 bot.register_behavior(ranged_maneuver)
 
             # Melee micro - weighted scoring handles priority targeting
@@ -1579,6 +1593,10 @@ def control_base_defenders(bot, defender_units: Units, threat_position: Point2) 
         ranged = [u for u in units if u.ground_range > MELEE_RANGE_THRESHOLD and u.energy == 0 and u.can_attack]
         spellcasters = [u for u in units if u.energy > 0 or u.type_id == UnitTypeId.DISRUPTOR]
         
+        # Compute enemy center for stalker blink targeting
+        enemy_center_mass, _ = cy_find_units_center_mass(all_close, 20.0)
+        enemy_center = Point2(enemy_center_mass)
+        
         # Ranged micro - weighted scoring handles priority targeting
         for r_unit in ranged:
             # Filter enemies to only those this unit can attack and reach
@@ -1586,13 +1604,26 @@ def control_base_defenders(bot, defender_units: Units, threat_position: Point2) 
             if not unit_enemies:
                 continue
             
-            ranged_maneuver = micro_ranged_unit(
-                unit=r_unit,
-                enemies=unit_enemies,
-                grid=grid,
-                avoid_grid=avoid_grid,
-                aggressive=True  # Always aggressive when defending base
-            )
+            # Stalkers get blink-aware micro when low health
+            if r_unit.type_id == UnitTypeId.STALKER:
+                ranged_maneuver = micro_stalker(
+                    stalker=r_unit,
+                    enemies=unit_enemies,
+                    grid=grid,
+                    avoid_grid=avoid_grid,
+                    aggressive=True,  # Always aggressive when defending base
+                    squad_center=squad_position,
+                    enemy_center=enemy_center,
+                    ranged_units=ranged,
+                )
+            else:
+                ranged_maneuver = micro_ranged_unit(
+                    unit=r_unit,
+                    enemies=unit_enemies,
+                    grid=grid,
+                    avoid_grid=avoid_grid,
+                    aggressive=True  # Always aggressive when defending base
+                )
             bot.register_behavior(ranged_maneuver)
         
         # Melee micro - weighted scoring handles priority targeting
