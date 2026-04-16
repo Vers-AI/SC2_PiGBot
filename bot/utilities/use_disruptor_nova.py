@@ -12,6 +12,7 @@ from sc2.unit import Unit
 from behaviors.combat.individual.combat_individual_behavior import CombatIndividualBehavior
 from ares.managers.manager_mediator import ManagerMediator
 from cython_extensions.general_utils import cy_in_pathing_grid_ma
+from cython_extensions import cy_distance_to
 import numpy as np
 from sc2.position import Point2, Point3
 
@@ -201,7 +202,7 @@ class UseDisruptorNova(CombatIndividualBehavior):
                     # Use a default nova radius of 1.5 when nova_manager is None
                     nova_radius = nova_manager.nova_radius if nova_manager else 1.5
                     nearby_enemies = [unit for unit in enemy_units 
-                                      if unit.position.distance_to(game_world_pos) <= nova_radius]
+                                      if cy_distance_to(unit.position, game_world_pos) <= nova_radius]
                     
                     if nearby_enemies:
                         if self.debug_output:
@@ -261,7 +262,7 @@ class UseDisruptorNova(CombatIndividualBehavior):
             # Filter enemy units by distance to the Nova unit
             MAX_SEARCH_RADIUS = max_travel_distance + 4.0  # Add a small buffer
             nearby_enemies = [unit for unit in enemy_units 
-                             if unit.position.distance_to(current_position) <= MAX_SEARCH_RADIUS]
+                              if cy_distance_to(unit.position, current_position) <= MAX_SEARCH_RADIUS]
             
             if not nearby_enemies:
                 if self.debug_output:
@@ -423,7 +424,7 @@ class UseDisruptorNova(CombatIndividualBehavior):
         max_travel_distance = nova_speed * nova_lifetime
         
         # Calculate the current distance to the target
-        current_distance = disruptor_unit.position.distance_to(target)
+        current_distance = cy_distance_to(disruptor_unit.position, target)
         
         # Add a safety margin to account for unit movement
         safety_margin = 2.0  # Can be adjusted based on testing results

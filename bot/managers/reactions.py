@@ -16,7 +16,8 @@ from ares.dicts.unit_data import UNIT_DATA
 
 from cython_extensions import (
     cy_distance_to, cy_distance_to_squared, cy_center, cy_find_units_center_mass,
-    cy_closest_to, cy_attack_ready, cy_in_attack_range, cy_pick_enemy_target
+    cy_closest_to, cy_attack_ready, cy_in_attack_range, cy_pick_enemy_target,
+    cy_structure_pending_ares
 )
 
 from bot.utilities.intel import get_enemy_cannon_rushed
@@ -267,7 +268,7 @@ def cheese_reaction(bot):
     bot.build_order_runner.switch_opening("Cheese_Reaction_Build", remove_completed=remove_completed)
     
     # Cancel a fast-expanding Nexus if it's started and we detect cheese
-    pending_townhalls = bot.structure_pending(UnitTypeId.NEXUS)
+    pending_townhalls = cy_structure_pending_ares(bot, UnitTypeId.NEXUS)
     if pending_townhalls == 1 and bot.time < 2 * 60:
         for pt in bot.townhalls.not_ready:
             bot.mediator.cancel_structure(structure=pt)

@@ -8,6 +8,7 @@ from sc2.ids.ability_id import AbilityId
 from sc2.ids.buff_id import BuffId
 from sc2.position import Point2
 from sc2.units import Units
+from cython_extensions import cy_distance_to
 
 from bot.constants import (
     MASS_RECALL_COOLDOWN,
@@ -70,7 +71,7 @@ def use_recharge(bot, main_army: Units) -> bool:
         min_energy = 100 if nexus.tag == recall_nexus_tag else 50
         if nexus.energy < min_energy:
             continue
-        distance = main_army.center.distance_to(nexus.position)
+        distance = cy_distance_to(main_army.center, nexus.position)
         if distance < closest_distance:
             closest_distance = distance
             closest_nexus = nexus
@@ -86,7 +87,7 @@ def use_recharge(bot, main_army: Units) -> bool:
         collection = bot.structures if unit_type == UnitTypeId.SHIELDBATTERY else bot.units
         for unit in collection:
             if (unit.type_id == unit_type and
-                unit.distance_to(closest_nexus) <= 12 and
+                cy_distance_to(unit, closest_nexus) <= 12 and
                 unit.energy_percentage < 1.0):
                 candidates.append(unit)
 
@@ -166,7 +167,7 @@ def use_chronoboost(bot) -> bool:
         if candidates:
             target_structure = candidates[0]
             closest_nexus = min(available_nexuses,
-                              key=lambda nexus: nexus.distance_to(target_structure.position))
+                                key=lambda nexus: cy_distance_to(nexus, target_structure.position))
             closest_nexus(AbilityId.EFFECT_CHRONOBOOSTENERGYCOST, target_structure)
             return True
 

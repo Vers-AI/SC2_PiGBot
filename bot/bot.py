@@ -41,6 +41,7 @@ from bot.combat import (
     manage_defensive_unit_roles
 )
 from bot.utilities.intel import update_enemy_intel_tracking, create_choke_grid, create_narrow_choke_points
+from cython_extensions import cy_distance_to
 from bot.utilities.debug import render_narrow_choke_points
 from ares.behaviors.macro import Mining
 #debugs
@@ -181,7 +182,7 @@ class PiG_Bot(AresBot):
 
         # Sort expansions by proximity to the enemy's start
         self.expansion_locations_list.sort(
-            key=lambda loc: loc.distance_to(self.enemy_start_locations[0])
+            key=lambda loc: cy_distance_to(loc, self.enemy_start_locations[0])
         )
         self.scout_targets = self.expansion_locations_list
         

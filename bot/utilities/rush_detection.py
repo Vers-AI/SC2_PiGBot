@@ -16,7 +16,7 @@ from sc2.position import Point2
 from sc2.ids.unit_typeid import UnitTypeId
 from ares.consts import UnitRole
 
-from cython_extensions import cy_dijkstra
+from cython_extensions import cy_dijkstra, cy_distance_to
 from bot.constants import RUSH_SPEED, RUSH_DISTANCE_CALIBRATION
 
 # Suppress sklearn feature name warnings (we use numpy arrays at inference)
@@ -166,7 +166,7 @@ def _track_enemy_timings(bot: "PiG_Bot"):
         # Check if natural hatchery exists at this moment
         nat_hatcheries = [
             s for s in bot.enemy_structures
-            if s.type_id == UnitTypeId.HATCHERY and s.distance_to(enemy_nat_pos) < 10
+            if s.type_id == UnitTypeId.HATCHERY and cy_distance_to(s, enemy_nat_pos) < 10
         ]
         bot._nat_present_on_last_scout = len(nat_hatcheries) > 0
     
@@ -174,7 +174,7 @@ def _track_enemy_timings(bot: "PiG_Bot"):
     if bot._enemy_nat_started_at is None:
         nat_hatcheries = [
             s for s in bot.enemy_structures
-            if s.type_id == UnitTypeId.HATCHERY and s.distance_to(enemy_nat_pos) < 10
+            if s.type_id == UnitTypeId.HATCHERY and cy_distance_to(s, enemy_nat_pos) < 10
         ]
         if nat_hatcheries:
             hatch = nat_hatcheries[0]
@@ -225,7 +225,7 @@ def _track_enemy_timings(bot: "PiG_Bot"):
             our_nat_pos = bot.mediator.get_own_nat
             lings_at_nat = [
                 ling for ling in enemy_lings
-                if ling.distance_to(our_nat_pos) < 15
+                if cy_distance_to(ling, our_nat_pos) < 15
             ]
             if lings_at_nat:
                 bot._first_ling_contact_nat_time = bot.time
@@ -245,7 +245,7 @@ def _track_enemy_timings(bot: "PiG_Bot"):
                     prev_pos, prev_time = bot._ling_pos_history[tag]
                     dt = now - prev_time
                     if dt >= 0.3:  # Need meaningful time gap
-                        dist = pos.distance_to(prev_pos)
+                        dist = cy_distance_to(pos, prev_pos)
                         observed_speed = dist / dt
                         if observed_speed > 5.5:  # Above base+creep(5.37), below speed(6.58)
                             bot._ling_has_speed = True
@@ -266,7 +266,7 @@ def _track_enemy_timings(bot: "PiG_Bot"):
     if extractors:
         workers_on_gas = [
             w for w in bot.enemy_units 
-            if w.type_id == UnitTypeId.DRONE and w.distance_to(extractors[0]) < 3
+            if w.type_id == UnitTypeId.DRONE and cy_distance_to(w, extractors[0]) < 3
         ]
         bot._gas_workers_count = len(workers_on_gas)
     
@@ -385,7 +385,7 @@ def get_ling_rush_signals(bot: "PiG_Bot") -> dict:
     enemy_lings = bot.mediator.get_enemy_army_dict.get(UnitTypeId.ZERGLING, [])
     lings_near_main = [
         ling for ling in enemy_lings 
-        if ling.distance_to(bot.start_location) < 50
+        if cy_distance_to(ling, bot.start_location) < 50
     ]
     
     # Speed detection - use tracked value from _track_enemy_timings

@@ -4,6 +4,7 @@ from sc2.ids.unit_typeid import UnitTypeId
 import numpy as np
 from sc2.position import Point2
 from ares.managers.grid_manager import GridManager
+from cython_extensions import cy_distance_to
 
 
 if TYPE_CHECKING:
@@ -213,7 +214,7 @@ class NovaManager:
         try:
             # First check if this target is too close to an existing target
             for target_key, target_position in list(self.current_targets.items()):
-                distance = position.distance_to(target_position)
+                distance = cy_distance_to(position, target_position)
                 if distance < self.exclusion_radius * 2:
                     if self.debug_output:
                         print(f"DEBUG: Target at {position} rejected - too close to existing target at {target_position} (distance: {distance:.2f})")
@@ -227,7 +228,7 @@ class NovaManager:
                         print(f"DEBUG: Skipping self-check for pending target {target_id}")
                     continue
                     
-                distance = position.distance_to(target_position)
+                distance = cy_distance_to(position, target_position)
                 if distance < self.exclusion_radius * 2:
                     if self.debug_output:
                         print(f"DEBUG: Target at {position} rejected - too close to pending target at {target_position} (distance: {distance:.2f})")
@@ -259,7 +260,7 @@ class NovaManager:
             min_distance = float('inf')
             
             for target_key, target_position in list(self.current_targets.items()):
-                distance = position.distance_to(target_position)
+                distance = cy_distance_to(position, target_position)
                 
                 # If within a reasonable threshold, consider it a match
                 if distance < 15.0 and distance < min_distance:

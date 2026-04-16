@@ -12,6 +12,7 @@ from map_analyzer import MapData
 from sc2.data import Race
 from sc2.ids.unit_typeid import UnitTypeId as UnitID
 from sc2.position import Point2
+from cython_extensions import cy_distance_to
 
 from ares.consts import WORKER_TYPES
 
@@ -96,7 +97,7 @@ def create_narrow_choke_points(bot: "PiG_Bot") -> dict[Point2, float]:
             # MDRamp / VisionBlockerArea: distance between computed sides
             sa = Point2(choke.side_a) if not isinstance(choke.side_a, Point2) else choke.side_a
             sb = Point2(choke.side_b) if not isinstance(choke.side_b, Point2) else choke.side_b
-            width = sa.distance_to(sb)
+            width = cy_distance_to(sa, sb)
         
         if width is None:
             # Fallback: approximate Polygon.width
@@ -149,8 +150,8 @@ def get_enemy_cannon_rushed(bot, detection_radius: float = 25.0) -> bool:
         # Look for enemy pylons and cannons near our bases
         enemy_structures = bot.enemy_structures.filter(
             lambda s: s.type_id in {UnitID.PYLON, UnitID.PHOTONCANNON} and 
-                     (s.distance_to(main_base) < detection_radius or 
-                      s.distance_to(natural_expansion) < detection_radius)
+                     (cy_distance_to(s, main_base) < detection_radius or 
+                      cy_distance_to(s, natural_expansion) < detection_radius)
         )
         
         # Count pylons and cannons

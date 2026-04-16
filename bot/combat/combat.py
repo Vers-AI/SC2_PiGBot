@@ -103,7 +103,7 @@ from bot.managers.structure_manager import use_mass_recall
 
 from cython_extensions import (
     cy_pick_enemy_target, cy_closest_to, cy_distance_to, cy_distance_to_squared, cy_in_attack_range, cy_find_units_center_mass,
-    cy_adjust_moving_formation
+    cy_adjust_moving_formation, cy_is_facing
 )
 from cython_extensions.general_utils import cy_in_pathing_grid_ma
 from cython_extensions.numpy_helper import cy_point_below_value
@@ -448,7 +448,7 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                 attack_range = enemy.ground_range + enemy.radius + ACTIVE_ENGAGE_RANGE_BUFFER
                 for own_unit in units:
                     dist = cy_distance_to(enemy.position, own_unit.position)
-                    if dist <= attack_range + own_unit.radius and enemy.is_facing(own_unit, angle_error=ACTIVE_ENGAGE_ANGLE):
+                    if dist <= attack_range + own_unit.radius and cy_is_facing(enemy, own_unit, angle_error=ACTIVE_ENGAGE_ANGLE):
                         enemy_actively_engaging = True
                         break
                 if enemy_actively_engaging:
@@ -985,7 +985,7 @@ def _is_valid_warp_in_position(bot, position: Point2, ground_grid: np.ndarray) -
     enemy_army = bot.mediator.get_cached_enemy_army
     if enemy_army:
         closest_enemy = enemy_army.closest_to(position)
-        if closest_enemy.distance_to(position) < WARP_PRISM_MIN_ENEMY_DISTANCE:
+        if cy_distance_to(closest_enemy, position) < WARP_PRISM_MIN_ENEMY_DISTANCE:
             return False
     
     return True
@@ -1019,7 +1019,7 @@ def _find_valid_warp_in_position(bot, current_pos: Point2, army_center: Point2) 
             candidate = Point2((current_pos.x + dx, current_pos.y + dy))
             
             if _is_valid_warp_in_position(bot, candidate, ground_grid):
-                dist_to_army = candidate.distance_to(army_center)
+                dist_to_army = cy_distance_to(candidate, army_center)
                 if dist_to_army < best_dist_to_army:
                     best_dist_to_army = dist_to_army
                     best_pos = candidate
@@ -1039,7 +1039,7 @@ def warp_prism_follower(bot, warp_prisms: Units, main_army: Units) -> None:
     maneuver: CombatManeuver = CombatManeuver()
     for prism in warp_prisms:
         if main_army:
-            distance_to_center = prism.distance_to(main_army.center)
+            distance_to_center = cy_distance_to(prism, main_army.center)
 
             # If close to army, find valid position and phase or move there
             if distance_to_center < WARP_PRISM_FOLLOW_DISTANCE:
@@ -1053,7 +1053,7 @@ def warp_prism_follower(bot, warp_prisms: Units, main_army: Units) -> None:
             else:
                 # If no warpin in progress, revert to Transport
                 # Or simply path near the army
-                not_ready_units = [unit for unit in bot.units if not unit.is_ready and unit.distance_to(prism) < WARP_PRISM_UNIT_CHECK_RANGE]
+                not_ready_units = [unit for unit in bot.units if not unit.is_ready and cy_distance_to(unit, prism) < WARP_PRISM_UNIT_CHECK_RANGE]
                 if prism.type_id == UnitTypeId.WARPPRISMPHASING and not not_ready_units:
                         prism(AbilityId.MORPH_WARPPRISMTRANSPORTMODE)
 

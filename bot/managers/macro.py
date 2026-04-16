@@ -60,7 +60,7 @@ def get_freeflow_mode(bot) -> bool:
     
     if (bot.enemy_race == Race.Protoss
         and len(bot.townhalls) <= 1
-        and bot.unit_pending(UnitTypeId.IMMORTAL)):
+        and cy_unit_pending(bot, UnitTypeId.IMMORTAL)):
         return True
     
     # --- Bank-imbalance checks (always active, catches resource skew) ---

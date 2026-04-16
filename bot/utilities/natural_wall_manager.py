@@ -19,6 +19,7 @@ from sklearn.decomposition import PCA
 # SC2 imports
 from sc2.position import Point2
 from sc2.data import Race
+from cython_extensions import cy_distance_to
 
 logger = logging.getLogger(__name__)
 
@@ -231,7 +232,7 @@ class NaturalWallManager:
                         alignment = (enemy_direction.x * choke_direction_normalized.x + 
                                    enemy_direction.y * choke_direction_normalized.y)
                         
-                        distance = natural_pos.distance_to(choke)
+                        distance = cy_distance_to(natural_pos, choke)
                         
                         # Only consider chokes that are roughly toward enemy (alignment > 0.3)
                         # and prioritize closer ones
@@ -542,7 +543,7 @@ class NaturalWallManager:
                         # Check if buildable (grid_data uses [y][x] indexing)
                         if grid_data[test_y][test_x]:
                             test_pos = Point2((float(test_x), float(test_y)))
-                            distance = ideal_pos.distance_to(test_pos)
+                            distance = cy_distance_to(ideal_pos, test_pos)
                             
                             if distance < min_distance:
                                 min_distance = distance
@@ -572,7 +573,7 @@ class NaturalWallManager:
             search_radius = 8.0  # Look for choke points within 8 tiles
             
             for point in choke_points:
-                distance = selected_choke.distance_to(point)
+                distance = cy_distance_to(selected_choke, point)
                 if 1.0 < distance <= search_radius:  # Close but not the same point
                     choke_cluster.append(point)
             
@@ -615,7 +616,7 @@ class NaturalWallManager:
             search_radius = 8.0
             
             for point in choke_points:
-                distance = selected_choke.distance_to(point)
+                distance = cy_distance_to(selected_choke, point)
                 if 1.0 < distance <= search_radius:
                     choke_cluster.append(point)
             
@@ -660,7 +661,7 @@ class NaturalWallManager:
             # Check for overlaps with existing buildings
             for existing_pos in existing_positions:
                 existing_point = Point2((existing_pos[0], existing_pos[1]))
-                distance = pos.distance_to(existing_point)
+                distance = cy_distance_to(pos, existing_point)
                 if distance < 3.0:  # 3x3 buildings need at least 3 tile separation
                     return False
             
@@ -736,7 +737,7 @@ class NaturalWallManager:
                         overlap_found = False
                         for existing_pos in existing_positions:
                             existing_point = Point2((existing_pos[0], existing_pos[1]))
-                            distance = test_pos.distance_to(existing_point)
+                            distance = cy_distance_to(test_pos, existing_point)
                             
                             if distance < min_distance:
                                 overlap_found = True
@@ -1005,7 +1006,7 @@ class NaturalWallManager:
                     candidate_pylon_pos = defensive_center + toward_natural * pylon_distance
                     
                     # Check if pylon would conflict with natural's 5x5 footprint
-                    distance_to_natural = candidate_pylon_pos.distance_to(natural_pos)
+                    distance_to_natural = cy_distance_to(candidate_pylon_pos, natural_pos)
                     natural_radius = 3.0  # 5x5 building has ~2.5 radius, use 3.0 for safety
                     
                     if distance_to_natural > natural_radius:
