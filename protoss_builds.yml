@@ -5,10 +5,6 @@ UseData: False
 BuildSelection: Cycle
 # For each Race / Opponent ID choose a build selection
 BuildChoices:
-    test_123:
-        BotName: Test
-        Cycle:
-            - B2GM_PVZ_Standard_Build
     Protoss:
         BotName: ProtossRace
         Cycle:
