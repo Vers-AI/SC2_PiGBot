@@ -272,6 +272,49 @@ Group behaviors (e.g. `PathGroupToTarget`, `AMoveGroup`) are also valid — choo
 
 ---
 
+## ARES Grid System
+
+Grids are `numpy` arrays (dtype float) where each cell maps to an in-game tile. Safe/pathable cells default to `1.0`; danger adds cost above `1.0`; unpathable tiles are `0.0`. Access: `grid[int(x)][int(y)]` or `grid[pos[0], pos[1]]`.
+
+### Available grids (all via `bot.mediator`)
+
+| Accessor | Contains | Use for |
+|---|---|---|
+| `get_ground_grid` | Enemy units + effects dangerous to ground | Ground unit pathing, retreat path checks |
+| `get_ground_avoidance_grid` | Spell effects only (storms, biles, disruptors) — **no unit positions** | `KeepUnitSafe` for ground units, dodge logic |
+| `get_air_grid` | Enemy units + effects dangerous to air | Air unit pathing (observers, phoenix) |
+| `get_air_avoidance_grid` | Spell effects dangerous to air only | `KeepUnitSafe` for air units |
+| `get_climber_grid` | Same as `ground_grid` + reaper-jump / Colossus-climb tiles | Colossus micro |
+| `get_air_vs_ground_grid` | Air grid with increased cost on ground tiles | Air units that prefer high ground |
+| `get_ground_to_air_grid` | Ground enemies dangerous to air only | Air units avoiding ground AA |
+
+### Critical distinction: influence vs avoidance
+- **`ground_grid`** — enemy *unit* positions add cost here. Use this when you need to know if an area is contested by enemy forces (retreat checks, mass recall, engagement decisions).
+- **`ground_avoidance_grid`** — only spell *effects* (Disruptor shots, biles, storms, etc.) add cost. Regular combat units do **not** appear here. Use this for `KeepUnitSafe` so units dodge abilities without over-reacting to normal enemies.
+
+> Mixing these up is a common bug: using `avoidance_grid` for a retreat path check will miss enemy armies; using `ground_grid` for `KeepUnitSafe` causes units to flee from any enemy contact.
+
+### Checking cell safety
+
+```python
+from cython_extensions.numpy_helper import cy_point_below_value
+
+is_safe = cy_point_below_value(grid=avoid_grid, position=unit.position.rounded, weight_safety_limit=1.0)
+```
+
+### Custom grids
+
+```python
+map_data: MapData = bot.mediator.get_map_data_object
+my_grid = map_data.get_pyastar_grid()          # clean ground
+my_air  = map_data.get_clean_air_grid()        # clean air
+my_grid = map_data.add_cost(position=pos, radius=r, grid=my_grid, weight=dps)
+```
+
+Pass custom grids into any ARES behavior or pathing call exactly like the built-in ones.
+
+---
+
 ## Threat Response Architecture
 
 **Principle:** allocate the *minimum* force required — never redirect the whole army for a small threat.
