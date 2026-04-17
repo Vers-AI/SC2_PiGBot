@@ -422,6 +422,9 @@ class PiG_Bot(AresBot):
         if unit.type_id == UnitTypeId.GATEWAY:
             if self.rally_point:
                 unit(AbilityId.RALLY_BUILDING, self.rally_point)
+        elif unit.type_id == UnitTypeId.ROBOTICSFACILITY:
+            # Rally robo units to starting townhall so they don't wander
+            unit(AbilityId.RALLY_BUILDING, self.start_location)
             
 
     async def on_unit_created(self, unit: Unit) -> None:
