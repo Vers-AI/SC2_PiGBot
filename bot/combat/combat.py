@@ -82,6 +82,7 @@ from bot.combat.unit_micro import (
 )
 from bot.combat.formation import execute_fan_out, clear_formation_state
 from bot.combat.target_scoring import select_target, update_upgrades
+from bot.combat.force_field_split import compute_ff_split
 from ares.dicts.unit_data import UNIT_DATA
 from bot.utilities.debug import (
     render_combat_state_overlay,
@@ -97,6 +98,7 @@ from bot.utilities.debug import (
     render_blind_ramp_debug,
     render_choke_policy_debug,
     render_choke_decision_debug,
+    render_ff_split_debug,
 )
 from bot.utilities.intel import get_enemy_intel_quality
 from bot.managers.structure_manager import use_mass_recall
@@ -107,6 +109,83 @@ from cython_extensions import (
 )
 from cython_extensions.general_utils import cy_in_pathing_grid_ma
 from cython_extensions.numpy_helper import cy_point_below_value
+
+
+def _compute_guardian_shield_assignments(
+    sentries: list[Unit],
+    squad_units: list[Unit],
+    enemies: Units,
+) -> set[int]:
+    """Determine the minimum set of sentries that should cast Guardian Shield.
+
+    Greedy coverage: add sentries until every squad unit is within
+    GUARDIAN_SHIELD_RADIUS of an active (or just-approved) shield.
+    Sentries already holding the buff count as free coverage sources.
+
+    This ensures the squad gets full shield coverage with some natural
+    overlap at the edges, without every sentry wasting 75 energy.
+
+    Returns:
+        Set of sentry tags approved to cast Guardian Shield this frame.
+    """
+    from bot.constants import (
+        GUARDIAN_SHIELD_ENERGY_COST,
+        GUARDIAN_SHIELD_RADIUS,
+        MELEE_RANGE_THRESHOLD,
+    )
+    from sc2.ids.buff_id import BuffId
+
+    # No ranged enemies → no point casting
+    has_ranged_enemies = any(
+        u.ground_range > MELEE_RANGE_THRESHOLD for u in enemies
+    )
+    if not has_ranged_enemies:
+        return set()
+
+    # Positions of shields that are (or will be) active this frame
+    shield_positions: list[Point2] = []
+
+    # Already-shielded sentries provide free coverage
+    for s in sentries:
+        if s.has_buff(BuffId.GUARDIANSHIELD):
+            shield_positions.append(s.position)
+
+    # Candidates: sentries that can cast (enough energy, not already shielded)
+    candidates = [
+        s for s in sentries
+        if s.energy >= GUARDIAN_SHIELD_ENERGY_COST
+        and not s.has_buff(BuffId.GUARDIANSHIELD)
+    ]
+
+    approved: set[int] = set()
+
+    # Greedy: keep adding sentries until every squad unit is within
+    # GUARDIAN_SHIELD_RADIUS of at least one active shield.
+    # This naturally produces overlap at shield boundaries — units
+    # near the edge of one shield are also near the center of the next.
+    while candidates:
+        # Check which squad units are NOT covered by any current shield
+        uncovered = [
+            u for u in squad_units
+            if not any(
+                cy_distance_to(u.position, sp) <= GUARDIAN_SHIELD_RADIUS
+                for sp in shield_positions
+            )
+        ]
+        if not uncovered:
+            break  # Full coverage achieved
+
+        # Pick the candidate closest to the center of uncovered units
+        uc_center = cy_find_units_center_mass(uncovered, 10.0)
+        best = min(
+            candidates,
+            key=lambda s: cy_distance_to_squared(s.position, uc_center),
+        )
+        approved.add(best.tag)
+        shield_positions.append(best.position)
+        candidates.remove(best)
+
+    return approved
 
 
 def get_attackable_enemies(unit: Unit, enemies: list, grid: np.ndarray) -> list:
@@ -736,8 +815,53 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                             ranged_center=ranged_center,
                         )
                 
-                # Handle Sentries - Guardian Shield + safe follow
+                # Handle Sentries - Force Field split > Guardian Shield > safe follow
                 sentries = [c for c in other_casters if c.type_id == UnitTypeId.SENTRY]
+
+                # Compute Guardian Shield assignments once per squad:
+                # only the minimum sentries needed to cover the squad cast,
+                # preventing all sentries from casting simultaneously.
+                gs_approved_tags: set[int] = set()
+                if sentries:
+                    gs_approved_tags = _compute_guardian_shield_assignments(
+                        sentries=sentries,
+                        squad_units=units,
+                        enemies=all_close,
+                    )
+
+                # Compute FF split once per squad (pools energy across all sentries)
+                ff_assignments: dict[int, list[Point2]] | None = None
+                ff_debug_center: Point2 | None = None
+                ff_debug_near = 0
+                ff_debug_far = 0
+                if sentries and all_close:
+                    ff_result = compute_ff_split(
+                        enemies=list(all_close),
+                        sentries=sentries,
+                        own_center=squad_position,
+                        choke_width_map=choke_width_map,
+                        ground_grid=grid,
+                    )
+                    if ff_result is not None:
+                        ff_debug_center = ff_result.enemy_center
+                        ff_debug_near = ff_result.near_count
+                        ff_debug_far = ff_result.far_count
+                        if ff_result.assignments:
+                            # Convert [(sentry, pos), ...] → {sentry_tag: [pos1, pos2, ...]}
+                            ff_assignments = {}
+                            for sentry_unit, pos in ff_result.assignments:
+                                ff_assignments.setdefault(sentry_unit.tag, []).append(pos)
+
+                # Debug visualization for FF split
+                render_ff_split_debug(
+                    bot,
+                    ff_assignments=ff_assignments,
+                    sentries=sentries,
+                    enemy_center=ff_debug_center,
+                    near_count=ff_debug_near,
+                    far_count=ff_debug_far,
+                )
+
                 for sentry in sentries:
                     micro_sentry(
                         sentry=sentry,
@@ -748,6 +872,8 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                         bot=bot,
                         squad_position=squad_position,
                         ranged_center=ranged_center,
+                        ff_assignments=ff_assignments,
+                        gs_approved=sentry.tag in gs_approved_tags,
                     )
                 
                 # Handle other spellcasters (Observers, etc.) - stay with army, stay safe
@@ -985,7 +1111,7 @@ def _is_valid_warp_in_position(bot, position: Point2, ground_grid: np.ndarray) -
     enemy_army = bot.mediator.get_cached_enemy_army
     if enemy_army:
         closest_enemy = enemy_army.closest_to(position)
-        if cy_distance_to(closest_enemy, position) < WARP_PRISM_MIN_ENEMY_DISTANCE:
+        if cy_distance_to(closest_enemy.position, position) < WARP_PRISM_MIN_ENEMY_DISTANCE:
             return False
     
     return True
@@ -1019,7 +1145,7 @@ def _find_valid_warp_in_position(bot, current_pos: Point2, army_center: Point2) 
             candidate = Point2((current_pos.x + dx, current_pos.y + dy))
             
             if _is_valid_warp_in_position(bot, candidate, ground_grid):
-                dist_to_army = cy_distance_to(candidate, army_center)
+                dist_to_army = cy_distance_to(candidate, army_center)  # both are Point2, OK
                 if dist_to_army < best_dist_to_army:
                     best_dist_to_army = dist_to_army
                     best_pos = candidate
@@ -1039,7 +1165,7 @@ def warp_prism_follower(bot, warp_prisms: Units, main_army: Units) -> None:
     maneuver: CombatManeuver = CombatManeuver()
     for prism in warp_prisms:
         if main_army:
-            distance_to_center = cy_distance_to(prism, main_army.center)
+            distance_to_center = cy_distance_to(prism.position, main_army.center)
 
             # If close to army, find valid position and phase or move there
             if distance_to_center < WARP_PRISM_FOLLOW_DISTANCE:
@@ -1053,7 +1179,7 @@ def warp_prism_follower(bot, warp_prisms: Units, main_army: Units) -> None:
             else:
                 # If no warpin in progress, revert to Transport
                 # Or simply path near the army
-                not_ready_units = [unit for unit in bot.units if not unit.is_ready and cy_distance_to(unit, prism) < WARP_PRISM_UNIT_CHECK_RANGE]
+                not_ready_units = [unit for unit in bot.units if not unit.is_ready and cy_distance_to(unit.position, prism.position) < WARP_PRISM_UNIT_CHECK_RANGE]
                 if prism.type_id == UnitTypeId.WARPPRISMPHASING and not not_ready_units:
                         prism(AbilityId.MORPH_WARPPRISMTRANSPORTMODE)
 

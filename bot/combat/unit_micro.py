@@ -561,12 +561,25 @@ def micro_sentry(
     bot,
     squad_position: Point2,
     ranged_center: Optional[Point2] = None,
+    ff_assignments: Optional[dict[int, list[Point2]]] = None,
+    gs_approved: bool = False,
 ) -> bool:
-    """Handle Sentry Guardian Shield and safe army-following.
+    """Handle Sentry abilities and safe army-following.
 
-    Sentries spread coverage across the army — avoid overlapping shields.
-    - Priority: Guardian Shield (if ranged enemies present + space from other shields)
-    - Otherwise: stay safe (two-layer: avoid grid + ground grid) and follow army
+    Priority order:
+      1. Force Field split (if this sentry was assigned FF positions)
+      2. Guardian Shield (if squad-level assignment approved this sentry)
+      3. Stay safe (two-layer: avoid grid + ground grid) and follow army
+
+    Force Field split is computed once per squad (in combat.py) across all
+    sentries pooling their energy, then each sentry executes its assigned
+    casts. This ensures coordinated FF placement that a single sentry
+    couldn't achieve alone.
+
+    Guardian Shield assignment is also computed once per squad (in
+    combat.py) via _compute_guardian_shield_assignments(). Only the
+    minimum sentries needed to cover the squad are approved to cast,
+    preventing all sentries from casting simultaneously.
 
     Uses two KeepUnitSafe layers like ranged/melee units:
       1. avoid_grid — dodge immediate danger (biles, disruptor shots, etc.)
@@ -586,48 +599,41 @@ def micro_sentry(
         bot: Bot instance
         squad_position: Center of the full squad (fallback when no ranged_center)
         ranged_center: Center of ranged units during combat (preferred follow target)
+        ff_assignments: Dict mapping sentry tag → list of FF positions to cast.
+            Pre-computed by compute_ff_split() in combat.py. None = no split.
+        gs_approved: Whether this sentry was approved by the squad-level
+            Guardian Shield assignment to cast. If False, skip casting.
 
     Returns:
         True if behavior registered
     """
     from bot.constants import (
-        MELEE_RANGE_THRESHOLD,
         SENTRY_SQUAD_FOLLOW_DISTANCE,
         SENTRY_SQUAD_TARGET_DISTANCE,
-        GUARDIAN_SHIELD_ENERGY_COST,
-        GUARDIAN_SHIELD_OVERLAP_DISTANCE,
     )
     from sc2.ids.buff_id import BuffId
 
-    # Skip if already shielded (can't double-cast)
-    has_shield = sentry.has_buff(BuffId.GUARDIANSHIELD)
-
-    # Guardian Shield only reduces ranged damage — skip if no ranged enemies present
-    has_ranged_enemies = any(
-        u.ground_range > MELEE_RANGE_THRESHOLD for u in enemies
-    )
-
-    # Check if another friendly sentry nearby already has shield active
-    shield_overlap = False
-    if (
-        sentry.energy >= GUARDIAN_SHIELD_ENERGY_COST
-        and has_ranged_enemies
-        and not has_shield
-    ):
-        for u in friendly_units:
-            if u.type_id == UnitTypeId.SENTRY and u.tag != sentry.tag:
-                if u.has_buff(BuffId.GUARDIANSHIELD):
-                    dist = cy_distance_to(sentry.position, u.position)
-                    if dist < GUARDIAN_SHIELD_OVERLAP_DISTANCE:
-                        shield_overlap = True
-                        break
-
-        # Cast shield if no overlap and enemies present
-        if not shield_overlap:
-            sentry(AbilityId.GUARDIANSHIELD_GUARDIANSHIELD)
+    # Priority 1: Force Field split — cast assigned FFs if available
+    if ff_assignments and sentry.tag in ff_assignments:
+        positions = ff_assignments[sentry.tag]
+        if positions:
+            # Cast all assigned FFs for this sentry
+            # (energy was already validated in compute_ff_split)
+            # First cast is immediate (queue=False), subsequent casts are queued
+            # so SC2 executes them in sequence instead of overwriting each other
+            for i, pos in enumerate(positions):
+                sentry(AbilityId.FORCEFIELD_FORCEFIELD, pos, queue=(i > 0))
             return True
 
-    # No shield opportunity — stay safe and follow army
+    # Priority 2: Guardian Shield
+    # Squad-level assignment (computed in combat.py) determines which
+    # sentries cast. Only approved sentries spend energy, ensuring
+    # minimum shields to cover the squad without over-casting.
+    if gs_approved and not sentry.has_buff(BuffId.GUARDIANSHIELD):
+        sentry(AbilityId.GUARDIANSHIELD_GUARDIANSHIELD)
+        return True
+
+    # No cast opportunity — stay safe and follow army
     maneuver = CombatManeuver()
 
     # Layer 1: Dodge immediate danger (biles, disruptor shots, storms, etc.)

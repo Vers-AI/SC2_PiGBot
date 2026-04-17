@@ -1288,6 +1288,108 @@ def render_narrow_choke_points(bot) -> None:
             )
 
 
+def render_ff_split_debug(
+    bot,
+    ff_assignments: dict[int, list[Point2]] | None,
+    sentries: list,
+    enemy_center: Point2 | None = None,
+    near_count: int = 0,
+    far_count: int = 0,
+) -> None:
+    """Render Force Field split debug visualization.
+
+    Shows:
+    - Cyan spheres at each planned FF position
+    - Cyan line connecting FF positions (the split line)
+    - Sentry energy labels showing who's casting
+    - Near/far enemy count label at enemy center
+    - Red 'NO SPLIT' label if split was attempted but failed
+
+    Args:
+        bot: Bot instance
+        ff_assignments: Dict mapping sentry tag → list of FF positions, or None
+        sentries: List of sentry units in the squad
+        enemy_center: Enemy army center (for label placement)
+        near_count: Enemies on near side of split
+        far_count: Enemies on far side of split
+    """
+    if not bot.debug:
+        return
+
+    # Always show sentry energy labels
+    for s in sentries:
+        pos = s.position
+        z = bot.get_terrain_z_height(pos)
+        label = f"E:{s.energy:.0f}"
+        color = (0, 255, 255) if s.energy >= 30 else (128, 128, 128)
+        bot.client.debug_text_world(
+            label,
+            Point3((pos.x, pos.y, z + 1.5)),
+            color=color,
+            size=12,
+        )
+
+    if ff_assignments is None:
+        # No split this frame — show why if we have enemies
+        if enemy_center is not None and (near_count > 0 or far_count > 0):
+            z = bot.get_terrain_z_height(enemy_center)
+            reason = "NO SPLIT"
+            if near_count < 3 or far_count < 3:
+                reason = f"NO SPLIT (near:{near_count} far:{far_count})"
+            bot.client.debug_text_world(
+                reason,
+                Point3((enemy_center.x, enemy_center.y, z + 2.5)),
+                color=(255, 80, 80),
+                size=12,
+            )
+        return
+
+    # Draw each FF position as a cyan sphere
+    all_positions: list[Point2] = []
+    for tag, positions in ff_assignments.items():
+        for pos in positions:
+            all_positions.append(pos)
+            z = bot.get_terrain_z_height(pos)
+            # Sphere at FF center
+            bot.client.debug_sphere_out(
+                Point3((pos.x, pos.y, z + 0.3)),
+                1.5,  # FF_RADIUS
+                Point3((0, 255, 255)),  # Cyan
+            )
+            # Label showing which sentry is casting
+            bot.client.debug_text_world(
+                f"FF→{tag}",
+                Point3((pos.x, pos.y, z + 2.0)),
+                color=(0, 255, 255),
+                size=10,
+            )
+
+    # Draw line connecting FF positions (the split line)
+    if len(all_positions) >= 2:
+        for i in range(len(all_positions) - 1):
+            p1 = all_positions[i]
+            p2 = all_positions[i + 1]
+            z1 = bot.get_terrain_z_height(p1)
+            z2 = bot.get_terrain_z_height(p2)
+            bot.client.debug_line_out(
+                Point3((p1.x, p1.y, z1 + 0.3)),
+                Point3((p2.x, p2.y, z2 + 0.3)),
+                color=Point3((0, 255, 255)),
+            )
+
+    # Label at enemy center showing split info
+    if enemy_center is not None:
+        z = bot.get_terrain_z_height(enemy_center)
+        total_ffs = sum(len(pos_list) for pos_list in ff_assignments.values())
+        total_energy = sum(s.energy for s in sentries)
+        bot.client.debug_text_world(
+            f"FF SPLIT near:{near_count} far:{far_count} ffs:{total_ffs} pool:{total_energy:.0f}",
+            Point3((enemy_center.x, enemy_center.y, z + 3.0)),
+            color=(0, 255, 255),
+            size=12,
+        )
+
+
 def log_nova_error(error: Exception) -> None:
     """
     Log NovaManager errors (always shown, not gated by debug flag).

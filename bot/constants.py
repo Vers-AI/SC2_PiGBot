@@ -386,6 +386,30 @@ Low enough to be in real danger, high enough to still have time to blink."""
 STALKER_BLINK_RANGE = 8.0
 """Blink ability range in tiles (standard SC2 value)."""
 
+# ===== FORCE FIELD SPLIT =====
+FF_ENERGY_COST = 30
+"""Energy cost per Force Field cast"""
+
+FF_RADIUS = 1.5
+"""Radius of a single Force Field (tiles). Diameter = 3.0 tiles."""
+
+FF_CAST_RANGE = 9.0
+"""Sentry cast range for Force Field"""
+
+FF_OVERLAP = 0.5
+"""Overlap between adjacent Force Fields to prevent gaps.
+0.5 tiles ensures no unit can slip through the chain."""
+
+FF_SPLIT_MIN_ENEMIES = 8
+"""Minimum total ground combat enemies to attempt a force field split"""
+
+FF_SPLIT_MIN_HALF = 3
+"""Minimum enemies on each side of the split to be worthwhile.
+Below this, splitting isn't worth the energy investment."""
+
+FF_SPLIT_CHOKE_SNAP_RANGE = 10.0
+"""Max distance from enemy center to snap split line toward a nearby choke."""
+
 # ===== RESOURCE-AWARE PRODUCTION =====
 RESOURCE_PRESSURE_MAX_NUDGE = 0.15
 """Maximum proportion shift per unit type from resource pressure (±15%). Larger than counter-table nudge since resource starvation is more urgent."""

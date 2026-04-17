@@ -47,6 +47,11 @@ from bot.combat.formation import (
     clear_formation_state,
 )
 
+from bot.combat.force_field_split import (
+    compute_ff_split,
+    FFSplitResult,
+)
+
 __all__ = [
     # Constants
     "ATTACKING_SQUAD_RADIUS",
@@ -82,4 +87,7 @@ __all__ = [
     # Formation
     "execute_fan_out",
     "clear_formation_state",
+    # Force Field split
+    "compute_ff_split",
+    "FFSplitResult",
 ]
