@@ -49,6 +49,7 @@ from bot.combat.formation import (
 
 from bot.combat.force_field_split import (
     compute_ff_split,
+    compute_ff_ramp_block,
     FFSplitResult,
 )
 

@@ -82,7 +82,7 @@ from bot.combat.unit_micro import (
 )
 from bot.combat.formation import execute_fan_out, clear_formation_state
 from bot.combat.target_scoring import select_target, update_upgrades
-from bot.combat.force_field_split import compute_ff_split
+from bot.combat.force_field_split import compute_ff_split, compute_ff_ramp_block
 from ares.dicts.unit_data import UNIT_DATA
 from bot.utilities.debug import (
     render_combat_state_overlay,
@@ -829,28 +829,42 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                         enemies=all_close,
                     )
 
-                # Compute FF split once per squad (pools energy across all sentries)
+                # Compute FF assignments once per squad (pools energy across all sentries)
+                # Priority: ramp block > army split (1 FF at a choke is more impactful)
                 ff_assignments: dict[int, list[Point2]] | None = None
                 ff_debug_center: Point2 | None = None
-                ff_debug_near = 0
-                ff_debug_far = 0
                 if sentries and all_close:
-                    ff_result = compute_ff_split(
+                    # Only consider our ramp and enemy ramp for blocking
+                    own_ramp = bot.main_base_ramp
+                    enemy_ramp = bot.mediator.get_enemy_ramp
+
+                    # Try ramp block first: single FF at ramp center if enemy is crossing
+                    ramp_result = compute_ff_ramp_block(
                         enemies=list(all_close),
                         sentries=sentries,
-                        own_center=squad_position,
-                        choke_width_map=choke_width_map,
-                        ground_grid=grid,
+                        own_ramp=own_ramp,
+                        enemy_ramp=enemy_ramp,
                     )
-                    if ff_result is not None:
-                        ff_debug_center = ff_result.enemy_center
-                        ff_debug_near = ff_result.near_count
-                        ff_debug_far = ff_result.far_count
-                        if ff_result.assignments:
-                            # Convert [(sentry, pos), ...] → {sentry_tag: [pos1, pos2, ...]}
-                            ff_assignments = {}
-                            for sentry_unit, pos in ff_result.assignments:
-                                ff_assignments.setdefault(sentry_unit.tag, []).append(pos)
+                    if ramp_result is not None and ramp_result.assignments:
+                        ff_debug_center = ramp_result.enemy_center
+                        ff_assignments = {}
+                        for sentry_unit, pos in ramp_result.assignments:
+                            ff_assignments.setdefault(sentry_unit.tag, []).append(pos)
+                    else:
+                        # No ramp block opportunity — try army split
+                        ff_result = compute_ff_split(
+                            enemies=list(all_close),
+                            sentries=sentries,
+                            own_center=squad_position,
+                            ground_grid=grid,
+                        )
+                        if ff_result is not None:
+                            ff_debug_center = ff_result.enemy_center
+                            if ff_result.assignments:
+                                # Convert [(sentry, pos), ...] → {sentry_tag: [pos1, pos2, ...]}
+                                ff_assignments = {}
+                                for sentry_unit, pos in ff_result.assignments:
+                                    ff_assignments.setdefault(sentry_unit.tag, []).append(pos)
 
                 # Debug visualization for FF split
                 render_ff_split_debug(
@@ -858,8 +872,6 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     ff_assignments=ff_assignments,
                     sentries=sentries,
                     enemy_center=ff_debug_center,
-                    near_count=ff_debug_near,
-                    far_count=ff_debug_far,
                 )
 
                 for sentry in sentries:

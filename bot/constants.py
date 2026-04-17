@@ -387,10 +387,10 @@ STALKER_BLINK_RANGE = 8.0
 """Blink ability range in tiles (standard SC2 value)."""
 
 # ===== FORCE FIELD SPLIT =====
-FF_ENERGY_COST = 30
+FF_ENERGY_COST = 50
 """Energy cost per Force Field cast"""
 
-FF_RADIUS = 1.5
+FF_RADIUS = 1.7
 """Radius of a single Force Field (tiles). Diameter = 3.0 tiles."""
 
 FF_CAST_RANGE = 9.0
@@ -403,12 +403,14 @@ FF_OVERLAP = 0.5
 FF_SPLIT_MIN_ENEMIES = 8
 """Minimum total ground combat enemies to attempt a force field split"""
 
-FF_SPLIT_MIN_HALF = 3
-"""Minimum enemies on each side of the split to be worthwhile.
-Below this, splitting isn't worth the energy investment."""
+FF_RAMP_BLOCK_RADIUS = 5.0
+"""Max distance from enemy center to ramp top/bottom center to trigger a ramp block.
+A single FF at the ramp center when the enemy is crossing through it."""
 
-FF_SPLIT_CHOKE_SNAP_RANGE = 10.0
-"""Max distance from enemy center to snap split line toward a nearby choke."""
+FF_RAMP_BLOCK_MIN_VALUE = 6.0
+"""Minimum enemy army_value near a ramp to justify a ramp block FF.
+Roughly 2 stalkers or 6 zerglings worth — below this, 50 energy isn't worth spending.
+Uses the same UNIT_DATA army_value as ENGAGEMENT_ARMY_VALUE_THRESHOLD."""
 
 # ===== RESOURCE-AWARE PRODUCTION =====
 RESOURCE_PRESSURE_MAX_NUDGE = 0.15

@@ -1293,8 +1293,6 @@ def render_ff_split_debug(
     ff_assignments: dict[int, list[Point2]] | None,
     sentries: list,
     enemy_center: Point2 | None = None,
-    near_count: int = 0,
-    far_count: int = 0,
 ) -> None:
     """Render Force Field split debug visualization.
 
@@ -1302,7 +1300,6 @@ def render_ff_split_debug(
     - Cyan spheres at each planned FF position
     - Cyan line connecting FF positions (the split line)
     - Sentry energy labels showing who's casting
-    - Near/far enemy count label at enemy center
     - Red 'NO SPLIT' label if split was attempted but failed
 
     Args:
@@ -1310,8 +1307,6 @@ def render_ff_split_debug(
         ff_assignments: Dict mapping sentry tag → list of FF positions, or None
         sentries: List of sentry units in the squad
         enemy_center: Enemy army center (for label placement)
-        near_count: Enemies on near side of split
-        far_count: Enemies on far side of split
     """
     if not bot.debug:
         return
@@ -1330,14 +1325,11 @@ def render_ff_split_debug(
         )
 
     if ff_assignments is None:
-        # No split this frame — show why if we have enemies
-        if enemy_center is not None and (near_count > 0 or far_count > 0):
+        # No split this frame — show indicator if we have an enemy center
+        if enemy_center is not None:
             z = bot.get_terrain_z_height(enemy_center)
-            reason = "NO SPLIT"
-            if near_count < 3 or far_count < 3:
-                reason = f"NO SPLIT (near:{near_count} far:{far_count})"
             bot.client.debug_text_world(
-                reason,
+                "NO SPLIT",
                 Point3((enemy_center.x, enemy_center.y, z + 2.5)),
                 color=(255, 80, 80),
                 size=12,
@@ -1382,8 +1374,9 @@ def render_ff_split_debug(
         z = bot.get_terrain_z_height(enemy_center)
         total_ffs = sum(len(pos_list) for pos_list in ff_assignments.values())
         total_energy = sum(s.energy for s in sentries)
+        label = "RAMP BLOCK" if total_ffs == 1 else f"FF SPLIT ffs:{total_ffs}"
         bot.client.debug_text_world(
-            f"FF SPLIT near:{near_count} far:{far_count} ffs:{total_ffs} pool:{total_energy:.0f}",
+            f"{label} pool:{total_energy:.0f}",
             Point3((enemy_center.x, enemy_center.y, z + 3.0)),
             color=(0, 255, 255),
             size=12,
