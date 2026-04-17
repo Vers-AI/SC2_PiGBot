@@ -71,6 +71,7 @@ def compute_ff_ramp_block(
     sentries: List[Unit],
     own_ramp: Optional[Sc2Ramp],
     enemy_ramp: Optional[Sc2Ramp],
+    active_ffs: Optional[List[Point2]] = None,
 ) -> Optional[FFSplitResult]:
     """Check if the enemy center is crossing a ramp and place a single FF to block it.
 
@@ -82,11 +83,16 @@ def compute_ff_ramp_block(
     of the ramp regardless of shape, accounting for both left-right and
     top-bottom asymmetry.
 
+    Checks active Force Fields to avoid stacking a second FF on top of an
+    existing one at the same ramp position.
+
     Args:
         enemies: All nearby enemy units (pre-filtered for combat relevance)
         sentries: All friendly sentries (energy pooled across all of them)
         own_ramp: Our main Ramp object (from bot.main_base_ramp), or None
         enemy_ramp: Enemy main Ramp object (from bot.mediator.get_enemy_ramp), or None
+        active_ffs: List of active FF center positions from bot.mediator.get_forcefield_positions,
+            or None. Used to avoid stacking duplicate FFs.
 
     Returns:
         FFSplitResult with a single FF assignment at the ramp center, or None
@@ -137,6 +143,12 @@ def compute_ff_ramp_block(
 
     if target_pos is None:
         return None
+
+    # Don't stack FFs: if there's already an active FF near the target, skip
+    if active_ffs:
+        for ff_pos in active_ffs:
+            if cy_distance_to(ff_pos, target_pos) < FF_RADIUS:
+                return None
 
     # Find closest sentry with enough energy and in cast range
     for s in sentries:

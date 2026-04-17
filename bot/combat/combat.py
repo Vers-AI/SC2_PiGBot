@@ -844,6 +844,7 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                         sentries=sentries,
                         own_ramp=own_ramp,
                         enemy_ramp=enemy_ramp,
+                        active_ffs=bot.mediator.get_forcefield_positions,
                     )
                     if ramp_result is not None and ramp_result.assignments:
                         ff_debug_center = ramp_result.enemy_center
