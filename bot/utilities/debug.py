@@ -938,7 +938,7 @@ def render_observer_debug(bot) -> None:
                 label, color = "STATION", (0, 255, 0)
         elif tag in assignments.get("patrol", []):
             target_pos = bot.observer_targets.get(tag)
-            dist = f" D:{cy_distance_to(obs, target_pos):.0f}" if target_pos else ""
+            dist = f" D:{cy_distance_to(obs.position, target_pos):.0f}" if target_pos else ""
             label, color = f"PATROL{dist}", (200, 200, 0)
         else:
             label, color = "UNASSIGNED", (255, 0, 0)

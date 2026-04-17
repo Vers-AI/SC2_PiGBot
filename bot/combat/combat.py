@@ -176,7 +176,7 @@ def _compute_guardian_shield_assignments(
             break  # Full coverage achieved
 
         # Pick the candidate closest to the center of uncovered units
-        uc_center = cy_find_units_center_mass(uncovered, 10.0)
+        uc_center, _ = cy_find_units_center_mass(uncovered, 10.0)
         best = min(
             candidates,
             key=lambda s: cy_distance_to_squared(s.position, uc_center),
