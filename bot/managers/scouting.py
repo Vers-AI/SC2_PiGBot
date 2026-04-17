@@ -121,10 +121,15 @@ def control_worker_scout(bot) -> None:
     existing_scouts = existing_scouts.filter(lambda u: u.tag in valid_tags)
     worker_scouts = existing_scouts.filter(lambda u: u.type_id in WORKER_TYPES)
     
+    # Also recall if build runner already has a worker scout — avoid duplicates
+    build_runner_scouts = bot.mediator.get_units_from_role(role=UnitRole.BUILD_RUNNER_SCOUT)
+    build_runner_worker_scouts = build_runner_scouts.filter(lambda u: u.type_id in WORKER_TYPES)
+    
     should_recall = (
         bot.units(UnitTypeId.OBSERVER).amount > 0 or
         bot._under_attack or
-        bot._intel_urgency <= HUNT_URGENCY_THRESHOLD  # Intel is fresh, no longer need scout
+        bot._intel_urgency <= HUNT_URGENCY_THRESHOLD or  # Intel is fresh, no longer need scout
+        bool(build_runner_worker_scouts)  # Build runner scout exists, no need for extra
     )
     
     if worker_scouts and should_recall:
@@ -154,17 +159,12 @@ def control_worker_scout(bot) -> None:
         return
     
     # Don't send intel scout if build runner already has a worker scout
-    build_runner_scouts = bot.mediator.get_units_from_role(role=UnitRole.BUILD_RUNNER_SCOUT)
-    build_runner_worker_scouts = build_runner_scouts.filter(lambda u: u.type_id in WORKER_TYPES)
+    # (already queried at top of function, reuse the variable)
     if build_runner_worker_scouts:
         return
     
     # Check if we already have a worker scout assigned
-    existing_scouts = bot.mediator.get_units_from_role(role=UnitRole.SCOUTING)
-    # Filter to only units that still exist by checking their tags
-    valid_tags = {u.tag for u in bot.all_own_units}
-    existing_scouts = existing_scouts.filter(lambda u: u.tag in valid_tags)
-    worker_scouts = existing_scouts.filter(lambda u: u.type_id in WORKER_TYPES)
+    # (already queried at top of function, reuse the variable)
     
     # If flag is set but no worker scouts exist, reset the flag (scout died)
     if bot._worker_scout_sent_this_stale_period and not worker_scouts:
