@@ -150,8 +150,8 @@ def get_enemy_cannon_rushed(bot, detection_radius: float = 25.0) -> bool:
         # Look for enemy pylons and cannons near our bases
         enemy_structures = bot.enemy_structures.filter(
             lambda s: s.type_id in {UnitID.PYLON, UnitID.PHOTONCANNON} and 
-                     (cy_distance_to(s, main_base) < detection_radius or 
-                      cy_distance_to(s, natural_expansion) < detection_radius)
+                     (cy_distance_to(s.position, main_base) < detection_radius or 
+                      cy_distance_to(s.position, natural_expansion) < detection_radius)
         )
         
         # Count pylons and cannons

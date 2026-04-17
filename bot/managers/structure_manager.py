@@ -87,7 +87,7 @@ def use_recharge(bot, main_army: Units) -> bool:
         collection = bot.structures if unit_type == UnitTypeId.SHIELDBATTERY else bot.units
         for unit in collection:
             if (unit.type_id == unit_type and
-                cy_distance_to(unit, closest_nexus) <= 12 and
+                cy_distance_to(unit.position, closest_nexus.position) <= 12 and
                 unit.energy_percentage < 1.0):
                 candidates.append(unit)
 
@@ -167,7 +167,7 @@ def use_chronoboost(bot) -> bool:
         if candidates:
             target_structure = candidates[0]
             closest_nexus = min(available_nexuses,
-                                key=lambda nexus: cy_distance_to(nexus, target_structure.position))
+                                key=lambda nexus: cy_distance_to(nexus.position, target_structure.position))
             closest_nexus(AbilityId.EFFECT_CHRONOBOOSTENERGYCOST, target_structure)
             return True
 

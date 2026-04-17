@@ -63,7 +63,7 @@ def get_hunt_target(bot, unit: Unit) -> Point2:
             
             # If already near the army, orbit toward stale units to refresh
             # their visibility instead of parking at the centroid
-            if cy_distance_to(unit, centroid) < ORBIT_NEAR_RADIUS:
+            if cy_distance_to(unit.position, centroid) < ORBIT_NEAR_RADIUS:
                 stale_units = [
                     u for u in cached_army
                     if u.age >= VISIBLE_AGE_THRESHOLD
@@ -96,7 +96,7 @@ def get_hunt_target(bot, unit: Unit) -> Point2:
     current_target = hunt_targets[current_idx % len(hunt_targets)]
     
     # If close to current target, cycle to next
-    if cy_distance_to(unit, current_target) < 5:
+    if cy_distance_to(unit.position, current_target) < 5:
         next_idx = (current_idx + 1) % len(hunt_targets)
         bot.observer_targets[hunt_key] = next_idx
         current_target = hunt_targets[next_idx]
@@ -434,9 +434,9 @@ def control_observers(bot, all_observers: Units, main_army: Units) -> None:
             # Prefer closest non-army observer to enemy base
             non_army = [o for o in all_observers if o.tag != army_tag]
             if non_army:
-                hunter_tag = min(non_army, key=lambda o: cy_distance_to(o, enemy_pos)).tag
+                hunter_tag = min(non_army, key=lambda o: cy_distance_to(o.position, enemy_pos)).tag
             else:
-                hunter_tag = min(all_observers, key=lambda o: cy_distance_to(o, enemy_pos)).tag
+                hunter_tag = min(all_observers, key=lambda o: cy_distance_to(o.position, enemy_pos)).tag
     
     bot._hunting_observer_tag = hunter_tag
     
@@ -535,7 +535,7 @@ def _get_forward_army_center(army: Units, target_point: Point2) -> Point2:
         return army.center
     
     # Sort by distance to target, take the forward third (at least 3 units)
-    sorted_units = sorted(army, key=lambda u: cy_distance_to(u, target_point))
+    sorted_units = sorted(army, key=lambda u: cy_distance_to(u.position, target_point))
     forward_count = max(3, len(sorted_units) // 3)
     forward_units = sorted_units[:forward_count]
     
@@ -677,7 +677,7 @@ def _control_single_patrol_observer(bot, observer: Unit) -> None:
             bot.observer_targets[tag] = ol_spots[spot_index]
         
         # If close to target, cycle to next spot
-        if cy_distance_to(observer, bot.observer_targets[tag]) < 1:
+        if cy_distance_to(observer.position, bot.observer_targets[tag]) < 1:
             current_index = (
                 ol_spots.index(bot.observer_targets[tag])
                 if bot.observer_targets[tag] in ol_spots else 0
