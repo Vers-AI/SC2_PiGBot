@@ -24,7 +24,7 @@ from bot.constants import (
     MEMORY_EXPIRY_TIME,
     VISIBLE_AGE_THRESHOLD,
     STALENESS_WINDOW,
-    STALE_INTEL_THRESHOLD,
+    FRESH_INTEL_THRESHOLD,
     URGENCY_BUILD_RATE,
     URGENCY_DECAY_RATE,
 )
@@ -196,13 +196,16 @@ def get_enemy_intel_quality(bot: "PiG_Bot") -> dict:
     # No units in cache at all
     if not all_cached:
         if bot._enemy_army_ever_seen:
+            # We've seen the enemy before but cache is empty — intel is stale,
+            # not fresh. Returning 1.0 here would prevent urgency from building
+            # and block scout dispatch.
             return {
-                "has_intel": True,  # Enemy army destroyed or never cached
-                "avg_age": 0.0,
+                "has_intel": True,
+                "avg_age": float('inf'),
                 "visible_count": 0,
                 "memory_count": 0,
                 "expired_count": 0,
-                "freshness": 1.0,
+                "freshness": 0.0,
             }
         return {
             "has_intel": False,  # Never seen enemy army
@@ -282,17 +285,22 @@ def update_enemy_intel_tracking(bot: "PiG_Bot") -> None:
         bot._enemy_army_ever_seen = True
     
     # Update intel urgency (gradual build/decay to avoid oscillation)
-    # Only track urgency after we've seen enemy army at least once
-    if bot._enemy_army_ever_seen:
-        intel = get_enemy_intel_quality(bot)
-        freshness = intel["freshness"]
-        
-        # Stale threshold from constants.py
-        if freshness < STALE_INTEL_THRESHOLD:
-            # Intel is stale - build urgency
-            bot._intel_urgency = min(1.0, bot._intel_urgency + URGENCY_BUILD_RATE)
-        else:
-            # Intel is fresh - slowly decay urgency
-            bot._intel_urgency = max(0.0, bot._intel_urgency - URGENCY_DECAY_RATE)
-            # Reset worker scout flag so we can scout again next stale period
-            bot._worker_scout_sent_this_stale_period = False
+    # Always track urgency — if we've never seen the enemy army, that's the
+    # most urgent scenario (we need to find them). Previously gated on
+    # _enemy_army_ever_seen, which prevented urgency from ever building
+    # when the enemy army was never spotted (e.g., scout only saw workers).
+    intel = get_enemy_intel_quality(bot)
+    freshness = intel["freshness"]
+    
+    # Build urgency when intel is not fresh (below FRESH_INTEL_THRESHOLD).
+    # Previously used STALE_INTEL_THRESHOLD (0.2) which only triggered at
+    # "BLIND" level, causing urgency to decay during "STALE" (0.2–0.7)
+    # and preventing scout dispatch.
+    if freshness < FRESH_INTEL_THRESHOLD:
+        # Intel is stale or blind - build urgency
+        bot._intel_urgency = min(1.0, bot._intel_urgency + URGENCY_BUILD_RATE)
+    else:
+        # Intel is fresh - slowly decay urgency
+        bot._intel_urgency = max(0.0, bot._intel_urgency - URGENCY_DECAY_RATE)
+        # Reset worker scout flag so we can scout again next stale period
+        bot._worker_scout_sent_this_stale_period = False
