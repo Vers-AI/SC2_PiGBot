@@ -13,14 +13,14 @@ from sc2 import maps
 from sc2.bot_ai import BotAI
 from sc2.data import AIBuild, Difficulty, Race
 from sc2.main import run_game
-from sc2.player import Bot, Computer, AbstractPlayer
-from sc2.ids.unit_typeid import UnitTypeId
-from sc2.units import Units
+from sc2.player import Bot, Computer
 
 import yaml
 
 from bot import PiG_Bot
 from ladder import run_ladder_game
+from tests.widowmine_test_bot import WidowMineTestBot
+from tests.worker_rush_bot import WorkerRushBot
 
 # change if non default setup / linux
 # if having issues with this, modify `map_list` below manually
@@ -71,51 +71,41 @@ def main():
         print(result, " against opponent ", opponentid)
     else:
         # Local game
-        
+
+        # Choose opponent: --TestBot=WidowMine, --TestBot=WorkerRush, or default AI
+        test_bot_name = None
+        for arg in sys.argv:
+            if arg.startswith("--TestBot="):
+                test_bot_name = arg.split("=", 1)[1]
+
+        if test_bot_name == "WidowMine":
+            opponent = Bot(Race.Terran, WidowMineTestBot(), "WidowMineTest")
+            print("🧪 Test mode: Widow Mine opponent")
+        elif test_bot_name == "WorkerRush":
+            opponent = Bot(Race.Terran, WorkerRushBot(), "WorkerRushTest")
+            print("🧪 Test mode: Worker Rush opponent")
+        else:
+            opponent = Computer(Race.Terran, Difficulty.VeryHard, ai_build=AIBuild.Macro)
+
         map_list: List[str] = [
             "TorchesAIE_v4",
-            "PylonAIE_v4",
-            "PersephoneAIE_v4",
-            "IncorporealAIE_v4",
-            "LeyLinesAIE_v3",
-            "UltraloveAIE_v2",
-            "MagannathaAIE_v2"
+            #"PylonAIE_v4",
+            #"PersephoneAIE_v4",
+            #"IncorporealAIE_v4",
+            #"LeyLinesAIE_v3",
+            #"UltraloveAIE_v2",
+            #"MagannathaAIE_v2"
         ]
 
         print("Starting local game...")
         run_game(
             maps.get(random.choice(map_list)),
-      [
+            [
                 bot1,
-                Computer(Race.Terran, Difficulty.VeryHard, ai_build=AIBuild.Macro),
+                opponent,
             ],
             realtime=False,
         )
-
-
-class WorkerRushBot(BotAI):
-    """A simple bot that rushes with workers to the enemy start location."""
-    
-    async def on_step(self, iteration: int):
-        # Get all our workers
-        workers = self.units(UnitTypeId.PROBE).idle
-        
-        # If we don't have any idle workers, try to get any workers
-        if not workers:
-            workers = self.units(UnitTypeId.PROBE)
-            
-        # If we still don't have any workers, we're probably dead
-        if not workers:
-            return  # Nothing to do
-        
-        if self.enemy_start_locations:
-            enemy_start = self.enemy_start_locations[0]
-        else:
-            return  # No enemy location known yet
-            
-        # Send all workers to attack the enemy start location
-        for worker in workers:
-            worker.attack(enemy_start)
 
 
 # Start game
