@@ -92,6 +92,7 @@ from bot.utilities.debug import (
     render_base_defender_debug,
     render_target_scoring_debug,
     render_observer_debug,
+
     log_nova_error,
     render_formation_debug,
     render_concave_formation_debug,
@@ -751,6 +752,8 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                         squad_center=squad_position,
                         enemy_center=enemy_center,
                         ranged_units=ranged,
+                        all_close=all_close,
+                        bot=bot,
                     )
                 else:
                     ranged_maneuver = micro_ranged_unit(
@@ -1833,6 +1836,8 @@ def control_base_defenders(bot, defender_units: Units, threat_position: Point2) 
                     squad_center=squad_position,
                     enemy_center=enemy_center,
                     ranged_units=ranged,
+                    all_close=all_close,
+                    bot=bot,
                 )
             else:
                 ranged_maneuver = micro_ranged_unit(

@@ -10,9 +10,11 @@ from typing import List, Optional
 import numpy as np
 
 from sc2.unit import Unit
+from sc2.units import Units
 from sc2.position import Point2
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.ability_id import AbilityId
+from sc2.ids.buff_id import BuffId
 from sc2.data import Race
 
 from ares.behaviors.combat import CombatManeuver
@@ -20,7 +22,7 @@ from ares.behaviors.combat.individual import (
     KeepUnitSafe, StutterUnitBack, AMove, ShootTargetInRange, PathUnitToTarget,
     UseAOEAbility, UseAbility,
 )
-from cython_extensions import cy_closest_to, cy_in_attack_range, cy_distance_to, cy_find_units_center_mass, cy_towards
+from cython_extensions import cy_closest_to, cy_in_attack_range, cy_distance_to, cy_find_units_center_mass, cy_towards, cy_is_facing
 from bot.combat.target_scoring import select_target
 from bot.constants import (
     DISRUPTOR_SQUAD_FOLLOW_DISTANCE, DISRUPTOR_SQUAD_TARGET_DISTANCE,
@@ -30,7 +32,152 @@ from bot.constants import (
     FEEDBACK_TARGET_TYPES, HT_MERGE_ENERGY_THRESHOLD,
     HT_MERGE_COUNT_THRESHOLD, HT_MERGE_COUNT_THRESHOLD_PVP,
     STALKER_BLINK_HEALTH_THRESHOLD, STALKER_BLINK_RANGE,
+    STALKER_LOCKON_BREAK_DISTANCE, STALKER_WIDOWMINE_DODGE_RADIUS,
+    STALKER_FUNGAL_DODGE_RADIUS, FUNGAL_GROWTH_ENERGY_COST,
+    FUNGAL_GROWTH_IMPACT_RADIUS,
 )
+
+# Per-mine tracking: tag → True if we already dodged this mine's shot.
+# Prevents re-dodging the same mine shot across multiple frames.
+_mine_dodged: dict = {}
+
+# Per-frame cache: maps mine tag → targeted stalker tag.
+# Computed once per frame so each stalker doesn't re-scan all mines.
+_mine_target_cache: dict = {}  # {mine_tag: stalker_tag}
+_mine_target_frame: int = -1   # game_loop when cache was built
+
+# Per-infestor energy tracking: tag → (energy, frame) for detecting casts.
+# Used to detect Fungal Growth casts via energy drop.
+_infestor_energy_cache: dict = {}  # {infestor_tag: (energy, frame)}
+
+# Per-frame cache: maps infestor tag → list of stalker tags in impact zone.
+# Computed once per frame so each stalker doesn't re-scan all infestors.
+_fungal_target_cache: dict = {}  # {infestor_tag: [stalker_tag, ...]}
+_fungal_target_frame: int = -1   # game_loop when cache was built
+
+# Per-infestor tracking: tag → True if we already dodged this fungal cast.
+# Prevents re-dodging the same cast across multiple frames.
+_fungal_dodged: dict = {}
+
+
+def _build_mine_target_cache(bot) -> None:
+    """Build a cache of which stalker each fired mine is targeting.
+
+    Called once per frame. For each WIDOWMINEBURROWED with cba=True
+    and facing!=0, finds the closest stalker within the facing cone
+    (cy_is_facing with angle_error=0.5). This avoids each stalker
+    independently iterating all mines.
+
+    Also prunes stale entries from _mine_dodged to prevent unbounded
+    growth across long games.
+    """
+    global _mine_target_cache, _mine_target_frame
+    current_frame = bot.state.game_loop
+    if current_frame == _mine_target_frame:
+        return  # Already built this frame
+    _mine_target_frame = current_frame
+    _mine_target_cache = {}
+
+    # Prune _mine_dodged: remove entries for mines no longer on the field
+    alive_mine_tags = {u.tag for u in bot.enemy_units}
+    stale = [k for k in _mine_dodged if k not in alive_mine_tags]
+    for k in stale:
+        del _mine_dodged[k]
+
+    stalkers = bot.units(UnitTypeId.STALKER)
+    if not stalkers:
+        return
+
+    for mine in bot.enemy_units:
+        if mine.type_id != UnitTypeId.WIDOWMINEBURROWED:
+            continue
+        if not mine.can_be_attacked or mine.facing == 0.0:
+            continue
+        if _mine_dodged.get(mine.tag, False):
+            continue
+        # Find the stalker this mine is targeting (closest in facing cone)
+        best_stalker = None
+        best_dist = float('inf')
+        for s in stalkers:
+            if cy_distance_to(s.position, mine.position) > STALKER_WIDOWMINE_DODGE_RADIUS:
+                continue
+            if cy_is_facing(mine, s, angle_error=0.5):
+                d = cy_distance_to(s.position, mine.position)
+                if d < best_dist:
+                    best_dist = d
+                    best_stalker = s
+        if best_stalker is not None:
+            _mine_target_cache[mine.tag] = best_stalker.tag
+
+
+def _build_fungal_target_cache(bot) -> None:
+    """Build a cache of which stalkers are in the facing cone of casting infestors.
+
+    Called once per frame. For each INFESTOR with energy drop >= 75 (Fungal cast),
+    finds all stalkers within cast range (12 tiles) that are in the infestor's
+    facing cone (cy_is_facing with angle_error=0.5). This identifies which
+    stalkers the infestor targeted, since Fungal Growth is cast in the direction
+    the infestor faces.
+
+    Also prunes stale entries from _fungal_dodged to prevent unbounded growth.
+    """
+    global _fungal_target_cache, _fungal_target_frame, _infestor_energy_cache
+    current_frame = bot.state.game_loop
+    if current_frame == _fungal_target_frame:
+        return  # Already built this frame
+    _fungal_target_frame = current_frame
+    _fungal_target_cache = {}
+
+    # Prune _fungal_dodged: remove entries for infestors no longer on the field
+    alive_infestor_tags = {u.tag for u in bot.enemy_units}
+    stale = [k for k in _fungal_dodged if k not in alive_infestor_tags]
+    for k in stale:
+        del _fungal_dodged[k]
+
+    # Prune old energy cache entries (older than 5 seconds)
+    stale_energy = [tag for tag, (energy, frame) in _infestor_energy_cache.items()
+                    if current_frame - frame > 112]  # ~5 seconds at 22.4 fps
+    for tag in stale_energy:
+        del _infestor_energy_cache[tag]
+
+    stalkers = bot.units(UnitTypeId.STALKER)
+    if not stalkers:
+        return
+
+    for infestor in bot.enemy_units:
+        if infestor.type_id != UnitTypeId.INFESTOR:
+            continue
+
+        # Get previous energy to detect casts
+        prev_energy, prev_frame = _infestor_energy_cache.get(infestor.tag, (None, -1))
+        _infestor_energy_cache[infestor.tag] = (infestor.energy, current_frame)
+
+        if prev_energy is None:
+            continue  # First time seeing this infestor
+
+        # Check for energy drop indicating Fungal Growth cast (75 energy)
+        energy_drop = prev_energy - infestor.energy
+        if energy_drop < FUNGAL_GROWTH_ENERGY_COST - 5:  # Allow 5 energy tolerance
+            continue  # Not a fungal cast
+
+        if _fungal_dodged.get(infestor.tag, False):
+            continue  # Already dodged this cast
+
+        # Find all stalkers in the infestor's facing cone within cast range.
+        # Fungal Growth has 9 range + 2 radius, so stalkers up to ~11 tiles
+        # away in the facing direction could be hit. Use cy_is_facing to
+        # identify which stalkers the infestor targeted.
+        targeted_stalkers = []
+        for s in stalkers:
+            dist = cy_distance_to(s.position, infestor.position)
+            if dist > STALKER_FUNGAL_DODGE_RADIUS:
+                continue
+            # Check if infestor is facing this stalker (angle_error=0.5 ~28 degrees)
+            if cy_is_facing(infestor, s, angle_error=0.5):
+                targeted_stalkers.append(s.tag)
+
+        if targeted_stalkers:
+            _fungal_target_cache[infestor.tag] = targeted_stalkers
 
 
 def micro_stalker(
@@ -42,20 +189,23 @@ def micro_stalker(
     squad_center: Optional[Point2] = None,
     enemy_center: Optional[Point2] = None,
     ranged_units: Optional[List[Unit]] = None,
+    all_close: Optional[Units] = None,
+    bot=None,
 ) -> CombatManeuver:
-    """Stalker micro with blink-when-low behavior.
+    """Stalker micro with threat-dodge and blink-when-low behavior.
 
-    When a Stalker's combined health+shields drop below the threshold and
-    Blink is off cooldown, the Stalker blinks along the concave line
-    (perpendicular to the approach direction) toward the far edge of the
-    formation. This keeps the Stalker in the fight at a safer position
-    instead of stutter-stepping back (which is slower and still takes hits).
+    Priority order:
+    1. Dodge incoming threats (Cyclone lock-on, Widow Mine, Fungal Growth)
+       — blink away from the threat source/impact point.
+    2. Low-health blink along the concave line to a safer position.
+    3. Standard ranged micro (stutter-step via micro_ranged_unit).
 
-    If no concave geometry is available (no squad/enemy center), falls back
-    to blinking directly away from the closest enemy.
-
-    When blink isn't needed (healthy or on cooldown), delegates to
-    micro_ranged_unit for standard stutter-step behavior.
+    Threat detection methods:
+    - Cyclone Lock-on: check our stalker's buffs for BuffId.LOCKON
+    - Widow Mine: track can_be_attacked transitions on WIDOWMINEBURROWED
+      (False→True = just fired) + facing angle to identify targeted stalker
+    - Fungal Growth: detect via INFESTOR energy drop (75 energy) + facing
+      angle to identify stalkers in the 2-tile impact radius
 
     Args:
         stalker: The Stalker unit to control
@@ -66,36 +216,45 @@ def micro_stalker(
         squad_center: Center of the squad (for concave direction)
         enemy_center: Center of nearby enemies (for concave direction)
         ranged_units: Other ranged units in the squad (for concave edge calculation)
+        all_close: All nearby enemy units (for finding Cyclone position)
+        bot: Bot instance (for finding projectile units)
 
     Returns:
         CombatManeuver with appropriate behaviors added
     """
-    # Check if blink is available and stalker is low health
-    # shield_health_percentage = (health + shield) / (health_max + shield_max), includes build progress
-    health_ratio = stalker.shield_health_percentage
     blink_ready = AbilityId.EFFECT_BLINK_STALKER in stalker.abilities
 
+    # --- Priority 1: Threat-dodge blink ---
+    if blink_ready and all_close is not None and bot is not None:
+        dodge_target = _check_threat_dodge(stalker, all_close, bot)
+        if dodge_target is not None:
+            maneuver = CombatManeuver()
+            maneuver.add(UseAbility(
+                ability=AbilityId.EFFECT_BLINK_STALKER,
+                unit=stalker,
+                target=dodge_target,
+            ))
+            maneuver.add(KeepUnitSafe(stalker, avoid_grid))
+            return maneuver
+
+    # --- Priority 2: Low-health concave blink ---
+    health_ratio = stalker.shield_health_percentage
     if blink_ready and health_ratio < STALKER_BLINK_HEALTH_THRESHOLD and enemies:
-        # Compute blink direction: along the concave line toward the far edge
         blink_target = _compute_blink_target(
             stalker, enemies, squad_center, enemy_center, ranged_units
         )
 
         if blink_target is not None:
             maneuver = CombatManeuver()
-            # Blink is the priority action — UseAbility checks cooldown internally
-            # and returns True if executed, short-circuiting the rest of the maneuver.
-            # If blink fails (e.g. target unpathable), falls through to KeepUnitSafe.
             maneuver.add(UseAbility(
                 ability=AbilityId.EFFECT_BLINK_STALKER,
                 unit=stalker,
                 target=blink_target,
             ))
-            # Safety fallback if blink doesn't execute
             maneuver.add(KeepUnitSafe(stalker, avoid_grid))
             return maneuver
 
-    # No blink needed — fall through to standard ranged micro
+    # --- Priority 3: Standard ranged micro ---
     return micro_ranged_unit(
         unit=stalker,
         enemies=enemies,
@@ -103,6 +262,96 @@ def micro_stalker(
         avoid_grid=avoid_grid,
         aggressive=aggressive,
     )
+
+
+def _check_threat_dodge(
+    stalker: Unit,
+    all_close: Units,
+    bot,
+) -> Optional[Point2]:
+    """Check if the stalker should blink to dodge an incoming threat.
+
+    Detection methods (enemy orders/engaged_target_tag/weapon_cooldown
+    are NOT populated for enemies; WIDOWMINEWEAPON/FUNGALGROWTHMISSILE
+    projectile units are NOT visible to opponents):
+
+    1. Cyclone Lock-on: our stalker gets BuffId.LOCKON while locked.
+       Blink away from the Cyclone to break the 15-tile tether.
+    2. Widow Mine: track can_be_attacked transitions on WIDOWMINEBURROWED.
+       When a mine flips from can_be_attacked=False → True, it just fired.
+       The mine's .facing angle points at its target — blink stalkers
+       in that direction away from the mine.
+    3. Fungal Growth: detect via INFESTOR energy drop (75 energy).
+       When an infestor's energy drops by ~75, it just cast Fungal.
+       Blink stalkers in the impact zone (2 tile radius) away from
+       the infestor's position.
+
+    Args:
+        stalker: The Stalker that might need to dodge
+        all_close: All nearby enemy units (for finding Cyclone position)
+        bot: Bot instance (for finding enemy mines/infestors)
+
+    Returns:
+        Point2 blink target if a threat is detected, None otherwise
+    """
+    pos = stalker.position
+
+    # --- Cyclone Lock-on ---
+    # Our stalker gets the LOCKON buff when a Cyclone locks onto it.
+    # Blink away from the Cyclone to break the tether (must exceed 15 tiles).
+    if BuffId.LOCKON in stalker.buffs:
+        cyclones = [e for e in all_close if e.type_id == UnitTypeId.CYCLONE]
+        if cyclones:
+            closest_cyclone = cy_closest_to(pos, cyclones)
+            away = Point2(cy_towards(closest_cyclone.position, pos, STALKER_BLINK_RANGE))
+            return away
+
+    # --- Widow Mine (can_be_attacked + facing) ---
+    # A WIDOWMINEBURROWED with can_be_attacked=True and facing != 0.0
+    # has just fired — the facing angle points at the target.
+    # We pre-compute which stalker each mine targets (once per frame),
+    # then each stalker just checks "am I the target?"
+    _build_mine_target_cache(bot)
+    for mine_tag, stalker_tag in _mine_target_cache.items():
+        if stalker_tag != stalker.tag:
+            continue  # This mine isn't targeting us
+        # We're the target — blink away from the mine
+        _mine_dodged[mine_tag] = True
+        # Find the mine position for blink direction
+        mine = None
+        for e in bot.enemy_units:
+            if e.tag == mine_tag:
+                mine = e
+                break
+        if mine is None:
+            continue
+        dist = cy_distance_to(pos, mine.position)
+        away = Point2(cy_towards(mine.position, pos, STALKER_BLINK_RANGE))
+        return away
+
+    # --- Fungal Growth (energy drop detection) ---
+    # When an INFESTOR's energy drops by ~75, it just cast Fungal Growth.
+    # The fungal targets wherever the infestor is facing (9 range, 2 radius).
+    # We pre-compute which stalkers are in the facing cone (once per frame),
+    # then each stalker checks "am I in the impact zone?"
+    _build_fungal_target_cache(bot)
+    for infestor_tag, stalker_tags in _fungal_target_cache.items():
+        if stalker.tag not in stalker_tags:
+            continue  # This fungal isn't targeting us
+        # We're in the impact zone — blink away from the infestor
+        _fungal_dodged[infestor_tag] = True
+        # Find the infestor position for blink direction
+        infestor = None
+        for e in bot.enemy_units:
+            if e.tag == infestor_tag:
+                infestor = e
+                break
+        if infestor is None:
+            continue
+        away = Point2(cy_towards(infestor.position, pos, STALKER_BLINK_RANGE))
+        return away
+
+    return None
 
 
 def _compute_blink_target(

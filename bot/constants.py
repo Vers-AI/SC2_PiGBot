@@ -386,6 +386,26 @@ Low enough to be in real danger, high enough to still have time to blink."""
 STALKER_BLINK_RANGE = 8.0
 """Blink ability range in tiles (standard SC2 value)."""
 
+STALKER_LOCKON_BREAK_DISTANCE = 15.0
+"""Cyclone Lock-on max tether range. Blinking beyond this distance breaks the lock."""
+
+STALKER_WIDOWMINE_DODGE_RADIUS = 10.0
+"""Max distance from a WIDOWMINEBURROWED to consider dodge blink.
+Widow Mine Sentinel Missile range is ~5 tiles; 10 gives margin for
+detecting the mine's can_be_attacked transition and facing direction."""
+
+STALKER_FUNGAL_DODGE_RADIUS = 14.0
+"""Max distance from an INFESTOR to consider fungal dodge blink.
+Fungal Growth has 9 cast range + 2.25 radius = 11.25 max reach;
+plus stalkers on far side of impact zone = 13.5 tiles.
+14 gives margin for detection and blink reaction time."""
+
+FUNGAL_GROWTH_ENERGY_COST = 75
+"""Energy cost of Fungal Growth ability — used to detect casts via energy drop."""
+
+FUNGAL_GROWTH_IMPACT_RADIUS = 2.25
+"""Radius of Fungal Growth impact zone (2.25 tiles, per LotV balance patch)."""
+
 # ===== FORCE FIELD SPLIT =====
 FF_ENERGY_COST = 50
 """Energy cost per Force Field cast"""
