@@ -19,8 +19,9 @@ import yaml
 
 from bot import PiG_Bot
 from ladder import run_ladder_game
-from tests.widowmine_test_bot import WidowMineTestBot
-from tests.worker_rush_bot import WorkerRushBot
+from tests.terran_test_bot import TerranTestBot
+from tests.zerg_test_bot import ZergTestBot
+from tests.protoss_test_bot import ProtossTestBot
 
 # change if non default setup / linux
 # if having issues with this, modify `map_list` below manually
@@ -72,18 +73,22 @@ def main():
     else:
         # Local game
 
-        # Choose opponent: --TestBot=WidowMine, --TestBot=WorkerRush, or default AI
+        # Choose opponent: --TestBot=Terran, --TestBot=Zerg, --TestBot=Protoss,
+        #                    or default AI
         test_bot_name = None
         for arg in sys.argv:
             if arg.startswith("--TestBot="):
                 test_bot_name = arg.split("=", 1)[1]
 
-        if test_bot_name == "WidowMine":
-            opponent = Bot(Race.Terran, WidowMineTestBot(), "WidowMineTest")
-            print("🧪 Test mode: Widow Mine opponent")
-        elif test_bot_name == "WorkerRush":
-            opponent = Bot(Race.Terran, WorkerRushBot(), "WorkerRushTest")
-            print("🧪 Test mode: Worker Rush opponent")
+        if test_bot_name == "Terran":
+            opponent = Bot(Race.Terran, TerranTestBot(), "TerranTest")
+            print("🧪 Test mode: Terran opponent (Widow Mines)")
+        elif test_bot_name == "Zerg":
+            opponent = Bot(Race.Zerg, ZergTestBot(), "ZergTest")
+            print("🧪 Test mode: Zerg opponent (Fungal Growth)")
+        elif test_bot_name == "Protoss":
+            opponent = Bot(Race.Protoss, ProtossTestBot(), "ProtossTest")
+            print("🧪 Test mode: Protoss opponent (Worker Rush)")
         else:
             opponent = Computer(Race.Terran, Difficulty.VeryHard, ai_build=AIBuild.Macro)
 
