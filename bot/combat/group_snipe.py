@@ -10,7 +10,6 @@ Limitations: calculate_damage_vs_target doesn't model Guardian Shield on enemies
 """
 
 from math import ceil
-from pathlib import Path
 from typing import Optional, Union
 
 import numpy as np
@@ -56,17 +55,6 @@ SNIPE_SIM_THRESHOLD = {EngagementResult.TIE, EngagementResult.VICTORY_MARGINAL,
 # light threats but blocks marching through a full army.
 SNIPE_CORRIDOR_MAX_VALUE = 15.0
 SNIPE_CORRIDOR_SAMPLES = 4  # number of evenly-spaced sample points
-
-_LOG_DIR = Path(__file__).resolve().parents[2] / "logs"
-_LOG_FILE = _LOG_DIR / "snipe_log.txt"
-
-
-def _snipe_log(game_loop: int, msg: str) -> None:
-    """Append a timestamped line to the snipe debug log."""
-    _LOG_DIR.mkdir(exist_ok=True)
-    mins, secs = divmod(game_loop / 22.4, 60)
-    with open(_LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(f"[{int(mins):02d}:{secs:04.1f} F{game_loop}] {msg}\n")
 
 
 
@@ -143,6 +131,9 @@ def find_snipe_candidates(
     Filters:
     - Blink ready (EFFECT_BLINK_STALKER in abilities)
     - Within max_range of the target
+
+    Weapons are not checked here — stalkers use pure move during approach,
+    so any prior cooldowns will expire before they reach firing range.
 
     Sorts by: distance to target (closest first) to minimize travel time.
     Returns up to `needed` stalkers. Returns empty list if not enough qualify.
@@ -230,7 +221,6 @@ def find_best_snipe_target(
     stalker_sample: Unit,
     squad_stalkers: list[Unit],
     min_value: float = SNIPE_MIN_TARGET_VALUE,
-    game_loop: int = 0,
 ) -> Optional[tuple[Unit, int, list[Unit]]]:
     """Find the best target for a group blink snipe.
 
@@ -245,20 +235,13 @@ def find_best_snipe_target(
     Perf: O(e) value scan + O(1) damage calc + O(s) candidate selection + 1 combat sim.
     where e = enemies, s = squad stalkers. Typically e < 30, s < 15.
     """
-    verbose = (game_loop % 50) < 4  # log details ~every 2 seconds
     valued: list[tuple[float, Unit]] = []
     for enemy in enemies:
         val = effective_value(enemy)
         if val < min_value:
-            if verbose:
-                _snipe_log(game_loop, f"    REJECT {enemy.type_id.name} val={val:.1f} < min={min_value}")
             continue
         # Snipe-A only: target must be walk-in eligible
         if not is_snipe_a_eligible(stalker_sample, enemy):
-            if verbose:
-                our_r = cy_range_vs_target(stalker_sample, enemy)
-                their_r = cy_range_vs_target(enemy, stalker_sample)
-                _snipe_log(game_loop, f"    REJECT {enemy.type_id.name} val={val:.1f} outranged (our={our_r:.1f} their={their_r:.1f})")
             continue
         valued.append((val, enemy))
 
@@ -271,14 +254,12 @@ def find_best_snipe_target(
     for _val, target in valued:
         needed = stalkers_needed_to_kill(stalker_sample, target)
         if needed <= 0:
-            _snipe_log(game_loop, f"    REJECT {target.type_id.name} can't damage (needed=0)")
             continue
 
         candidates = find_snipe_candidates(
             squad_stalkers, target, needed,
         )
         if not candidates:
-            _snipe_log(game_loop, f"    REJECT {target.type_id.name} need={needed} but only {len(find_snipe_candidates(squad_stalkers, target, 999))} eligible stalkers")
             continue
 
         # Combat sim gate: can the snipe squad survive against nearby enemies?
@@ -288,8 +269,6 @@ def find_best_snipe_target(
             workers_do_no_damage=True,
         )
         if sim_result not in SNIPE_SIM_THRESHOLD:
-            if verbose:
-                _snipe_log(game_loop, f"    REJECT {target.type_id.name} sim={sim_result.name} (need TIE+)")
             continue
 
         # Approach corridor safety: don't walk through an army to reach target.
@@ -297,12 +276,8 @@ def find_best_snipe_target(
         # the target are expected to be hot and are OK.
         squad_center = cy_center([c.position for c in candidates])
         if not _is_corridor_safe(bot, squad_center, target.position, stalker_sample, target):
-            if verbose:
-                _snipe_log(game_loop, f"    REJECT {target.type_id.name} corridor unsafe")
             continue
 
-        if verbose:
-            _snipe_log(game_loop, f"    PASS {target.type_id.name} val={_val:.1f} sim={sim_result.name}")
         return target, needed, candidates
 
     return None
@@ -345,8 +320,6 @@ def try_commit_snipe(
     if not squad_stalkers:
         return False
 
-    _snipe_log(game_loop, f"EVAL squad={squad_id[:8]} stalkers={len(squad_stalkers)} enemies={len(enemies)}")
-
     stalker_sample = squad_stalkers[0]
 
     result = find_best_snipe_target(
@@ -354,15 +327,16 @@ def try_commit_snipe(
         enemies=enemies,
         stalker_sample=stalker_sample,
         squad_stalkers=squad_stalkers,
-        game_loop=game_loop,
     )
     if result is None:
-        _snipe_log(game_loop, f"  SKIP no viable target")
         return False
 
     target, needed, candidates = result
-    _snipe_log(game_loop, f"  COMMIT {target.type_id.name} hp={target.health+target.shield:.0f} needed={needed} candidates={len(candidates)}")
     candidate_tags = {s.tag for s in candidates}
+
+    # Raw kill count (without overkill buffer) — minimum stalkers to one-shot
+    dmg = damage_per_volley(stalker_sample, target)
+    raw_needed = ceil((target.health + target.shield) / dmg) if dmg > 0 else needed
 
     # Commit: register in skip-set with TTL
     expiry = game_loop + SNIPE_EXIT_FRAMES + 200  # generous TTL for full lifecycle
@@ -374,8 +348,8 @@ def try_commit_snipe(
         "target_tag": target.tag,
         "stalker_tags": candidate_tags,
         "retreat_point": squad_position,
-        "fired": False,
         "commit_frame": game_loop,
+        "min_to_kill": raw_needed,
     }
     bot._snipe_squad_cooldown[squad_id] = game_loop
 
@@ -385,13 +359,12 @@ def try_commit_snipe(
 def execute_snipe_a(bot, squad_id: str, grid: np.ndarray) -> None:
     """Execute Snipe-A (walk-in, blink-out) for an active snipe.
 
-    Coordinated single movement:
-    - PathGroupToTarget (pure move, no attacking) until ALL stalkers are in firing range
-    - AMoveGroup to attack the target (synchronized volley)
-    - GroupUseAbility blink back to retreat point immediately after
-    - Cleanup and release stalkers to normal micro
-
-    Trusts the damage math — no target-death check between fire and retreat.
+    Each frame reads unit state and decides:
+      not in range        → PathGroupToTarget (pure move, weapons recharge)
+      in range, shooting  → AMoveGroup (volley)
+      all weapons cooling → blink retreat (shots are out)
+      target dead/lost    → blink retreat (job done or abort)
+      stalkers all dead   → cleanup only (nobody to blink)
     """
     if squad_id not in bot._snipe_state:
         return
@@ -399,17 +372,18 @@ def execute_snipe_a(bot, squad_id: str, grid: np.ndarray) -> None:
     info = bot._snipe_state[squad_id]
     target_tag = info["target_tag"]
     stalker_tags: set[int] = info["stalker_tags"]
-
+    retreat = info["retreat_point"]
     game_loop = bot.state.game_loop
 
-    # Resolve live stalkers from tags
+    # Resolve live stalkers
     stalkers = [u for u in bot.units if u.tag in stalker_tags]
     if not stalkers:
-        _snipe_log(game_loop, f"ABORT squad={squad_id[:8]} no live stalkers")
         _cleanup_snipe(bot, squad_id)
         return
 
-    # Resolve target
+    tags = {s.tag for s in stalkers}
+
+    # Resolve target — if dead/lost, blink retreat immediately
     target: Optional[Unit] = None
     for u in bot.all_enemy_units:
         if u.tag == target_tag:
@@ -417,29 +391,30 @@ def execute_snipe_a(bot, squad_id: str, grid: np.ndarray) -> None:
             break
 
     if target is None or not target.is_visible:
-        _snipe_log(game_loop, f"ABORT squad={squad_id[:8]} target lost")
+        maneuver = CombatManeuver()
+        maneuver.add(GroupUseAbility(
+            ability=AbilityId.EFFECT_BLINK_STALKER,
+            group=stalkers,
+            group_tags=tags,
+            target=retreat,
+            sync_command=True,
+        ))
+        bot.register_behavior(maneuver)
         _cleanup_snipe(bot, squad_id)
         return
 
-    group = stalkers
-    tags = {s.tag for s in stalkers}
-    retreat = info["retreat_point"]
+    in_range = [s for s in stalkers if cy_in_attack_range(s, [target], bonus_distance=0.5)]
+    # "Enough" = at least the raw number needed to one-shot the target
+    enough_in_range = len(in_range) >= info["min_to_kill"]
 
-    # Check if ALL stalkers are in firing range
-    all_in_range = all(
-        cy_in_attack_range(s, [target], bonus_distance=0.5)
-        for s in stalkers
-    )
+    maneuver = CombatManeuver()
 
-    # Phase 1: Approach — pure move (no attacking) so stalkers stay together
-    if not all_in_range and not info["fired"]:
+    # --- Approach: pure move (no attacking) so weapons recharge en route ---
+    if not enough_in_range:
         stalker_center = Point2(cy_center(stalkers))
-        dists = [cy_distance_to(s.position, target.position) for s in stalkers]
-        _snipe_log(game_loop, f"APPROACH squad={squad_id[:8]} dists={[f'{d:.1f}' for d in dists]} target={target.type_id.name}@{target.position}")
-        maneuver = CombatManeuver()
         maneuver.add(PathGroupToTarget(
             start=stalker_center,
-            group=group,
+            group=stalkers,
             group_tags=tags,
             grid=grid,
             target=target.position,
@@ -448,29 +423,23 @@ def execute_snipe_a(bot, squad_id: str, grid: np.ndarray) -> None:
         bot.register_behavior(maneuver)
         return
 
-    # Phase 2: Fire — all in range, synchronized A-Move volley
-    if not info["fired"]:
-        _snipe_log(game_loop, f"FIRE squad={squad_id[:8]} {len(stalkers)}stk → {target.type_id.name} hp={target.health+target.shield:.0f}")
-        maneuver = CombatManeuver()
-        maneuver.add(AMoveGroup(group=group, group_tags=tags, target=target))
+    # All weapons on cooldown = all shots have left the barrel → blink
+    # Only check in-range stalkers; stragglers blink regardless
+    if all(not s.weapon_ready for s in in_range):
+        maneuver.add(GroupUseAbility(
+            ability=AbilityId.EFFECT_BLINK_STALKER,
+            group=stalkers,
+            group_tags=tags,
+            target=retreat,
+            sync_command=True,
+        ))
         bot.register_behavior(maneuver)
-        info["fired"] = True
+        _cleanup_snipe(bot, squad_id)
         return
 
-    # Phase 3: Retreat — group blink back immediately after firing
-    _snipe_log(game_loop, f"RETREAT squad={squad_id[:8]} blink→{retreat}")
-    maneuver = CombatManeuver()
-    maneuver.add(GroupUseAbility(
-        ability=AbilityId.EFFECT_BLINK_STALKER,
-        group=group,
-        group_tags=tags,
-        target=retreat,
-        sync_command=True,  # Wait for all stalkers to have blink ready
-    ))
+    # Weapons still ready / firing — keep attacking
+    maneuver.add(AMoveGroup(group=in_range, group_tags={s.tag for s in in_range}, target=target))
     bot.register_behavior(maneuver)
-
-    # Done — per-unit micro resumes next frame
-    _cleanup_snipe(bot, squad_id)
 
 
 def _cleanup_snipe(bot, squad_id: str) -> None:
@@ -478,7 +447,6 @@ def _cleanup_snipe(bot, squad_id: str) -> None:
     if squad_id not in bot._snipe_state:
         return
     state_info = bot._snipe_state[squad_id]
-    _snipe_log(bot.state.game_loop, f"CLEANUP squad={squad_id[:8]} fired={state_info.get('fired')}")
     for tag in state_info["stalker_tags"]:
         bot._snipe_committed.pop(tag, None)
     del bot._snipe_state[squad_id]
