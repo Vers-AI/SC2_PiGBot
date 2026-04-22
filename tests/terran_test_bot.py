@@ -18,9 +18,11 @@ class TerranTestBot(BotAI):
 
     Set class attributes to enable/disable specific test modules:
       - enable_widow_mines: Build and burrow Widow Mines (default True)
+      - enable_siege_tanks: Siege any spawned tanks (default True)
     """
 
-    enable_widow_mines: bool = True
+    enable_widow_mines: bool = False
+    enable_siege_tanks: bool = True
 
     async def on_step(self, iteration: int):
         if iteration == 0:
@@ -37,6 +39,8 @@ class TerranTestBot(BotAI):
         # --- Behavior modules ---
         if self.enable_widow_mines:
             await self._run_widow_mines(cc)
+        if self.enable_siege_tanks:
+            await self._run_siege_tanks()
 
     async def _run_economy(self, cc) -> None:
         """Minimal Terran economy: SCVs, supply, refinery."""
@@ -97,3 +101,8 @@ class TerranTestBot(BotAI):
                     mine(AbilityId.BURROWDOWN_WIDOWMINE)
                 else:
                     mine.move(enemy_start.towards(mine.position, 15))
+
+    async def _run_siege_tanks(self) -> None:
+        """Siege Tank module: siege up any unsieged tanks (spawned via debug)."""
+        for tank in self.units(UnitTypeId.SIEGETANK):
+            tank(AbilityId.SIEGEMODE_SIEGEMODE)
