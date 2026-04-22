@@ -432,6 +432,53 @@ FF_RAMP_BLOCK_MIN_VALUE = 6.0
 Roughly 2 stalkers or 6 zerglings worth — below this, 50 energy isn't worth spending.
 Uses the same UNIT_DATA army_value as ENGAGEMENT_ARMY_VALUE_THRESHOLD."""
 
+# ===== BLINK SNIPE / CHASE =====
+SNIPE_MIN_HEALTH = 0.75
+"""Minimum shield_health_percentage for a stalker to participate in a snipe.
+Don't send already-hurt stalkers into a dive."""
+
+SNIPE_MIN_TARGET_VALUE = 14.0
+"""Minimum effective value (army_value * TYPE_VALUE_SCALE + TACTICAL_BONUS) for a target
+to qualify for blink sniping. Roughly: High Templar ~29, Siege Tank sieged ~21, Medivac ~14."""
+
+SNIPE_ISOLATION_MIN = 12.0
+"""Minimum isolation score (effective_value - tactical_grid_excess * 0.3) for a snipe.
+High value + low tactical = isolated → snipe. High value + high tactical = skip."""
+
+SNIPE_OVERKILL_BUFFER_MOBILE = 1
+"""Extra stalkers beyond kill math for mobile targets (can dodge/move between shots)."""
+
+SNIPE_OVERKILL_BUFFER_STATIC = 0
+"""Extra stalkers beyond kill math for static/immobile targets (sieged, burrowed)."""
+
+SNIPE_EXIT_FRAMES = 30
+"""Frames to hold VOLLEY state before retreating (~1.3s at 22.4fps, one stalker weapon cycle)."""
+
+SNIPE_COMMIT_COOLDOWN = 180
+"""Minimum frames between snipe commits per squad (~8s). Prevents re-committing
+before previous snipe group's blink is off cooldown."""
+
+CHASE_MIN_VALUE = 10.0
+"""Minimum target value to initiate a chase. Lower bar than snipe since we're already winning."""
+
+CHASE_TACTICAL_MAX = 210
+"""Maximum tactical_grid value at target position for chase (200=neutral, >200=enemy-heavy).
+210 means target is only lightly supported."""
+
+CHASE_TIMEOUT_FRAMES = 180
+"""Maximum chase duration in frames (~8s). One full blink cooldown cycle."""
+
+TACTICAL_ESCAPE_MAX = 260.0
+"""Maximum tactical_grid value along escape corridor for Snipe-B (blink-in, walk-out).
+Above this, the escape lane is too enemy-dominated to walk through."""
+
+RETREAT_DETECTION_FRAMES = 5
+"""Consecutive frames of increasing enemy-squad distance to confirm retreat."""
+
+SNIPE_APPROACH_RANGE_BUFFER = 1.5
+"""Buffer added to stalker range when deciding Snipe-A (walk-in) eligibility.
+If target.ground_range <= stalker_range + buffer, stalker can walk into range safely."""
+
 # ===== RESOURCE-AWARE PRODUCTION =====
 RESOURCE_PRESSURE_MAX_NUDGE = 0.15
 """Maximum proportion shift per unit type from resource pressure (±15%). Larger than counter-table nudge since resource starvation is more urgent."""

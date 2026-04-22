@@ -83,6 +83,7 @@ from bot.combat.unit_micro import (
 from bot.combat.formation import execute_fan_out, clear_formation_state
 from bot.combat.target_scoring import select_target, update_upgrades
 from bot.combat.force_field_split import compute_ff_split, compute_ff_ramp_block
+from bot.combat.group_snipe import try_commit_snipe, execute_snipe_a
 from ares.dicts.unit_data import UNIT_DATA
 from bot.utilities.debug import (
     render_combat_state_overlay,
@@ -100,6 +101,7 @@ from bot.utilities.debug import (
     render_choke_policy_debug,
     render_choke_decision_debug,
     render_ff_split_debug,
+    render_snipe_debug,
 )
 from bot.utilities.intel import get_enemy_intel_quality
 from bot.managers.structure_manager import use_mass_recall
@@ -458,6 +460,33 @@ def get_formation_move_target(
     return target
 
 
+def _expire_snipe_committed(bot) -> None:
+    """Remove expired entries from snipe skip-set and stale _snipe_state entries.
+
+    Safety net: if a snipe state outlives its skip-set, clean it up to prevent
+    stale state machines from conflicting with per-unit micro.
+    """
+    from bot.combat.group_snipe import SNIPE_EXIT_FRAMES
+
+    game_loop = bot.state.game_loop
+    expired = [tag for tag, expiry in bot._snipe_committed.items() if game_loop >= expiry]
+    for tag in expired:
+        bot._snipe_committed.pop(tag, None)
+
+    # Also clean up _snipe_state entries that have been alive too long
+    max_lifetime = SNIPE_EXIT_FRAMES * 4
+    stale_squads = [
+        sid for sid, info in bot._snipe_state.items()
+        if (game_loop - info["commit_frame"]) > max_lifetime
+    ]
+    for sid in stale_squads:
+        # Remove stalkers from skip-set and delete state
+        info = bot._snipe_state[sid]
+        for tag in info["stalker_tags"]:
+            bot._snipe_committed.pop(tag, None)
+        del bot._snipe_state[sid]
+
+
 def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSquad]) -> Point2:
     """
     Controls the main army's movement and engagement logic using individual unit behaviors.
@@ -481,6 +510,9 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
         bot.total_health_shield_percentage = (
             sum(unit.shield_health_percentage for unit in main_army) / len(main_army)
         )
+
+    # Expire stale snipe skip-set entries (safety net for edge cases)
+    _expire_snipe_committed(bot)
 
     for squad in squads:
         squad_position: Point2 = squad.squad_position
@@ -672,6 +704,26 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                 ))
                 bot.register_behavior(choke_retreat)
 
+            # --- Blink snipe evaluation (before per-unit micro) ---
+            # Try to commit a snipe if conditions are met, then execute active snipes.
+            # Committed stalkers are added to bot._snipe_committed and skipped in per-unit loop.
+            squad_stalkers = [
+                u for u in units
+                if u.type_id == UnitTypeId.STALKER and u.tag not in bot._snipe_committed
+            ]
+            if can_engage and squad_stalkers and all_close:
+                try_commit_snipe(
+                    bot=bot,
+                    squad_id=squad.squad_id,
+                    enemies=all_close,
+                    squad_stalkers=squad_stalkers,
+                    squad_position=squad_position,
+                )
+            # Execute active snipe (runs every frame for committed squads)
+            execute_snipe_a(bot, squad.squad_id, grid)
+            # Debug: render snipe state
+            render_snipe_debug(bot, squad.squad_id)
+
             # Separate melee, ranged, spell casters, and high templars
             # HTs get their own control (like disruptors) - Feedback + safe follow
             # Other spellcasters: Sentries, etc.
@@ -722,6 +774,9 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     continue  # Group command active — skip individual micro
                 if r_unit in ranged_on_unsafe_ground:
                     continue  # Skip units retreating to safer ground
+                # Skip stalkers committed to a group snipe (they get group commands)
+                if r_unit.tag in bot._snipe_committed and bot.state.game_loop < bot._snipe_committed[r_unit.tag]:
+                    continue
                 
                 # Ramp safety: don't attack up ramp without vision (blind disadvantage)
                 blind_ramp = is_blind_ramp_attack(bot, r_unit)

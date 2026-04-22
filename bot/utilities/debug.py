@@ -1383,6 +1383,78 @@ def render_ff_split_debug(
         )
 
 
+def render_snipe_debug(bot, squad_id: str) -> None:
+    """Render debug overlay for active blink snipe.
+
+    Shows: phase (approach / fire), target unit, committed stalkers with colored markers,
+    and retreat lines. Only renders if bot.debug and snipe is active.
+
+    Args:
+        bot: Bot instance
+        squad_id: Squad ID to check for active snipe
+    """
+    if not bot.debug:
+        return
+
+    if squad_id not in bot._snipe_state:
+        return
+
+    info = bot._snipe_state[squad_id]
+    fired = info.get("fired", False)
+    target_tag = info["target_tag"]
+    stalker_tags = info["stalker_tags"]
+
+    # Find target unit for position
+    target = None
+    for u in bot.all_enemy_units:
+        if u.tag == target_tag:
+            target = u
+            break
+
+    phase = "FIRE" if fired else "APPROACH"
+    color = (255, 60, 60) if fired else (255, 255, 0)
+
+    # Draw phase label at target position
+    if target is not None:
+        pos = target.position
+        z = bot.get_terrain_z_height(pos)
+        bot.client.debug_text_world(
+            f"SNIPE:{phase} ({len(stalker_tags)}stk)",
+            Point3((pos.x, pos.y, z + 2.5)),
+            color=color,
+            size=14,
+        )
+        # Ring around target
+        bot.client.debug_sphere_out(
+            Point3((pos.x, pos.y, z + 0.5)),
+            1.0,
+            Point3(color),
+        )
+
+    # Mark committed stalkers with orange dots
+    for u in bot.units:
+        if u.tag in stalker_tags:
+            z = bot.get_terrain_z_height(u.position)
+            bot.client.debug_sphere_out(
+                Point3((u.position.x, u.position.y, z + 1.5)),
+                0.3,
+                Point3((255, 165, 0)),
+            )
+
+    # Draw retreat lines when fired (about to blink back)
+    if fired and "retreat_point" in info:
+        rp = info["retreat_point"]
+        rz = bot.get_terrain_z_height(rp)
+        for u in bot.units:
+            if u.tag in stalker_tags:
+                uz = bot.get_terrain_z_height(u.position)
+                bot.client.debug_line_out(
+                    Point3((u.position.x, u.position.y, uz + 0.5)),
+                    Point3((rp.x, rp.y, rz + 0.5)),
+                    color=Point3((0, 255, 100)),
+                )
+
+
 def log_nova_error(error: Exception) -> None:
     """
     Log NovaManager errors (always shown, not gated by debug flag).

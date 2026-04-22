@@ -53,6 +53,16 @@ from bot.combat.force_field_split import (
     FFSplitResult,
 )
 
+from bot.combat.group_snipe import (
+    effective_value,
+    damage_per_volley,
+    stalkers_needed_to_kill,
+    find_snipe_candidates,
+    find_best_snipe_target,
+    try_commit_snipe,
+    execute_snipe_a,
+)
+
 __all__ = [
     # Constants
     "ATTACKING_SQUAD_RADIUS",
@@ -91,4 +101,12 @@ __all__ = [
     # Force Field split
     "compute_ff_split",
     "FFSplitResult",
+    # Group snipe
+    "effective_value",
+    "damage_per_volley",
+    "stalkers_needed_to_kill",
+    "find_snipe_candidates",
+    "find_best_snipe_target",
+    "try_commit_snipe",
+    "execute_snipe_a",
 ]

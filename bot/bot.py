@@ -148,6 +148,11 @@ class PiG_Bot(AresBot):
         self._halu_scout_pending_role: str = ""  # Role for next hallucinated Phoenix (set before cast, consumed on spawn)
         self._blind_ramp_target: Optional[Point2] = None  # Set per-frame by combat when army blocked by blind ramp
 
+        # Blink snipe state (group snipe system)
+        self._snipe_committed: dict[int, int] = {}  # tag → expiry_frame (skip-set for per-unit micro)
+        self._snipe_state: dict[str, dict] = {}  # squad_id → {state, target_tag, stalker_tags, ...}
+        self._snipe_squad_cooldown: dict[str, int] = {}  # squad_id → last_commit_frame
+
         # Mass Recall state (Nexus emergency evacuation)
         self._mass_recall_last_cast_time: float = -999.0  # Game time of last mass recall cast (global 130s cooldown)
         self._mass_recall_pending: bool = False  # True when units should cluster before recall fires
@@ -521,6 +526,15 @@ class PiG_Bot(AresBot):
             self.mediator.clear_role(tag=unit_tag)
             self._worker_scout_sent_this_stale_period = False
             
+        # Clean up blink snipe state if a committed stalker dies
+        self._snipe_committed.pop(unit_tag, None)
+        # Also remove from any active snipe's stalker_tags set
+        for sid, info in list(self._snipe_state.items()):
+            if unit_tag in info["stalker_tags"]:
+                info["stalker_tags"].discard(unit_tag)
+                if not info["stalker_tags"]:
+                    del self._snipe_state[sid]
+
         # Clean up observer targets if needed
         if unit_tag in self.observer_targets:
             del self.observer_targets[unit_tag]
