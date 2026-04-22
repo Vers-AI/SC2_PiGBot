@@ -1,7 +1,8 @@
-"""Group blink-snipe helper functions and Snipe-A coordinator for Stalker micro.
+"""Group blink-snipe helper functions for Stalker micro (Snipe-A and Snipe-B).
 
-Purpose: Damage math, target evaluation, stalker selection, and coordinated walk-in/blink-out
-    sniping. Distance-based logic (approach → fire → blink retreat), no frame counting.
+Purpose: Damage math, target evaluation, stalker selection, and coordinated sniping.
+    Snipe-A: walk-in, blink-out (safe, for targets we outrange or match).
+    Snipe-B: blink-in, walk-out (riskier, for targets that outrange us).
 Key Decisions: Reuses existing TACTICAL_BONUS + army_value for target value; uses python-sc2's
     calculate_damage_vs_target for exact damage math; cy_* for all hot-path geometry.
     Skip-set pattern (bot._snipe_committed) prevents per-unit micro from overriding group commands.
@@ -30,8 +31,9 @@ from cython_extensions import (
     cy_in_attack_range,
     cy_range_vs_target,
     cy_sorted_by_distance_to,
+    cy_towards,
 )
-from cython_extensions.numpy_helper import cy_all_points_below_max_value
+from cython_extensions.numpy_helper import cy_all_points_below_max_value, cy_point_below_value
 
 from bot.combat.target_scoring import TACTICAL_BONUS, TYPE_VALUE_SCALE, DEFAULT_TYPE_VALUE
 from ares.consts import EngagementResult
@@ -43,6 +45,8 @@ from bot.constants import (
     SNIPE_EXIT_FRAMES,
     SNIPE_COMMIT_COOLDOWN,
     SNIPE_APPROACH_RANGE_BUFFER,
+    STALKER_BLINK_RANGE,
+    TACTICAL_ESCAPE_MAX,
 )
 
 # Combat sim results that allow snipe commitment
@@ -215,35 +219,118 @@ def _is_corridor_safe(
     )
 
 
+def is_snipe_b_eligible(stalker_sample: Unit, target: Unit) -> bool:
+    """Check if Snipe-B (blink-in, walk-out) is viable for this target.
+
+    Snipe-B is for targets that outrange us — we blink in, fire, and walk out.
+    True when target's weapon range > stalker range + buffer (inverse of Snipe-A).
+    Also requires the target is within blink range from a reasonable distance.
+
+    Perf: ~300ns (two cy_range_vs_target calls).
+    """
+    our_range = cy_range_vs_target(stalker_sample, target)
+    their_range = cy_range_vs_target(target, stalker_sample)
+    if their_range <= our_range + SNIPE_APPROACH_RANGE_BUFFER:
+        return False  # Snipe-A handles this
+    # Target must have meaningful range (no point blinking into melee-range stuff)
+    return their_range > 0
+
+
+def compute_blink_landing(
+    squad_center: Union[Point2, tuple[float, float]],
+    target_pos: Point2,
+    stalker_range: float,
+) -> Point2:
+    """Compute the blink landing spot for Snipe-B.
+
+    Landing spot is right on top of the target (~0.5 tiles away).
+    This negates splash damage (e.g., siege tanks can't splash without
+    hitting themselves) and removes any range advantage the target has.
+
+    Perf: ~200ns (one cy_towards call).
+    """
+    # Land practically touching the target — inside minimum range of
+    # splash units and too close for them to fire effectively
+    land_distance = 0.5
+    return Point2(cy_towards(target_pos, squad_center, land_distance))
+
+
+def _is_escape_corridor_safe(
+    bot,
+    landing: Point2,
+    retreat_pos: Point2,
+) -> bool:
+    """Check if the walk-out corridor is safe enough for Snipe-B retreat.
+
+    Samples points along the path from landing back toward the retreat point.
+    Uses the tactical ground grid — high values mean heavy enemy presence.
+    The first ~3 tiles near the landing are excluded (danger expected at target).
+
+    Perf: O(SNIPE_CORRIDOR_SAMPLES) grid lookups (~4 us total).
+    """
+    total_dist = cy_distance_to(landing, retreat_pos)
+    if total_dist <= 3.0:
+        return True  # Already very close, no corridor to check
+
+    grid: np.ndarray = bot.mediator.get_ground_grid
+    dx = retreat_pos.x - landing.x
+    dy = retreat_pos.y - landing.y
+    inv_dist = 1.0 / total_dist
+    dx *= inv_dist
+    dy *= inv_dist
+
+    # Skip the first ~3 tiles (near target, expected to be hot)
+    # Sample from ~3 tiles out to ~80% of the corridor
+    skip_dist = 3.0
+    corridor_length = total_dist - skip_dist
+
+    if corridor_length <= 2.0:
+        return True
+
+    sample_points: list[tuple[int, int]] = []
+    for i in range(1, SNIPE_CORRIDOR_SAMPLES + 1):
+        t = skip_dist + (corridor_length * i / (SNIPE_CORRIDOR_SAMPLES + 1))
+        px = int(landing.x + dx * t)
+        py = int(landing.y + dy * t)
+        sample_points.append((px, py))
+
+    return cy_all_points_below_max_value(
+        grid, TACTICAL_ESCAPE_MAX, sample_points
+    )
+
+
 def find_best_snipe_target(
     bot,
     enemies: Union[Units, list[Unit]],
     stalker_sample: Unit,
     squad_stalkers: list[Unit],
+    squad_position: Point2,
     min_value: float = SNIPE_MIN_TARGET_VALUE,
-) -> Optional[tuple[Unit, int, list[Unit]]]:
-    """Find the best target for a group blink snipe.
+) -> Optional[tuple[Unit, int, list[Unit], str]]:
+    """Find the best target for a group blink snipe (Snipe-A or Snipe-B).
 
-    Evaluates all enemies by effective_value, filters to Snipe-A eligible targets,
-    checks damage math + candidate count, then runs combat sim to verify the snipe
-    squad can survive against nearby enemies (TIE or better).
+    Evaluates all enemies by effective_value, determines which mode applies
+    (A = walk-in/blink-out, B = blink-in/walk-out), checks damage math +
+    candidate count, then runs combat sim and corridor safety.
 
-    Returns (target, needed_count, selected_stalkers) or None if no viable snipe.
+    Targets are sorted by value regardless of mode — highest value wins.
 
-    This is the main entry point called per-squad per-frame.
+    Returns (target, needed_count, selected_stalkers, mode) or None.
+    mode is "a" or "b".
 
     Perf: O(e) value scan + O(1) damage calc + O(s) candidate selection + 1 combat sim.
     where e = enemies, s = squad stalkers. Typically e < 30, s < 15.
     """
-    valued: list[tuple[float, Unit]] = []
+    # (value, enemy, mode) — mode determined by range comparison
+    valued: list[tuple[float, Unit, str]] = []
     for enemy in enemies:
         val = effective_value(enemy)
         if val < min_value:
             continue
-        # Snipe-A only: target must be walk-in eligible
-        if not is_snipe_a_eligible(stalker_sample, enemy):
-            continue
-        valued.append((val, enemy))
+        if is_snipe_a_eligible(stalker_sample, enemy):
+            valued.append((val, enemy, "a"))
+        elif is_snipe_b_eligible(stalker_sample, enemy):
+            valued.append((val, enemy, "b"))
 
     if not valued:
         return None
@@ -251,7 +338,7 @@ def find_best_snipe_target(
     # Sort by value descending, then by current HP ascending (easiest kill first)
     valued.sort(key=lambda x: (x[0], -(x[1].health + x[1].shield)), reverse=True)
 
-    for _val, target in valued:
+    for _val, target, mode in valued:
         needed = stalkers_needed_to_kill(stalker_sample, target)
         if needed <= 0:
             continue
@@ -271,19 +358,28 @@ def find_best_snipe_target(
         if sim_result not in SNIPE_SIM_THRESHOLD:
             continue
 
-        # Approach corridor safety: don't walk through an army to reach target.
-        # Only checks the path BEFORE firing range — the last ~7 tiles near
-        # the target are expected to be hot and are OK.
         squad_center = cy_center([c.position for c in candidates])
-        if not _is_corridor_safe(bot, squad_center, target.position, stalker_sample, target):
-            continue
 
-        return target, needed, candidates
+        if mode == "a":
+            # Walk-in corridor safety
+            if not _is_corridor_safe(bot, squad_center, target.position, stalker_sample, target):
+                continue
+        else:
+            # Snipe-B: don't blink blind — landing must be visible
+            stalker_range = cy_range_vs_target(stalker_sample, target)
+            landing = compute_blink_landing(squad_center, target.position, stalker_range)
+            if not bot.is_visible(landing):
+                continue
+            # Check escape corridor from landing back to squad
+            if not _is_escape_corridor_safe(bot, landing, squad_position):
+                continue
+
+        return target, needed, candidates, mode
 
     return None
 
 
-# ===== SNIPE-A STATE MACHINE =====
+# ===== SNIPE STATE MACHINE =====
 
 def try_commit_snipe(
     bot,
@@ -292,7 +388,7 @@ def try_commit_snipe(
     squad_stalkers: list[Unit],
     squad_position: Point2,
 ) -> bool:
-    """Evaluate and commit a Snipe-A (walk-in, blink-out) for this squad.
+    """Evaluate and commit a snipe (A or B) for this squad.
 
     Called once per squad per frame from control_main_army, BEFORE per-unit micro.
     If a snipe is committed, adds tags to bot._snipe_committed and creates
@@ -327,11 +423,12 @@ def try_commit_snipe(
         enemies=enemies,
         stalker_sample=stalker_sample,
         squad_stalkers=squad_stalkers,
+        squad_position=squad_position,
     )
     if result is None:
         return False
 
-    target, needed, candidates = result
+    target, needed, candidates, mode = result
     candidate_tags = {s.tag for s in candidates}
 
     # Raw kill count (without overkill buffer) — minimum stalkers to one-shot
@@ -343,6 +440,13 @@ def try_commit_snipe(
     for tag in candidate_tags:
         bot._snipe_committed[tag] = expiry
 
+    # For Snipe-B, precompute landing spot
+    landing = None
+    if mode == "b":
+        stalker_range = cy_range_vs_target(stalker_sample, target)
+        squad_center = cy_center([c.position for c in candidates])
+        landing = compute_blink_landing(squad_center, target.position, stalker_range)
+
     # Record snipe state for this squad
     bot._snipe_state[squad_id] = {
         "target_tag": target.tag,
@@ -350,6 +454,8 @@ def try_commit_snipe(
         "retreat_point": squad_position,
         "commit_frame": game_loop,
         "min_to_kill": raw_needed,
+        "mode": mode,
+        "landing": landing,  # only used by Snipe-B
     }
     bot._snipe_squad_cooldown[squad_id] = game_loop
 
@@ -432,6 +538,103 @@ def execute_snipe_a(bot, squad_id: str, grid: np.ndarray) -> None:
             group_tags=tags,
             target=retreat,
             sync_command=True,
+        ))
+        bot.register_behavior(maneuver)
+        _cleanup_snipe(bot, squad_id)
+        return
+
+    # Weapons still ready / firing — keep attacking
+    maneuver.add(AMoveGroup(group=in_range, group_tags={s.tag for s in in_range}, target=target))
+    bot.register_behavior(maneuver)
+
+
+def execute_snipe_b(bot, squad_id: str, grid: np.ndarray) -> None:
+    """Execute Snipe-B (blink-in, walk-out) for an active snipe.
+
+    Each frame reads unit state and decides:
+      not blinked in yet  → GroupUseAbility blink to landing spot
+      not in range yet    → AMoveGroup toward target (closing after blink)
+      in range, shooting  → AMoveGroup (volley)
+      all weapons cooling → PathGroupToTarget walk out (shots are out)
+      target dead/lost    → PathGroupToTarget walk out (no blink to escape)
+      stalkers all dead   → cleanup only
+    """
+    if squad_id not in bot._snipe_state:
+        return
+
+    info = bot._snipe_state[squad_id]
+    target_tag = info["target_tag"]
+    stalker_tags: set[int] = info["stalker_tags"]
+    retreat = info["retreat_point"]
+    landing = info["landing"]
+    game_loop = bot.state.game_loop
+
+    # Resolve live stalkers
+    stalkers = [u for u in bot.units if u.tag in stalker_tags]
+    if not stalkers:
+        _cleanup_snipe(bot, squad_id)
+        return
+
+    tags = {s.tag for s in stalkers}
+
+    # Resolve target
+    target: Optional[Unit] = None
+    for u in bot.all_enemy_units:
+        if u.tag == target_tag:
+            target = u
+            break
+
+    # --- Blink approach (first frame only) ---
+    if not info.get("_blinked_in"):
+        info["_blinked_in"] = True
+        maneuver = CombatManeuver()
+        maneuver.add(GroupUseAbility(
+            ability=AbilityId.EFFECT_BLINK_STALKER,
+            group=stalkers,
+            group_tags=tags,
+            target=landing,
+            sync_command=True,
+        ))
+        bot.register_behavior(maneuver)
+        return
+
+    # --- Target dead/lost → walk out immediately (no blink available) ---
+    if target is None or not target.is_visible:
+        maneuver = CombatManeuver()
+        stalker_center = Point2(cy_center(stalkers))
+        maneuver.add(PathGroupToTarget(
+            start=stalker_center,
+            group=stalkers,
+            group_tags=tags,
+            grid=grid,
+            target=retreat,
+            success_at_distance=3.0,
+        ))
+        bot.register_behavior(maneuver)
+        _cleanup_snipe(bot, squad_id)
+        return
+
+    in_range = [s for s in stalkers if cy_in_attack_range(s, [target], bonus_distance=0.5)]
+    enough_in_range = len(in_range) >= info["min_to_kill"]
+
+    maneuver = CombatManeuver()
+
+    # --- Not in range yet: close the gap after blink (shouldn't take long) ---
+    if not enough_in_range:
+        maneuver.add(AMoveGroup(group=stalkers, group_tags=tags, target=target))
+        bot.register_behavior(maneuver)
+        return
+
+    # --- All weapons on cooldown → walk out ---
+    if all(not s.weapon_ready for s in in_range):
+        stalker_center = Point2(cy_center(stalkers))
+        maneuver.add(PathGroupToTarget(
+            start=stalker_center,
+            group=stalkers,
+            group_tags=tags,
+            grid=grid,
+            target=retreat,
+            success_at_distance=3.0,
         ))
         bot.register_behavior(maneuver)
         _cleanup_snipe(bot, squad_id)

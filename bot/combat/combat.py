@@ -83,7 +83,7 @@ from bot.combat.unit_micro import (
 from bot.combat.formation import execute_fan_out, clear_formation_state
 from bot.combat.target_scoring import select_target, update_upgrades
 from bot.combat.force_field_split import compute_ff_split, compute_ff_ramp_block
-from bot.combat.group_snipe import try_commit_snipe, execute_snipe_a
+from bot.combat.group_snipe import try_commit_snipe, execute_snipe_a, execute_snipe_b
 from ares.dicts.unit_data import UNIT_DATA
 from bot.utilities.debug import (
     render_combat_state_overlay,
@@ -720,7 +720,11 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     squad_position=squad_position,
                 )
             # Execute active snipe (runs every frame for committed squads)
-            execute_snipe_a(bot, squad.squad_id, grid)
+            snipe_info = bot._snipe_state.get(squad.squad_id)
+            if snipe_info and snipe_info.get("mode") == "b":
+                execute_snipe_b(bot, squad.squad_id, grid)
+            else:
+                execute_snipe_a(bot, squad.squad_id, grid)
             # Debug: render snipe state
             render_snipe_debug(bot, squad.squad_id)
 

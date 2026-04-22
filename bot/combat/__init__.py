@@ -61,6 +61,7 @@ from bot.combat.group_snipe import (
     find_best_snipe_target,
     try_commit_snipe,
     execute_snipe_a,
+    execute_snipe_b,
 )
 
 __all__ = [
@@ -109,4 +110,5 @@ __all__ = [
     "find_best_snipe_target",
     "try_commit_snipe",
     "execute_snipe_a",
+    "execute_snipe_b",
 ]
