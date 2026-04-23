@@ -63,6 +63,9 @@ PRIORITY_TARGET_TYPES: set[UnitTypeId] = {
 MELEE_RANGE_THRESHOLD = 3.0
 """Range threshold to classify units as melee vs ranged"""
 
+MELEE_THREAT_BUFFER = 1.0
+"""Extra buffer beyond melee attack range for threat detection (tiles)"""
+
 STAY_AGGRESSIVE_DURATION = 20.0
 """Minimum time (seconds) to stay committed to an attack before reconsidering"""
 

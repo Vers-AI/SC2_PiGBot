@@ -35,6 +35,7 @@ from bot.constants import (
     STALKER_LOCKON_BREAK_DISTANCE, STALKER_WIDOWMINE_DODGE_RADIUS,
     STALKER_FUNGAL_DODGE_RADIUS, FUNGAL_GROWTH_ENERGY_COST,
     FUNGAL_GROWTH_IMPACT_RADIUS,
+    MELEE_RANGE_THRESHOLD, MELEE_THREAT_BUFFER, ACTIVE_ENGAGE_ANGLE,
 )
 
 # Per-mine tracking: tag → True if we already dodged this mine's shot.
@@ -453,6 +454,63 @@ def _compute_blink_target(
     return None
 
 
+def _has_melee_threat(unit: Unit, enemies: List[Unit]) -> bool:
+    """Check if any melee enemy is facing toward and close to this unit.
+
+    Uses cy_is_facing to confirm the melee unit is actively charging
+    rather than retreating past or moving elsewhere.
+    """
+    for enemy in enemies:
+        if enemy.ground_range > MELEE_RANGE_THRESHOLD:
+            continue
+        threat_range = enemy.ground_range + enemy.radius + unit.radius + MELEE_THREAT_BUFFER
+        if cy_distance_to(unit.position, enemy.position) <= threat_range:
+            if cy_is_facing(enemy, unit, angle_error=ACTIVE_ENGAGE_ANGLE):
+                return True
+    return False
+
+
+def _is_targeted_by_ranged(unit: Unit, enemies: List[Unit]) -> bool:
+    """Check if any ranged enemy is actively targeting this unit.
+
+    Uses engaged_target_tag from the SC2 protocol to detect which
+    unit an enemy has locked onto. Conservative: only returns True
+    when we have positive confirmation (tag match), not on 0/unknown.
+    """
+    unit_tag = unit.tag
+    for enemy in enemies:
+        if enemy.ground_range <= MELEE_RANGE_THRESHOLD:
+            continue
+        if enemy.engaged_target_tag == unit_tag:
+            return True
+    return False
+
+
+def micro_air_unit(
+    unit: Unit,
+    enemies: List[Unit],
+    avoid_grid: np.ndarray,
+    aggressive: bool = True,
+) -> CombatManeuver:
+    """Placeholder micro for air combat units. Shoot in range, AMove toward target.
+
+    Purpose: Basic air unit behavior until dedicated air micro is implemented.
+    Key Decisions: No stutter logic — air units don't kite like ground units.
+    Limitations: No specialized behavior for Void Rays, Phoenixes, Carriers, etc.
+    """
+    maneuver = CombatManeuver()
+    maneuver.add(KeepUnitSafe(unit, avoid_grid))
+
+    if in_attack_range := cy_in_attack_range(unit, enemies):
+        shoot_target = select_target(unit, in_attack_range)
+        maneuver.add(ShootTargetInRange(unit=unit, targets=[shoot_target]))
+    elif aggressive:
+        best_target = select_target(unit, enemies)
+        maneuver.add(AMove(unit=unit, target=best_target.position))
+
+    return maneuver
+
+
 def micro_ranged_unit(
     unit: Unit,
     enemies: List[Unit],
@@ -460,52 +518,71 @@ def micro_ranged_unit(
     avoid_grid: np.ndarray,
     aggressive: bool = True
 ) -> CombatManeuver:
-    """
-    Create micro behaviors for a ranged unit.
-    
-    Uses weighted scoring (select_target) for target selection.
-    Priority targeting is handled by score weights (UNIT_TYPE_VALUES),
-    not a separate priority list.
-    
+    """Create micro behaviors for a ground ranged unit.
+
+    Purpose: Smart stutter-step micro for ground ranged combat units (Stalkers, Immortals, etc.).
+    Key Decisions: Stutter-back only when threatened (melee facing us or ranged targeting us),
+        not blindly on every weapon cooldown. Air units use micro_air_unit instead.
+    Limitations: Not suitable for air units (different kiting dynamics).
+
+    Stutter logic:
+    - Melee threat nearby (facing us + in range): always stutter back on cooldown
+    - Ranged enemy targeting us (engaged_target_tag match): stutter back on cooldown
+    - Neither threat: AMove toward target on cooldown (keep advancing, shoot when ready)
+
     Args:
-        unit: The ranged unit to control
-        enemies: All enemy units in range (pre-filtered to attackable/reachable)
+        unit: The ground ranged unit to control
+        enemies: All enemy units (pre-filtered to attackable/reachable)
         grid: Ground grid for pathfinding
         avoid_grid: Avoidance grid for safety checks
         aggressive: Whether to fight aggressively or defensively
-        
+
     Returns:
         CombatManeuver with appropriate behaviors added
     """
     maneuver = CombatManeuver()
-    closest_enemy = cy_closest_to(unit.position, enemies)  # For kiting direction
-    
-    # Weighted scoring picks the best target considering distance, HP, type value, counter matchup
+    closest_enemy = cy_closest_to(unit.position, enemies)
     best_target = select_target(unit, enemies)
-    
+
     # ALWAYS add KeepUnitSafe FIRST with avoidance grid
     # This ensures units dodge dangerous abilities (disruptor shots, banelings, etc.)
     maneuver.add(KeepUnitSafe(unit, avoid_grid))
-    
-    # Defensive mode: prioritize kiting
+
+    # Determine if unit should stutter back (threatened) or hold/advance (safe)
+    is_threatened = _has_melee_threat(unit, enemies) or _is_targeted_by_ranged(unit, enemies)
+
     if not aggressive:
+        # Defensive mode: always kite back (retreat from fight).
+        # Smart stutter is for aggressive mode only — when retreating,
+        # the priority is leaving the battle, not conditional kiting.
         maneuver.add(StutterUnitBack(unit, target=closest_enemy, grid=grid))
+        # Still shoot if weapon ready and in range while retreating
+        if unit.weapon_ready and (in_attack_range := cy_in_attack_range(unit, enemies)):
+            shoot_target = select_target(unit, in_attack_range)
+            maneuver.add(ShootTargetInRange(unit=unit, targets=[shoot_target]))
         return maneuver
-    
-    # Aggressive mode: stutter-step micro with scored targeting
+
+    # Aggressive mode: smart stutter based on threat type
     if not unit.weapon_ready:
-        # Weapon on cooldown - kite back from closest threat
-        maneuver.add(StutterUnitBack(unit, target=closest_enemy, grid=grid))
+        if is_threatened:
+            # Confirmed threat: kite back from closest enemy
+            maneuver.add(StutterUnitBack(unit, target=closest_enemy, grid=grid))
+        else:
+            # No confirmed threat but enemies nearby — stutter back conservatively.
+            # engaged_target_tag is unreliable (often 0), and cy_is_facing can miss
+            # enemies mid-attack. Only AMove forward if truly no enemies in range.
+            if cy_in_attack_range(unit, enemies):
+                maneuver.add(StutterUnitBack(unit, target=closest_enemy, grid=grid))
+            else:
+                maneuver.add(AMove(unit=unit, target=best_target.position))
     else:
-        # Weapon ready - shoot best scored target if in range, else advance
+        # Weapon ready: shoot if in range, else advance
         if in_attack_range := cy_in_attack_range(unit, enemies):
-            # Re-score only in-range enemies for the actual shot
             shoot_target = select_target(unit, in_attack_range)
             maneuver.add(ShootTargetInRange(unit=unit, targets=[shoot_target]))
         else:
-            # Nothing in range - move towards best scored target
             maneuver.add(AMove(unit=unit, target=best_target.position))
-    
+
     return maneuver
 
 
@@ -513,6 +590,7 @@ def micro_melee_unit(
     unit: Unit,
     enemies: List[Unit],
     avoid_grid: np.ndarray,
+    grid: np.ndarray,
     fallback_position: Optional[Point2] = None,
     aggressive: bool = True
 ) -> CombatManeuver:
@@ -526,7 +604,8 @@ def micro_melee_unit(
         unit: The melee unit to control
         enemies: All enemy units in range (pre-filtered to attackable/reachable)
         avoid_grid: Avoidance grid for safety (dodge disruptor shots, etc.)
-        fallback_position: Position to move to if no targets
+        grid: Ground grid for pathing (used in defensive retreat)
+        fallback_position: Position to retreat to when defensive and no enemies in range
         aggressive: Whether to advance or hold position
         
     Returns:
@@ -547,8 +626,10 @@ def micro_melee_unit(
         best_target = select_target(unit, enemies)
         maneuver.add(AMove(unit=unit, target=best_target.position))
     elif fallback_position:
-        maneuver.add(AMove(unit=unit, target=fallback_position))
-    # Defensive mode with nothing in range: do nothing (KeepUnitSafe handles retreat)
+        # Defensive mode: path toward fallback (base/squad target) using ground grid
+        # to avoid running through enemy influence. AMove would charge back in.
+        maneuver.add(PathUnitToTarget(unit=unit, grid=grid, target=fallback_position, success_at_distance=3.0))
+    # Defensive mode with nothing in range and no fallback: KeepUnitSafe handles dodging
     
     return maneuver
 

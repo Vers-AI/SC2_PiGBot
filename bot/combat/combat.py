@@ -79,6 +79,7 @@ from bot.combat.unit_micro import (
     merge_high_templars,
     micro_sentry,
     micro_stalker,
+    micro_air_unit,
 )
 from bot.combat.formation import execute_fan_out, clear_formation_state
 from bot.combat.target_scoring import select_target, update_upgrades
@@ -104,6 +105,7 @@ from bot.utilities.debug import (
     render_ff_split_debug,
     render_snipe_debug,
     render_chase_debug,
+    render_micro_state_debug,
 )
 from bot.utilities.intel import get_enemy_intel_quality
 from bot.managers.structure_manager import use_mass_recall
@@ -506,6 +508,7 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
     pos_of_main_squad: Point2 = bot.mediator.get_position_of_main_squad(role=UnitRole.ATTACKING)
     grid: np.ndarray = bot.mediator.get_ground_grid
     avoid_grid: np.ndarray = bot.mediator.get_ground_avoidance_grid
+    air_avoid_grid: np.ndarray = bot.mediator.get_air_avoidance_grid
     choke_width_map: dict[Point2, float] = bot.narrow_choke_points
     
     if main_army:
@@ -753,13 +756,15 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
             execute_chase(bot, squad.squad_id, grid, all_close)
             render_chase_debug(bot, squad.squad_id)
 
-            # Separate melee, ranged, spell casters, and high templars
+            # Separate melee, ranged, air, spell casters, and high templars
+            # Ground combat units only (air units get their own micro)
             # HTs get their own control (like disruptors) - Feedback + safe follow
             # Other spellcasters: Sentries, etc.
-            # Excludes: air units with energy (Observers)
+            # Air excludes Observers/Warp Prisms (can't attack), includes Phoenixes/Oracles/Tempests
             high_templars = [u for u in units if u.type_id == UnitTypeId.HIGHTEMPLAR]
-            melee = [u for u in units if u.ground_range <= MELEE_RANGE_THRESHOLD and u.energy == 0 and u.can_attack]
-            ranged = [u for u in units if u.ground_range > MELEE_RANGE_THRESHOLD and u.energy == 0 and u.can_attack]
+            melee = [u for u in units if u.ground_range <= MELEE_RANGE_THRESHOLD and u.energy == 0 and u.can_attack and not u.is_flying]
+            ranged = [u for u in units if u.ground_range > MELEE_RANGE_THRESHOLD and u.energy == 0 and u.can_attack and not u.is_flying]
+            air = [u for u in units if u.is_flying and u.can_attack]
             spellcasters = [u for u in units if (u.energy > 0 and not u.is_flying and u.type_id != UnitTypeId.HIGHTEMPLAR) or u.type_id == UnitTypeId.DISRUPTOR]
             
             # --- Concave formation: fan out ranged units before engagement ---
@@ -851,6 +856,32 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     )
                 bot.register_behavior(ranged_maneuver)
 
+                # Debug: show micro state above ranged units
+                from bot.combat.unit_micro import _has_melee_threat, _is_targeted_by_ranged
+                is_threatened = _has_melee_threat(r_unit, unit_enemies) or _is_targeted_by_ranged(r_unit, unit_enemies)
+                render_micro_state_debug(
+                    bot, r_unit,
+                    is_threatened=is_threatened,
+                    aggressive=can_engage,
+                    weapon_ready=r_unit.weapon_ready,
+                    in_range=bool(cy_in_attack_range(r_unit, unit_enemies)),
+                )
+
+            # Air micro - separate handling for flying combat units
+            for a_unit in air:
+                if formation_active or choke_active:
+                    continue  # Group command active — skip individual micro
+                unit_enemies = get_attackable_enemies(a_unit, all_close, grid)
+                if not unit_enemies:
+                    continue
+                air_maneuver = micro_air_unit(
+                    unit=a_unit,
+                    enemies=unit_enemies,
+                    avoid_grid=air_avoid_grid,
+                    aggressive=can_engage,
+                )
+                bot.register_behavior(air_maneuver)
+
             # Melee micro - weighted scoring handles priority targeting
             for m_unit in melee:
                 if choke_active:
@@ -864,7 +895,8 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     unit=m_unit,
                     enemies=unit_enemies,
                     avoid_grid=avoid_grid,
-                    fallback_position=enemy_target.position if enemy_target else move_to,
+                    grid=grid,
+                    fallback_position=move_to if not can_engage else (enemy_target.position if enemy_target else move_to),
                     aggressive=can_engage
                 )
                 bot.register_behavior(melee_maneuver)
@@ -1896,8 +1928,10 @@ def control_base_defenders(bot, defender_units: Units, threat_position: Point2) 
             continue
         
         # Separate unit types for appropriate micro
-        melee = [u for u in units if u.ground_range <= MELEE_RANGE_THRESHOLD and u.energy == 0 and u.can_attack]
-        ranged = [u for u in units if u.ground_range > MELEE_RANGE_THRESHOLD and u.energy == 0 and u.can_attack]
+        # Ground combat units only (air units get their own micro)
+        melee = [u for u in units if u.ground_range <= MELEE_RANGE_THRESHOLD and u.energy == 0 and u.can_attack and not u.is_flying]
+        ranged = [u for u in units if u.ground_range > MELEE_RANGE_THRESHOLD and u.energy == 0 and u.can_attack and not u.is_flying]
+        air = [u for u in units if u.is_flying and u.can_attack]
         spellcasters = [u for u in units if u.energy > 0 or u.type_id == UnitTypeId.DISRUPTOR]
         
         # Compute enemy center for stalker blink targeting
@@ -1934,7 +1968,30 @@ def control_base_defenders(bot, defender_units: Units, threat_position: Point2) 
                     aggressive=True  # Always aggressive when defending base
                 )
             bot.register_behavior(ranged_maneuver)
-        
+
+            # Debug: show micro state above base defender ranged units
+            from bot.combat.unit_micro import _has_melee_threat, _is_targeted_by_ranged
+            is_threatened = _has_melee_threat(r_unit, unit_enemies) or _is_targeted_by_ranged(r_unit, unit_enemies)
+            render_micro_state_debug(
+                bot, r_unit,
+                is_threatened=is_threatened,
+                aggressive=True,  # Always aggressive when defending base
+                weapon_ready=r_unit.weapon_ready,
+                in_range=bool(cy_in_attack_range(r_unit, unit_enemies)),
+            )
+        # Air micro - separate handling for flying combat units
+        for a_unit in air:
+            unit_enemies = get_attackable_enemies(a_unit, all_close, grid)
+            if not unit_enemies:
+                continue
+            air_maneuver = micro_air_unit(
+                unit=a_unit,
+                enemies=unit_enemies,
+                avoid_grid=bot.mediator.get_air_avoidance_grid,
+                aggressive=True,  # Always aggressive when defending base
+            )
+            bot.register_behavior(air_maneuver)
+
         # Melee micro - weighted scoring handles priority targeting
         for m_unit in melee:
             # Filter enemies to only those this unit can attack and reach
@@ -1946,6 +2003,7 @@ def control_base_defenders(bot, defender_units: Units, threat_position: Point2) 
                 unit=m_unit,
                 enemies=unit_enemies,
                 avoid_grid=avoid_grid,
+                grid=grid,
                 fallback_position=threat_position,
                 aggressive=True  # Always aggressive when defending base
             )

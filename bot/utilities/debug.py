@@ -1523,3 +1523,52 @@ def log_nova_error(error: Exception) -> None:
         error: Exception that occurred
     """
     print(f"DEBUG ERROR updating NovaManager: {error}")
+
+
+def render_micro_state_debug(
+    bot,
+    unit,
+    is_threatened: bool,
+    aggressive: bool,
+    weapon_ready: bool,
+    in_range: bool,
+) -> None:
+    """Render per-unit micro state labels above ranged units.
+
+    Shows: threat status (M=melee, R=ranged, -=safe), aggressive mode (A/D),
+    weapon state (W=ready, C=cooldown), range status (IR=in range, OR=out of range).
+
+    Color coding:
+        Green: safe + aggressive + weapon ready
+        Yellow: threatened + aggressive (kiting)
+        Red: defensive mode
+        Orange: safe + aggressive + cooldown (advancing)
+    """
+    if not bot.debug:
+        return
+
+    # Build short state string
+    threat_str = "T" if is_threatened else "-"
+    aggr_str = "A" if aggressive else "D"
+    weap_str = "W" if weapon_ready else "C"
+    range_str = "IR" if in_range else "OR"
+    label = f"{threat_str}{aggr_str}{weap_str}{range_str}"
+
+    # Color based on state
+    if not aggressive:
+        color = (255, 80, 80)       # Red: defensive
+    elif is_threatened:
+        color = (255, 255, 0)        # Yellow: threatened (kiting)
+    elif not weapon_ready:
+        color = (255, 165, 0)        # Orange: safe + cooldown (advancing)
+    else:
+        color = (0, 255, 0)          # Green: safe + weapon ready
+
+    pos = unit.position
+    z = bot.get_terrain_z_height(pos)
+    bot.client.debug_text_world(
+        label,
+        Point3((pos.x, pos.y, z + 2.0)),
+        color=color,
+        size=10,
+    )
