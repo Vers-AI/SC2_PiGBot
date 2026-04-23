@@ -1455,6 +1455,66 @@ def render_snipe_debug(bot, squad_id: str) -> None:
                 )
 
 
+def render_chase_debug(bot, squad_id: str) -> None:
+    """Render debug overlay for active blink chase.
+
+    Shows: CHASE label at target, lines from stalkers to target,
+    cyan markers on committed chasers.
+    """
+    if not bot.debug:
+        return
+
+    if squad_id not in bot._chase_state:
+        return
+
+    info = bot._chase_state[squad_id]
+    target_tag = info["target_tag"]
+    stalker_tags = info["stalker_tags"]
+
+    # Find target unit
+    target = None
+    for u in bot.all_enemy_units:
+        if u.tag == target_tag:
+            target = u
+            break
+
+    color = (0, 200, 255)  # cyan
+
+    # Draw CHASE label at target
+    if target is not None:
+        pos = target.position
+        z = bot.get_terrain_z_height(pos)
+        bot.client.debug_text_world(
+            f"CHASE ({len(stalker_tags)}stk)",
+            Point3((pos.x, pos.y, z + 2.5)),
+            color=color,
+            size=14,
+        )
+        # Ring around target
+        bot.client.debug_sphere_out(
+            Point3((pos.x, pos.y, z + 0.5)),
+            1.0,
+            Point3(color),
+        )
+
+    # Mark committed stalkers with cyan dots + lines to target
+    for u in bot.units:
+        if u.tag in stalker_tags:
+            uz = bot.get_terrain_z_height(u.position)
+            bot.client.debug_sphere_out(
+                Point3((u.position.x, u.position.y, uz + 1.5)),
+                0.3,
+                Point3(color),
+            )
+            if target is not None:
+                tz = bot.get_terrain_z_height(target.position)
+                bot.client.debug_line_out(
+                    Point3((u.position.x, u.position.y, uz + 0.5)),
+                    Point3((target.position.x, target.position.y, tz + 0.5)),
+                    color=Point3(color),
+                )
+
+
 def log_nova_error(error: Exception) -> None:
     """
     Log NovaManager errors (always shown, not gated by debug flag).

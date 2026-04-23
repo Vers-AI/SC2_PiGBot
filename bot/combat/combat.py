@@ -84,6 +84,7 @@ from bot.combat.formation import execute_fan_out, clear_formation_state
 from bot.combat.target_scoring import select_target, update_upgrades
 from bot.combat.force_field_split import compute_ff_split, compute_ff_ramp_block
 from bot.combat.group_snipe import try_commit_snipe, execute_snipe_a, execute_snipe_b
+from bot.combat.group_chase import try_commit_chase, execute_chase
 from ares.dicts.unit_data import UNIT_DATA
 from bot.utilities.debug import (
     render_combat_state_overlay,
@@ -102,6 +103,7 @@ from bot.utilities.debug import (
     render_choke_decision_debug,
     render_ff_split_debug,
     render_snipe_debug,
+    render_chase_debug,
 )
 from bot.utilities.intel import get_enemy_intel_quality
 from bot.managers.structure_manager import use_mass_recall
@@ -709,7 +711,9 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
             # Committed stalkers are added to bot._snipe_committed and skipped in per-unit loop.
             squad_stalkers = [
                 u for u in units
-                if u.type_id == UnitTypeId.STALKER and u.tag not in bot._snipe_committed
+                if u.type_id == UnitTypeId.STALKER
+                and u.tag not in bot._snipe_committed
+                and u.tag not in bot._chase_committed
             ]
             if can_engage and squad_stalkers and all_close:
                 try_commit_snipe(
@@ -727,6 +731,27 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                 execute_snipe_a(bot, squad.squad_id, grid)
             # Debug: render snipe state
             render_snipe_debug(bot, squad.squad_id)
+
+            # --- Blink chase evaluation (after snipe, before per-unit micro) ---
+            # Chase retreating enemies if we're winning. Uses stalkers not committed to snipe/chase.
+            chase_stalkers = [
+                u for u in units
+                if u.type_id == UnitTypeId.STALKER
+                and u.tag not in bot._snipe_committed
+                and u.tag not in bot._chase_committed
+            ]
+            if can_engage and chase_stalkers and all_close:
+                try_commit_chase(
+                    bot=bot,
+                    squad_id=squad.squad_id,
+                    enemies=all_close,
+                    squad_stalkers=chase_stalkers,
+                    squad_position=squad_position,
+                    can_engage=can_engage,
+                )
+            # Execute active chase (runs every frame for committed squads)
+            execute_chase(bot, squad.squad_id, grid, all_close)
+            render_chase_debug(bot, squad.squad_id)
 
             # Separate melee, ranged, spell casters, and high templars
             # HTs get their own control (like disruptors) - Feedback + safe follow
@@ -778,8 +803,10 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     continue  # Group command active — skip individual micro
                 if r_unit in ranged_on_unsafe_ground:
                     continue  # Skip units retreating to safer ground
-                # Skip stalkers committed to a group snipe (they get group commands)
+                # Skip stalkers committed to a group snipe or chase (they get group commands)
                 if r_unit.tag in bot._snipe_committed and bot.state.game_loop < bot._snipe_committed[r_unit.tag]:
+                    continue
+                if r_unit.tag in bot._chase_committed and bot.state.game_loop < bot._chase_committed[r_unit.tag]:
                     continue
                 
                 # Ramp safety: don't attack up ramp without vision (blind disadvantage)

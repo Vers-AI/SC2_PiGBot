@@ -64,6 +64,11 @@ from bot.combat.group_snipe import (
     execute_snipe_b,
 )
 
+from bot.combat.group_chase import (
+    try_commit_chase,
+    execute_chase,
+)
+
 __all__ = [
     # Constants
     "ATTACKING_SQUAD_RADIUS",
@@ -111,4 +116,7 @@ __all__ = [
     "try_commit_snipe",
     "execute_snipe_a",
     "execute_snipe_b",
+    # Group chase
+    "try_commit_chase",
+    "execute_chase",
 ]
