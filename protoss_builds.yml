@@ -13,6 +13,7 @@ BuildChoices:
         BotName: TerranRace
         Cycle:
             - B2GM_PVT_Standard_Build
+            #- B2GM_PVT_Stalker
     Zerg:
         BotName: ZergRace
         Cycle:
@@ -65,6 +66,41 @@ Builds:
             - 48 EXPAND
             - 50 ROBOTICSBAY
             - 50 ROBOTICSFACILITY
+
+    B2GM_PVT_Stalker:
+        # Build constant worker production till this supply
+        ConstantWorkerProductionTill: 44
+        # After 0 supply turn AutoSupply on
+        AutoSupplyAtSupply: 33
+        OpeningBuildOrder:
+            - 14 PYLON @ ramp_wall
+            - 16 GATEWAY @ ramp_wall
+            - 16 CHRONO @ NEXUS
+            - 16 WORKER_SCOUT:
+                [enemy_spawn, enemy_nat, map_center, fourth, third, enemy_nat, nat, spawn]
+            - 16 GAS
+            - 20 EXPAND
+            - 20 CORE @ ramp_wall
+            - 21 PYLON
+            - 21 GAS
+            - 22 WARPGATERESEARCH
+            - 22 CHRONO @ CYBERNETICSCORE
+            - 23 STALKER
+            - 25 CHRONO @ GATEWAY
+            - 25 STALKER
+            - 28 GATEWAY
+            - 28 GATEWAY
+            - 30 STALKER
+            - 33 PYLON
+            - 34 CHRONO @ GATEWAY
+            - 35 GAS x2
+            - 36 TWILIGHTCOUNCIL
+            - 40 STALKER *3
+            - 46 BLINKTECH
+            - 46 CHRONO @ TWILIGHTCOUNCIL
+            - 48 FORGE
+            - 50 EXPAND
+
     B2GM_PVZ_Standard_Build:
         # Build constant worker production till this supply
         ConstantWorkerProductionTill: 44
@@ -123,8 +159,7 @@ Builds:
             - 22 STALKER x2
             - 22 CHRONO @ NEXUS 
             - 26 EXPAND
-            # - 26 SENTRY x2
-            - 26 STALKER #temporary till sentry behavior made
+            - 26 SENTRY x2
             - 32 ROBOTICSFACILITY
             - 33 SHIELDBATTERY @ nat_wall
             - 35 STALKER x2
