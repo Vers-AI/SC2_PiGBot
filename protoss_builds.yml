@@ -12,8 +12,9 @@ BuildChoices:
     Terran:
         BotName: TerranRace
         Cycle:
-            - B2GM_PVT_Standard_Build
             - B2GM_PVT_Stalker_Centric_2021
+            - B2GM_PVT_Standard_Build
+            
     Zerg:
         BotName: ZergRace
         Cycle:
