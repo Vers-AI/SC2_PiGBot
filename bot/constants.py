@@ -5,12 +5,16 @@ Key Decisions: Immutable constants to prevent accidental modification, organized
 Limitations: None - pure data definitions
 
 Organization:
+- Build profiles (army comp, upgrades, economy targets per build)
 - Combat constants (squad radii, detection ranges, timings)
 - Unit filtering sets (ignore lists, priority targets)
-- Future: Macro constants, scouting parameters, etc.
 """
 
+from dataclasses import dataclass
+from typing import Callable, Union
+
 from sc2.ids.unit_typeid import UnitTypeId
+from sc2.ids.upgrade_id import UpgradeId
 
 # ===== SQUAD CONFIGURATION =====
 ATTACKING_SQUAD_RADIUS = 9.0
@@ -494,3 +498,141 @@ FREEFLOW_INCOME_RATIO_THRESHOLD = 3.0
 
 FREEFLOW_BANK_THRESHOLD = 800
 """Resource bank threshold for triggering freeflow when spending is inefficient."""
+
+
+# ===== BUILD PROFILES =====
+# Each build gets a BuildProfile that bundles all build-specific macro settings.
+# Adding a new build = add a BuildProfile instance + one dict entry. No macro.py changes needed.
+
+@dataclass
+class BuildProfile:
+    """Bundles all build-specific macro settings for plug-and-play build selection.
+
+    Fields accept int for static values or Callable[[bot], int] for dynamic ones.
+    The _resolve() helper in macro.py handles both transparently.
+    """
+    army_composition_0: dict[UnitTypeId, dict]
+    army_composition_1: dict[UnitTypeId, dict]
+    archon_switch_threshold: float
+    upgrade_order: list[UpgradeId]
+    conditional_upgrades: list[tuple[UpgradeId, Callable]]
+    gas_target: Union[int, Callable]
+    worker_cap: Union[int, Callable]
+    observer_target: int
+    gateway_thresholds: list[tuple[int, int]]
+    forge_count: Union[int, Callable]
+
+
+# --- 2023 PvT Standard (Robo-Centric) ---
+# Wraps all current hardcoded values — zero regression.
+PVT_STANDARD_2023_PROFILE = BuildProfile(
+    army_composition_0={},  # Set at runtime from macro.py STANDARD_ARMY_0
+    army_composition_1={},  # Set at runtime from macro.py STANDARD_ARMY_1
+    archon_switch_threshold=0.15,
+    upgrade_order=[
+        UpgradeId.WARPGATERESEARCH,
+        UpgradeId.EXTENDEDTHERMALLANCE,
+        UpgradeId.CHARGE,
+        UpgradeId.BLINKTECH,
+        UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1,
+        UpgradeId.PROTOSSGROUNDARMORSLEVEL1,
+        UpgradeId.PROTOSSGROUNDWEAPONSLEVEL2,
+        UpgradeId.PROTOSSGROUNDARMORSLEVEL2,
+        UpgradeId.PROTOSSGROUNDWEAPONSLEVEL3,
+        UpgradeId.PROTOSSGROUNDARMORSLEVEL3,
+    ],
+    conditional_upgrades=[],  # Populated after import in macro.py (avoids circular deps)
+    gas_target=lambda bot: len(bot.townhalls) * 2,
+    worker_cap=lambda bot: 90 if bot.game_state >= 1 else 66,
+    observer_target=3,
+    gateway_thresholds=[(1, 3), (3, 5), (5, 8)],
+    forge_count=lambda bot: 2 if len(bot.townhalls.ready) >= 4 else (1 if len(bot.townhalls.ready) >= 2 else 0),
+)
+
+# --- 2021 PvT Stalker-Centric ---
+# Twilight + Blink opener, Stalker/Zealot army, 2 gas, aggressive gateway scaling.
+PVT_STALKER_2021_PROFILE = BuildProfile(
+    army_composition_0={},  # Set at runtime from macro.py PVT_STALKER_2021_ARMY
+    army_composition_1={},  # Same as _0 (no archon switch)
+    archon_switch_threshold=1.0,  # Never switches — no HT in core path
+    upgrade_order=[
+        UpgradeId.WARPGATERESEARCH,
+        UpgradeId.BLINKTECH,
+        UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1,
+        UpgradeId.PROTOSSGROUNDARMORSLEVEL1,
+        UpgradeId.PROTOSSGROUNDARMORSLEVEL2,
+        UpgradeId.PROTOSSGROUNDWEAPONSLEVEL2,
+        UpgradeId.CHARGE,
+    ],
+    conditional_upgrades=[],  # No reactive upgrades in core path
+    gas_target=2,
+    worker_cap=70,
+    observer_target=0,
+    gateway_thresholds=[(1, 3), (3, 8), (4, 12)],
+    forge_count=1,
+)
+
+# Lookup dict: build name (from protoss_builds.yml) → BuildProfile
+BUILD_PROFILES: dict[str, BuildProfile] = {
+    "B2GM_PVT_Standard_Build": PVT_STANDARD_2023_PROFILE,
+    "B2GM_PVT_Stalker_Centric_2021": PVT_STALKER_2021_PROFILE,
+}
+
+# --- PvZ Standard (Robo-Centric) ---
+# Same robo path as PvT 2023 — Robo → Observer → Immortal → RoboBay.
+# Uses STANDARD_ARMY_0/1 (same as PvT). Same economy targets.
+PVZ_STANDARD_PROFILE = BuildProfile(
+    army_composition_0={},  # Set at runtime from macro.py STANDARD_ARMY_0
+    army_composition_1={},  # Set at runtime from macro.py STANDARD_ARMY_1
+    archon_switch_threshold=0.15,
+    upgrade_order=[
+        UpgradeId.WARPGATERESEARCH,
+        UpgradeId.EXTENDEDTHERMALLANCE,
+        UpgradeId.CHARGE,
+        UpgradeId.BLINKTECH,
+        UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1,
+        UpgradeId.PROTOSSGROUNDARMORSLEVEL1,
+        UpgradeId.PROTOSSGROUNDWEAPONSLEVEL2,
+        UpgradeId.PROTOSSGROUNDARMORSLEVEL2,
+        UpgradeId.PROTOSSGROUNDWEAPONSLEVEL3,
+        UpgradeId.PROTOSSGROUNDARMORSLEVEL3,
+    ],
+    conditional_upgrades=[],  # Populated after import in macro.py
+    gas_target=lambda bot: len(bot.townhalls) * 2,
+    worker_cap=lambda bot: 90 if bot.game_state >= 1 else 66,
+    observer_target=3,
+    gateway_thresholds=[(1, 3), (3, 5), (5, 8)],
+    forge_count=lambda bot: 2 if len(bot.townhalls.ready) >= 4 else (1 if len(bot.townhalls.ready) >= 2 else 0),
+)
+
+# --- PvP 2-Gate Expand ---
+# Blink-first upgrade order, PVP_ARMY_0/1 compositions, higher archon threshold.
+PVP_2GATE_PROFILE = BuildProfile(
+    army_composition_0={},  # Set at runtime from macro.py PVP_ARMY_0
+    army_composition_1={},  # Set at runtime from macro.py PVP_ARMY_1
+    archon_switch_threshold=0.30,
+    upgrade_order=[
+        UpgradeId.WARPGATERESEARCH,
+        UpgradeId.BLINKTECH,
+        UpgradeId.EXTENDEDTHERMALLANCE,
+        UpgradeId.CHARGE,
+        UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1,
+        UpgradeId.PROTOSSGROUNDARMORSLEVEL1,
+        UpgradeId.PROTOSSGROUNDWEAPONSLEVEL2,
+        UpgradeId.PROTOSSGROUNDARMORSLEVEL2,
+        UpgradeId.PROTOSSGROUNDWEAPONSLEVEL3,
+        UpgradeId.PROTOSSGROUNDARMORSLEVEL3,
+    ],
+    conditional_upgrades=[],  # Populated after import in macro.py
+    gas_target=lambda bot: len(bot.townhalls) * 2,
+    worker_cap=lambda bot: 90 if bot.game_state >= 1 else 66,
+    observer_target=2,
+    gateway_thresholds=[(1, 3), (3, 5), (5, 8)],
+    forge_count=lambda bot: 2 if len(bot.townhalls.ready) >= 4 else (1 if len(bot.townhalls.ready) >= 2 else 0),
+)
+
+# Add all profiles to the lookup dict
+BUILD_PROFILES.update({
+    "B2GM_PVZ_Standard_Build": PVZ_STANDARD_PROFILE,
+    "B2GM_PVP_2-Gate_Expand": PVP_2GATE_PROFILE,
+})

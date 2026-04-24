@@ -1,6 +1,6 @@
 # Save the game opening and result to disk?
 # Setting to `True` allows Ares to select a new opening after defeat
-UseData: False
+UseData: True
 # How should we choose a build? Cycle is the only option for now
 BuildSelection: Cycle
 # For each Race / Opponent ID choose a build selection
@@ -13,7 +13,7 @@ BuildChoices:
         BotName: TerranRace
         Cycle:
             - B2GM_PVT_Standard_Build
-            #- B2GM_PVT_Stalker
+            - B2GM_PVT_Stalker_Centric_2021
     Zerg:
         BotName: ZergRace
         Cycle:
@@ -24,10 +24,10 @@ BuildChoices:
             - B2GM_PVZ_Standard_Build
 
     # Can also use specific opponent ids (overrides race options above)
-    a_bot_opponent_id_from_aiarena:
+    test_123:
         BotName: test
         Cycle:
-            - B2GM_PVT_Standard_Build
+            - B2GM_PVT_Stalker_Centric_2021
 
 Builds:
     B2GM_PVT_Standard_Build:
@@ -67,20 +67,20 @@ Builds:
             - 50 ROBOTICSBAY
             - 50 ROBOTICSFACILITY
 
-    B2GM_PVT_Stalker:
+    B2GM_PVT_Stalker_Centric_2021:
         # Build constant worker production till this supply
         ConstantWorkerProductionTill: 44
         # After 0 supply turn AutoSupply on
         AutoSupplyAtSupply: 33
         OpeningBuildOrder:
-            - 14 PYLON @ ramp_wall
-            - 16 GATEWAY @ ramp_wall
+            - 14 PYLON @ reaper_wall
+            - 16 GATEWAY @ reaper_wall
             - 16 CHRONO @ NEXUS
             - 16 WORKER_SCOUT:
                 [enemy_spawn, enemy_nat, map_center, fourth, third, enemy_nat, nat, spawn]
             - 16 GAS
             - 20 EXPAND
-            - 20 CORE @ ramp_wall
+            - 20 CORE @ reaper_wall
             - 21 PYLON
             - 21 GAS
             - 22 WARPGATERESEARCH
@@ -88,18 +88,17 @@ Builds:
             - 23 STALKER
             - 25 CHRONO @ GATEWAY
             - 25 STALKER
-            - 28 GATEWAY
-            - 28 GATEWAY
-            - 30 STALKER
+            - 30 TWILIGHTCOUNCIL
             - 33 PYLON
-            - 34 CHRONO @ GATEWAY
-            - 35 GAS x2
-            - 36 TWILIGHTCOUNCIL
-            - 40 STALKER *3
-            - 46 BLINKTECH
-            - 46 CHRONO @ TWILIGHTCOUNCIL
-            - 48 FORGE
-            - 50 EXPAND
+            - 36 BLINKTECH
+            - 36 CHRONO @ TWILIGHTCOUNCIL
+            - 38 GATEWAY
+            - 38 GATEWAY
+            - 40 FORGE
+            - 42 PROTOSSGROUNDWEAPONSLEVEL1
+            - 42 CHRONO @ FORGE
+            - 46 EXPAND
+            - 48 PYLON
 
     B2GM_PVZ_Standard_Build:
         # Build constant worker production till this supply
@@ -153,7 +152,8 @@ Builds:
             - 18 GAS
             - 19 GATEWAY @ ramp
             - 20 CORE @ ramp
-            - 20 ZEALOT
+            - 20 SENTRY
+            - 20 STALKER
             - 21 PYLON @ nat_wall
             - 22 WARPGATERESEARCH
             - 22 STALKER x2
@@ -162,8 +162,9 @@ Builds:
             - 26 SENTRY x2
             - 32 ROBOTICSFACILITY
             - 33 SHIELDBATTERY @ nat_wall
-            - 35 STALKER x2
+            - 34 SENTRY
             - 36 OBSERVER
+            - 38 STALKER x2
             - 42 ROBOTICSBAY
             - 44 TWILIGHTCOUNCIL 
             - 44 BLINKTECH

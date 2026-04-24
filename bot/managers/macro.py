@@ -3,7 +3,7 @@ from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.ability_id import AbilityId
 from sc2.ids.upgrade_id import UpgradeId
 
-from cython_extensions import cy_upgrade_pending, cy_unit_pending, cy_structure_pending_ares
+from cython_extensions import cy_unit_pending, cy_structure_pending_ares
 
 from sc2.position import Point2
 from sc2.units import Units
@@ -31,9 +31,29 @@ from bot.constants import (
     RESOURCE_PRESSURE_MAX_NUDGE,
     RESOURCE_IMBALANCE_RATIO,
     FREEFLOW_INCOME_RATIO_THRESHOLD,
+    BuildProfile,
+    BUILD_PROFILES,
+    PVT_STANDARD_2023_PROFILE,
+    PVT_STALKER_2021_PROFILE,
+    PVZ_STANDARD_PROFILE,
+    PVP_2GATE_PROFILE,
 )
 from ares.dicts.cost_dict import COST_DICT
 
+
+def _resolve(value, bot):
+    """Resolve a BuildProfile field that may be int or Callable[[bot], int]."""
+    return value(bot) if callable(value) else value
+
+
+def get_active_profile(bot) -> BuildProfile:
+    """Look up the BuildProfile for the currently active build order.
+
+    Falls back to PVT_STANDARD_2023_PROFILE for unknown build names,
+    ensuring no regression for builds not yet in the profile dict.
+    """
+    name = bot.build_order_runner.chosen_opening
+    return BUILD_PROFILES.get(name, PVT_STANDARD_2023_PROFILE)
 
 def get_freeflow_mode(bot) -> bool:
     """
@@ -171,6 +191,50 @@ CHEESE_DEFENSE_ARMY = {
     
     
 }
+
+# 2021 PvT Stalker-Centric army: pure Stalker + Zealot, no Robo units
+PVT_STALKER_2021_ARMY = {
+    UnitTypeId.STALKER: {"proportion": 0.65, "priority": 0},
+    UnitTypeId.ZEALOT: {"proportion": 0.35, "priority": 1},
+}
+
+# Wire army composition dicts into BuildProfile instances
+# (profiles are defined in constants.py with empty dicts to avoid circular imports)
+PVT_STANDARD_2023_PROFILE.army_composition_0 = STANDARD_ARMY_0
+PVT_STANDARD_2023_PROFILE.army_composition_1 = STANDARD_ARMY_1
+PVT_STALKER_2021_PROFILE.army_composition_0 = PVT_STALKER_2021_ARMY
+PVT_STALKER_2021_PROFILE.army_composition_1 = PVT_STALKER_2021_ARMY  # Same — no archon switch
+PVZ_STANDARD_PROFILE.army_composition_0 = STANDARD_ARMY_0  # Same robo-centric comp as PvT
+PVZ_STANDARD_PROFILE.army_composition_1 = STANDARD_ARMY_1
+PVP_2GATE_PROFILE.army_composition_0 = PVP_ARMY_0
+PVP_2GATE_PROFILE.army_composition_1 = PVP_ARMY_1
+
+# Wire conditional upgrades (reactive, game-state dependent)
+# These predicates reference helper functions defined below, so they're set up here.
+_thermal_lance_predicate = lambda bot: bool(
+    bot.structures(UnitTypeId.ROBOTICSBAY)
+    and (bot.units(UnitTypeId.COLOSSUS).amount or cy_unit_pending(bot, UnitTypeId.COLOSSUS))
+)
+_storm_predicate = lambda bot: bool(
+    bot.structures(UnitTypeId.TEMPLARARCHIVE)
+    and (
+        (bot.enemy_race in {Race.Terran, Race.Zerg} and _count_enemy_anti_air(bot) >= 2)
+        or (bot.enemy_race == Race.Protoss and _count_enemy_carriers(bot) >= 1)
+    )
+)
+PVT_STANDARD_2023_PROFILE.conditional_upgrades = [
+    (UpgradeId.EXTENDEDTHERMALLANCE, _thermal_lance_predicate),
+    (UpgradeId.PSISTORMTECH, _storm_predicate),
+]
+PVZ_STANDARD_PROFILE.conditional_upgrades = [
+    (UpgradeId.EXTENDEDTHERMALLANCE, _thermal_lance_predicate),
+    (UpgradeId.PSISTORMTECH, _storm_predicate),
+]
+PVP_2GATE_PROFILE.conditional_upgrades = [
+    (UpgradeId.EXTENDEDTHERMALLANCE, _thermal_lance_predicate),
+    (UpgradeId.PSISTORMTECH, _storm_predicate),
+]
+# 2021 profile: no conditional upgrades (no Robo, no TemplarArchive in core path)
 
 # ===== PRODUCTION NUDGING =====
 # Uses COUNTER_TABLE to shift army proportions toward unit types that are
@@ -624,39 +688,21 @@ def expansion_checker(bot, main_army) -> int:
 
 def get_desired_upgrades(bot) -> list[UpgradeId]:
     """
-    Returns dynamic upgrade list based on game state and structures.
+    Returns dynamic upgrade list based on the active BuildProfile and game state.
     UpgradeController will automatically build required tech structures.
     """
+    profile = get_active_profile(bot)
     upgrades: list[UpgradeId] = []
     
-    if not cy_upgrade_pending(bot, UpgradeId.WARPGATERESEARCH):
-        upgrades.append(UpgradeId.WARPGATERESEARCH)
+    # Static upgrade order from profile
+    for upgrade in profile.upgrade_order:
+        if not bot.pending_or_complete_upgrade(upgrade):
+            upgrades.append(upgrade)
     
-    if (bot.structures(UnitTypeId.ROBOTICSBAY) 
-        and (bot.units(UnitTypeId.COLOSSUS) or cy_unit_pending(bot, UnitTypeId.COLOSSUS))):
-        upgrades.append(UpgradeId.EXTENDEDTHERMALLANCE)
-    
-    if bot.structures(UnitTypeId.TWILIGHTCOUNCIL) or (len(bot.townhalls) >= 3 and bot.supply_used >= 54):
-        upgrades.append(UpgradeId.CHARGE)
-    
-    # Blink: PvP gets it as soon as Twilight Council is up (Stalker-heavy comp).
-    # PvT/PvZ get it after Thermal Lance is researched (Colossus range first).
-    has_thermal_lance = cy_upgrade_pending(bot, UpgradeId.EXTENDEDTHERMALLANCE)
-    if bot.enemy_race == Race.Protoss:
-        if bot.structures(UnitTypeId.TWILIGHTCOUNCIL):
-            upgrades.append(UpgradeId.BLINKTECH)
-    elif has_thermal_lance:
-        upgrades.append(UpgradeId.BLINKTECH)
-    
-    # Psi Storm: reactive trigger based on matchup.
-    # PvT/PvZ: 2+ Vikings or Corruptors = anti-Colossus commitment, pivot to HT splash.
-    # PvP: Only on Carriers — Phoenix/Tempest reduce Colossus via nudging but don't
-    #       justify Storm. Carriers are the PvP signal that Storm splash is needed.
-    if bot.structures(UnitTypeId.TEMPLARARCHIVE):
-        if bot.enemy_race in {Race.Terran, Race.Zerg} and _count_enemy_anti_air(bot) >= 2:
-            upgrades.append(UpgradeId.PSISTORMTECH)
-        elif bot.enemy_race == Race.Protoss and _count_enemy_carriers(bot) >= 1:
-            upgrades.append(UpgradeId.PSISTORMTECH)
+    # Conditional upgrades (reactive, game-state dependent)
+    for upgrade, predicate in profile.conditional_upgrades:
+        if not bot.pending_or_complete_upgrade(upgrade) and predicate(bot):
+            upgrades.append(upgrade)
     
     # Gate early upgrades if economy not ready (use centralized economy state)
     economy_state = get_economy_state(bot)
@@ -666,16 +712,6 @@ def get_desired_upgrades(bot) -> list[UpgradeId]:
     # Also gate if army is too small (need units before upgrades)
     if bot.supply_army < 15:
         return upgrades
-    
-    if bot.structures(UnitTypeId.FORGE) and ((len(bot.townhalls) >= 3 and bot.supply_used >= 56)):
-        upgrades.extend([
-            UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1,
-            UpgradeId.PROTOSSGROUNDARMORSLEVEL1,
-            UpgradeId.PROTOSSGROUNDWEAPONSLEVEL2,
-            UpgradeId.PROTOSSGROUNDARMORSLEVEL2,
-            UpgradeId.PROTOSSGROUNDWEAPONSLEVEL3,
-            UpgradeId.PROTOSSGROUNDARMORSLEVEL3,
-        ])
     
     return upgrades
 
@@ -724,51 +760,46 @@ def get_shield_battery_base_location(bot) -> Point2:
 
 def get_desired_gateway_count(bot) -> int:
     """
-    Returns desired gateway/warpgate count based on supply and bases.
-    Build order provides 3, scales to 5, then 8 for mid-game production.
+    Returns desired gateway/warpgate count based on the active BuildProfile.
+    Walks gateway_thresholds in reverse (highest nexus req first), returns first match.
     """
-    if bot.supply_used >= 62 and len(bot.townhalls) >= 5:
-        return 8
-    elif bot.supply_used >= 54 and len(bot.townhalls) >= 3:
-        return 5
-    else:
-        return 3
+    profile = get_active_profile(bot)
+    bases = len(bot.townhalls)
+    for nexus_req, gate_count in reversed(profile.gateway_thresholds):
+        if bases >= nexus_req:
+            return gate_count
+    return profile.gateway_thresholds[0][1]  # fallback to first entry
 
 
 def get_desired_forge_count(bot) -> int:
     """
-    Returns desired forge count based on bases and game state.
-    Build 1 after first expansion, second in late game.
+    Returns desired forge count based on the active BuildProfile.
+    Supports int (static) or callable (dynamic) values.
     """
-    if len(bot.townhalls.ready) >= 4:
-        return 2
-    elif len(bot.townhalls.ready) >= 2:
-        return 1
-    else:
-        return 0
+    profile = get_active_profile(bot)
+    return _resolve(profile.forge_count, bot)
 
 
 def select_army_composition(bot, main_army: Units) -> dict:
     """
-    Determines which army composition to use based on the current army state,
-    enemy race, and observed enemy composition.
+    Determines which army composition to use based on the active BuildProfile
+    and observed enemy composition.
     
     Steps:
-        1. Pick base composition from race + archon percentage (existing logic)
-        2. Apply counter-table-driven proportion nudges based on enemy comp
-        3. Cache the nudged result on bot._last_nudged_comp for debug display
+        1. Pick base composition from profile
+        2. Apply archon switch if applicable
+        3. Apply counter-table-driven proportion nudges based on enemy comp
+        4. Cache the nudged result on bot._last_nudged_comp for debug display
     
     Returns:
         dict: The selected (and possibly nudged) army composition dictionary
     """
-    if bot.enemy_race == Race.Protoss:
-        selected_composition = PVP_ARMY_0
-        army_1 = PVP_ARMY_1
-        threshold = 0.30
-    else:
-        selected_composition = STANDARD_ARMY_0
-        army_1 = STANDARD_ARMY_1
-        threshold = 0.15
+    profile = get_active_profile(bot)
+    
+    # All builds now have dedicated profiles — use profile compositions directly
+    selected_composition = profile.army_composition_0
+    army_1 = profile.army_composition_1
+    threshold = profile.archon_switch_threshold
     
     # Switch composition when Archon percentage exceeds threshold
     if main_army and len(main_army) > 0:
@@ -810,7 +841,14 @@ def select_army_composition(bot, main_army: Units) -> dict:
 
 
 def _train_observers(bot) -> None:
-    """Train observers to target count based on game state and matchup."""
+    """Train observers to target count from the active BuildProfile.
+    Returns early if profile says 0 observers (e.g., 2021 Stalker build has no Robo).
+    """
+    profile = get_active_profile(bot)
+    target_count = profile.observer_target
+    if target_count == 0:
+        return
+
     observer_count = (
         bot.units(UnitTypeId.OBSERVER).amount
         + bot.units(UnitTypeId.OBSERVERSIEGEMODE).amount
@@ -827,7 +865,6 @@ def _train_observers(bot) -> None:
     if bot.game_state == 0:
         return
 
-    target_count = 3 if bot.enemy_race in {Race.Zerg, Race.Terran} else 2
     if observer_count < target_count:
         for facility in robotics_facilities.idle:
             facility.train(UnitTypeId.OBSERVER)
@@ -847,7 +884,8 @@ async def handle_macro(
     spawn_location = bot.natural_expansion
     production_location = bot.start_location
     
-    worker_limit = 90 if bot.game_state >= 1 else 66
+    profile = get_active_profile(bot)
+    worker_limit = _resolve(profile.worker_cap, bot)
     optimal_worker_count = min(calculate_optimal_worker_count(bot), worker_limit)
     
     economy_state = get_economy_state(bot)
@@ -886,7 +924,7 @@ async def handle_macro(
                 facility.train(UnitTypeId.WARPPRISM)
                 break
     
-    # Scale gateways to desired count (3→5→8)
+    # Scale gateways to desired count (from active BuildProfile)
     # Allow in reduced+ economy so production capacity ramps before the moderate transition,
     # preventing a burst of 2+ gateways when economy recovers
     if economy_state in ("reduced", "moderate", "full"):
@@ -917,7 +955,8 @@ async def handle_macro(
         pass
     else:
         # Reduced+: gas buildings and spawn from existing production
-        macro_plan.add(GasBuildingController(to_count=len(bot.townhalls)*2, max_pending=2))
+        gas_target = _resolve(profile.gas_target, bot)
+        macro_plan.add(GasBuildingController(to_count=gas_target, max_pending=2))
         
         spawn_target = warp_prism[0].position if warp_prism else spawn_location
         spawn_freeflow = True if bot._used_cheese_response else freeflow
