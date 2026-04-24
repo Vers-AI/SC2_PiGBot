@@ -1,4 +1,3 @@
-import sys
 import random
 import sys
 from os import path
@@ -19,9 +18,6 @@ import yaml
 
 from bot import PiG_Bot
 from ladder import run_ladder_game
-from tests.terran_test_bot import TerranTestBot
-from tests.zerg_test_bot import ZergTestBot
-from tests.protoss_test_bot import ProtossTestBot
 
 # change if non default setup / linux
 # if having issues with this, modify `map_list` below manually
@@ -81,12 +77,15 @@ def main():
                 test_bot_name = arg.split("=", 1)[1]
 
         if test_bot_name == "Terran":
+            from tests.terran_test_bot import TerranTestBot
             opponent = Bot(Race.Terran, TerranTestBot(), "TerranTest")
             print("🧪 Test mode: Terran opponent (Widow Mines)")
         elif test_bot_name == "Zerg":
+            from tests.zerg_test_bot import ZergTestBot
             opponent = Bot(Race.Zerg, ZergTestBot(), "ZergTest")
             print("🧪 Test mode: Zerg opponent (Fungal Growth)")
         elif test_bot_name == "Protoss":
+            from tests.protoss_test_bot import ProtossTestBot
             opponent = Bot(Race.Protoss, ProtossTestBot(), "ProtossTest")
             print("🧪 Test mode: Protoss opponent (Worker Rush)")
         else:
