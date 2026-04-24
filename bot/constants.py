@@ -592,6 +592,9 @@ def _needs_robo_for_detection(bot) -> bool:
     for unit in bot.enemy_units:
         if unit.type_id in _CLOAKED_THREAT_UNITS:
             return True
+        # Any cloaked/burrowed unit we can see (even partially) means detection is needed
+        if unit.is_cloaked or unit.is_burrowed:
+            return True
 
     for structure in bot.enemy_structures:
         if structure.type_id in _CLOAKED_THREAT_STRUCTURES:
@@ -607,6 +610,8 @@ def _needs_observer(bot) -> bool:
     """
     for unit in bot.enemy_units:
         if unit.type_id in _CLOAKED_THREAT_UNITS:
+            return True
+        if unit.is_cloaked or unit.is_burrowed:
             return True
 
     for structure in bot.enemy_structures:
