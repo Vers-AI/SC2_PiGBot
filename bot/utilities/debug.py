@@ -1572,3 +1572,59 @@ def render_micro_state_debug(
         color=color,
         size=10,
     )
+
+
+def render_detection_cannon_debug(bot) -> None:
+    """Render detection cannon state overlay: per-base state labels and 2D summary.
+
+    Shows:
+    - 3D label above each nexus showing detection cannon state
+    - 2D summary line with state counts
+
+    Only renders when bot.debug is True and detection cannon system is active.
+    """
+    if not bot.debug:
+        return
+
+    state_dict = getattr(bot, '_detection_cannon_state', {})
+    triggered = getattr(bot, '_detection_cannon_triggered', False)
+    if not triggered or not state_dict:
+        return
+
+    from sc2.ids.unit_typeid import UnitTypeId
+
+    # State colors for 3D labels
+    state_colors = {
+        "needs_pylon": (255, 165, 0),    # Orange — waiting to build pylon
+        "pylon_pending": (255, 255, 0),  # Yellow — pylon under construction
+        "needs_cannon": (0, 200, 255),    # Cyan — waiting to build cannon
+        "cannon_pending": (100, 100, 255), # Blue — cannon under construction
+        "complete": (0, 255, 0),           # Green — done
+    }
+
+    # 3D labels at each nexus
+    for nexus in bot.townhalls.ready:
+        tag = nexus.tag
+        if tag not in state_dict:
+            continue
+        state = state_dict[tag]
+        color = state_colors.get(state, (255, 255, 255))
+        pos = nexus.position3d
+        label = f"DET:{state}"
+        bot.client.debug_text_world(
+            label,
+            Point3((pos.x, pos.y, pos.z + 3.0)),
+            color=color,
+            size=12,
+        )
+
+    # 2D summary line
+    counts = {}
+    for state in state_dict.values():
+        counts[state] = counts.get(state, 0) + 1
+    parts = [f"{state}:{count}" for state, count in sorted(counts.items())]
+    summary = "DetCannon " + " ".join(parts)
+
+    _y = min(getattr(bot, '_debug_y', 0.50), 0.95)
+    bot.client.debug_text_2d(summary, Point2((0.1, _y)), None, 12)
+    bot._debug_y = _y + 0.018

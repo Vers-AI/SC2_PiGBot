@@ -1,9 +1,11 @@
+import math
+
 from sc2.data import Race
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.ability_id import AbilityId
 from sc2.ids.upgrade_id import UpgradeId
 
-from cython_extensions import cy_unit_pending, cy_structure_pending_ares
+from cython_extensions import cy_unit_pending, cy_structure_pending_ares, cy_distance_to
 
 from sc2.position import Point2
 from sc2.units import Units
@@ -20,10 +22,11 @@ from ares.behaviors.macro import (
     BuildStructure,
 )
 from ares.consts import UnitRole, WORKER_TYPES
-from ares.consts import LOSS_MARGINAL_OR_BETTER
+from ares.consts import LOSS_MARGINAL_OR_BETTER, ID, TARGET
 
 from bot.utilities.performance_monitor import get_economy_state
 from bot.utilities.intel import get_enemy_intel_quality
+from bot.utilities.debug import render_detection_cannon_debug
 from bot.combat.target_scoring import COUNTER_TABLE
 from bot.constants import (
     MEMORY_EXPIRY_TIME,
@@ -39,6 +42,10 @@ from bot.constants import (
     PVP_2GATE_PROFILE,
     _resolve,
     get_active_profile,
+    _needs_detection_cannons,
+    DETECTION_CANNON_RANGE,
+    PYLON_POWER_RANGE,
+    MINERAL_CLEARANCE,
 )
 from ares.dicts.cost_dict import COST_DICT
 
@@ -860,6 +867,326 @@ def _train_observers(bot) -> None:
             return
 
 
+def build_detection_cannons(bot) -> None:
+    """Build Pylon + Photon Cannon behind mineral lines at each owned base when
+    detection is needed (cloaked/burrowed threats). Uses a per-base state machine
+    to track progress: needs_pylon → pylon_pending → needs_cannon → cannon_pending → complete.
+
+    Purpose: Provide detection coverage for builds without natural Robo/Observer access.
+    Key Decisions: Per-base state machine prevents duplicate orders; proximity-based worker
+        selection naturally picks probes from the target base. All bases build in parallel
+        — no sequential blocking between bases. Mineral clearance ensures structures don't
+        block probe pathing.
+    Limitations: Only builds 1 cannon per base; relies on Forge being built by macro.
+    """
+    # Gate: need a completed Forge to build cannons
+    if not bot.structures(UnitTypeId.FORGE).ready.exists:
+        return
+
+    # Prune state entries for dead Nexuses
+    alive_tags = {nexus.tag for nexus in bot.townhalls.ready}
+    bot._detection_cannon_state = {
+        tag: state for tag, state in bot._detection_cannon_state.items()
+        if tag in alive_tags
+    }
+
+    for nexus in bot.townhalls.ready:
+        # Get behind-mineral-line positions: [left, center, right]
+        behind_mineral = bot.mediator.get_behind_mineral_positions(
+            th_pos=nexus.position
+        )
+        if not behind_mineral or len(behind_mineral) < 2:
+            continue
+
+        # Get mineral fields at this base for clearance checks
+        mineral_fields = bot.mineral_field.closer_than(10, nexus.position)
+
+        mineral_center = behind_mineral[1]  # Center position behind mineral line
+        state = bot._detection_cannon_state.get(nexus.tag, "needs_pylon")
+
+        # --- State: needs_pylon ---
+        if state == "needs_pylon":
+            # Check if a Pylon already exists near this base's mineral line
+            existing_pylons = bot.structures(UnitTypeId.PYLON).closer_than(
+                DETECTION_CANNON_RANGE, mineral_center
+            )
+            if existing_pylons.exists:
+                bot._detection_cannon_state[nexus.tag] = "needs_cannon"
+                continue
+
+            # Check if a Pylon is already pending for THIS specific base
+            # (use building tracker to avoid blocking other bases)
+            pending_for_this_base = False
+            building_tracker = bot.mediator.get_building_tracker_dict
+            for worker_tag, info in building_tracker.items():
+                if info.get(ID) == UnitTypeId.PYLON:
+                    target = info.get(TARGET)
+                    if target and cy_distance_to(target.position, mineral_center) < DETECTION_CANNON_RANGE:
+                        pending_for_this_base = True
+                        break
+            if pending_for_this_base:
+                continue
+
+            # Find a valid placement position for the Pylon
+            placement = _find_pylon_placement(bot, behind_mineral, nexus.position, mineral_fields)
+
+            if placement is None:
+                continue
+
+            if not bot.can_afford(UnitTypeId.PYLON):
+                continue
+
+            worker = bot.mediator.select_worker(
+                target_position=placement, force_close=True
+            )
+            if worker is None:
+                continue
+
+            success = bot.mediator.build_with_specific_worker(
+                worker=worker,
+                structure_type=UnitTypeId.PYLON,
+                pos=placement,
+            )
+            if success:
+                bot._detection_cannon_state[nexus.tag] = "pylon_pending"
+
+        # --- State: pylon_pending ---
+        elif state == "pylon_pending":
+            existing_pylons = bot.structures(UnitTypeId.PYLON).closer_than(
+                DETECTION_CANNON_RANGE, mineral_center
+            )
+            if existing_pylons.exists:
+                ready_pylons = existing_pylons.ready
+                if ready_pylons.exists:
+                    bot._detection_cannon_state[nexus.tag] = "needs_cannon"
+                # Pylon exists but not ready yet — stay in pylon_pending
+            else:
+                # No pylon at all — build may have been cancelled, retry
+                bot._detection_cannon_state[nexus.tag] = "needs_pylon"
+
+        # --- State: needs_cannon ---
+        elif state == "needs_cannon":
+            # Check if a Cannon already exists near this base's mineral line
+            existing_cannons = bot.structures(UnitTypeId.PHOTONCANNON).closer_than(
+                DETECTION_CANNON_RANGE, mineral_center
+            )
+            if existing_cannons.exists:
+                bot._detection_cannon_state[nexus.tag] = "complete"
+                continue
+
+            # Find the pylon that will power the cannon
+            existing_pylons = bot.structures(UnitTypeId.PYLON).closer_than(
+                DETECTION_CANNON_RANGE, mineral_center
+            )
+            if not existing_pylons.ready.exists:
+                # Pylon not ready yet — go back to waiting
+                bot._detection_cannon_state[nexus.tag] = "pylon_pending"
+                continue
+
+            pylon = existing_pylons.ready.closest_to(mineral_center)
+
+            # Find a valid placement position for the Cannon
+            placement = _find_cannon_placement(bot, behind_mineral, pylon, mineral_center, nexus.position, mineral_fields)
+
+            if placement is None:
+                continue
+
+            if not bot.can_afford(UnitTypeId.PHOTONCANNON):
+                continue
+
+            worker = bot.mediator.select_worker(
+                target_position=placement, force_close=True
+            )
+            if worker is None:
+                continue
+
+            success = bot.mediator.build_with_specific_worker(
+                worker=worker,
+                structure_type=UnitTypeId.PHOTONCANNON,
+                pos=placement,
+            )
+            if success:
+                bot._detection_cannon_state[nexus.tag] = "cannon_pending"
+
+        # --- State: cannon_pending ---
+        elif state == "cannon_pending":
+            existing_cannons = bot.structures(UnitTypeId.PHOTONCANNON).closer_than(
+                DETECTION_CANNON_RANGE, mineral_center
+            )
+            if existing_cannons.exists:
+                bot._detection_cannon_state[nexus.tag] = "complete"
+            else:
+                # Check if a cannon is still pending for THIS specific base
+                pending_for_this_base = False
+                building_tracker = bot.mediator.get_building_tracker_dict
+                for worker_tag, info in building_tracker.items():
+                    if info.get(ID) == UnitTypeId.PHOTONCANNON:
+                        target = info.get(TARGET)
+                        if target and cy_distance_to(target.position, mineral_center) < DETECTION_CANNON_RANGE:
+                            pending_for_this_base = True
+                            break
+                if not pending_for_this_base:
+                    # No cannon and nothing pending for this base — cancelled, retry
+                    bot._detection_cannon_state[nexus.tag] = "needs_cannon"
+
+        # --- State: complete ---
+        elif state == "complete":
+            # Verify cannon still exists; if destroyed, rebuild
+            existing_cannons = bot.structures(UnitTypeId.PHOTONCANNON).closer_than(
+                DETECTION_CANNON_RANGE, mineral_center
+            )
+            if not existing_cannons.exists:
+                # Cannon destroyed — check if pylon still exists
+                existing_pylons = bot.structures(UnitTypeId.PYLON).closer_than(
+                    DETECTION_CANNON_RANGE, mineral_center
+                )
+                if existing_pylons.exists:
+                    bot._detection_cannon_state[nexus.tag] = "needs_cannon"
+                else:
+                    bot._detection_cannon_state[nexus.tag] = "needs_pylon"
+
+    # Render debug overlay (no-op when bot.debug is False)
+    render_detection_cannon_debug(bot)
+
+
+def _is_clear_of_minerals(pos: Point2, mineral_fields, clearance: float = MINERAL_CLEARANCE) -> bool:
+    """Check if a position has enough clearance from mineral fields for probe pathing.
+
+    Args:
+        pos: Position to check
+        mineral_fields: Units collection of mineral fields at this base
+        clearance: Minimum distance from mineral field center (default MINERAL_CLEARANCE)
+
+    Returns:
+        True if position is far enough from all mineral fields for probe pathing.
+    """
+    if not mineral_fields:
+        return True
+    for mf in mineral_fields:
+        if cy_distance_to(pos, mf.position) < clearance:
+            return False
+    return True
+
+
+def _find_pylon_placement(bot, behind_mineral: list, nexus_pos: Point2, mineral_fields) -> Point2 | None:
+    """Find a valid placement for a Pylon, trying behind-mineral-line first,
+    then falling back to positions near the nexus. Ensures clearance from
+    mineral fields for probe pathing.
+
+    Args:
+        bot: Bot instance for placement validation
+        behind_mineral: 3 positions behind mineral line [left, center, right]
+        nexus_pos: Nexus position for fallback search
+        mineral_fields: Mineral fields at this base (for clearance checks)
+
+    Returns:
+        Valid placement Point2, or None if no position found
+    """
+    # Priority 1: Behind mineral line positions (with mineral clearance)
+    for pos in behind_mineral:
+        if bot.mediator.can_place_structure(
+            position=pos, structure_type=UnitTypeId.PYLON
+        ) and _is_clear_of_minerals(pos, mineral_fields):
+            return pos
+
+    # Priority 2: Between nexus and mineral center (offset toward minerals)
+    mineral_center = behind_mineral[1]
+    for offset in (3.0, 4.0, 5.0):
+        pos = Point2(nexus_pos.towards(mineral_center, offset))
+        if bot.mediator.can_place_structure(
+            position=pos, structure_type=UnitTypeId.PYLON
+        ) and _is_clear_of_minerals(pos, mineral_fields):
+            return pos
+
+    # Priority 3: Around the nexus at increasing radii
+    for radius in (4.0, 5.0, 6.0):
+        for angle_offset in range(0, 360, 45):
+            angle = math.radians(angle_offset)
+            pos = Point2((
+                nexus_pos.x + radius * math.cos(angle),
+                nexus_pos.y + radius * math.sin(angle),
+            ))
+            if bot.mediator.can_place_structure(
+                position=pos, structure_type=UnitTypeId.PYLON
+            ) and _is_clear_of_minerals(pos, mineral_fields):
+                return pos
+
+    return None
+
+
+def _find_cannon_placement(
+    bot, behind_mineral: list, pylon, mineral_center: Point2, nexus_pos: Point2, mineral_fields
+) -> Point2 | None:
+    """Find a valid placement for a Photon Cannon within pylon power range.
+    Ensures clearance from mineral fields for probe pathing.
+
+    Tries behind-mineral positions first, then positions near the pylon,
+    then fallback positions around the nexus.
+
+    Args:
+        bot: Bot instance for placement validation
+        behind_mineral: 3 positions behind mineral line [left, center, right]
+        pylon: The powered Pylon that will supply the cannon
+        mineral_center: Center position behind mineral line
+        nexus_pos: Nexus position for fallback search
+        mineral_fields: Mineral fields at this base (for clearance checks)
+
+    Returns:
+        Valid placement Point2, or None if no position found
+    """
+    # Priority 1: Behind mineral line within pylon power range (with mineral clearance)
+    for pos in behind_mineral:
+        dist_to_pylon = cy_distance_to(pos, pylon.position)
+        if dist_to_pylon <= PYLON_POWER_RANGE:
+            if bot.mediator.can_place_structure(
+                position=pos, structure_type=UnitTypeId.PHOTONCANNON
+            ) and _is_clear_of_minerals(pos, mineral_fields):
+                return pos
+
+    # Priority 2: Between mineral center and pylon
+    for offset in (1.0, 2.0, 3.0):
+        pos = Point2(mineral_center.towards(pylon.position, offset))
+        dist_to_pylon = cy_distance_to(pos, pylon.position)
+        if dist_to_pylon <= PYLON_POWER_RANGE:
+            if bot.mediator.can_place_structure(
+                position=pos, structure_type=UnitTypeId.PHOTONCANNON
+            ) and _is_clear_of_minerals(pos, mineral_fields):
+                return pos
+
+    # Priority 3: Around the pylon at increasing radii (within power range)
+    for radius in (2.0, 3.0, 4.0, 5.0):
+        for angle_offset in range(0, 360, 45):
+            angle = math.radians(angle_offset)
+            pos = Point2((
+                pylon.position.x + radius * math.cos(angle),
+                pylon.position.y + radius * math.sin(angle),
+            ))
+            dist_to_pylon = cy_distance_to(pos, pylon.position)
+            if dist_to_pylon <= PYLON_POWER_RANGE:
+                if bot.mediator.can_place_structure(
+                    position=pos, structure_type=UnitTypeId.PHOTONCANNON
+                ) and _is_clear_of_minerals(pos, mineral_fields):
+                    return pos
+
+    # Priority 4: Around the nexus (cannon may be far from minerals but still useful)
+    for radius in (4.0, 5.0, 6.0):
+        for angle_offset in range(0, 360, 45):
+            angle = math.radians(angle_offset)
+            pos = Point2((
+                nexus_pos.x + radius * math.cos(angle),
+                nexus_pos.y + radius * math.sin(angle),
+            ))
+            # Check if within pylon power range
+            dist_to_pylon = cy_distance_to(pos, pylon.position)
+            if dist_to_pylon <= PYLON_POWER_RANGE:
+                if bot.mediator.can_place_structure(
+                    position=pos, structure_type=UnitTypeId.PHOTONCANNON
+                ) and _is_clear_of_minerals(pos, mineral_fields):
+                    return pos
+
+    return None
+
+
 async def handle_macro(
     bot,
     main_army: Units,
@@ -938,6 +1265,16 @@ async def handle_macro(
     for structure_type, predicate in profile.conditional_structures:
         if predicate(bot) and bot.can_afford(structure_type):
             bot.register_behavior(BuildStructure(production_location, structure_type))
+    
+    # Detection cannons behind mineral lines (plug-and-play: only active if profile enables it)
+    # Sticky trigger: once a cloaked threat is seen, the system stays active for ALL bases
+    # (including new expansions) until every base has a completed cannon. This prevents
+    # the harass unit from simply flying to an unprotected base.
+    detection_cannon_flag = _resolve(profile.detection_cannons, bot)
+    if detection_cannon_flag and _needs_detection_cannons(bot):
+        bot._detection_cannon_triggered = True
+    if detection_cannon_flag and bot._detection_cannon_triggered:
+        build_detection_cannons(bot)
     
     macro_plan: MacroPlan = MacroPlan()
     

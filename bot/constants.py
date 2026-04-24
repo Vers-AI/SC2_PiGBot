@@ -398,6 +398,18 @@ STALKER_BLINK_RANGE = 8.0
 STALKER_LOCKON_BREAK_DISTANCE = 15.0
 """Cyclone Lock-on max tether range. Blinking beyond this distance breaks the lock."""
 
+# ===== DETECTION CANNON SYSTEM =====
+DETECTION_CANNON_RANGE = 10.0
+"""Range from nexus to search for pylons/cannons near mineral line.
+Covers the full mineral line area behind the nexus."""
+
+PYLON_POWER_RANGE = 6.5
+"""Pylon power radius. Cannon must be within this range of a powered Pylon."""
+
+MINERAL_CLEARANCE = 1.5
+"""Minimum distance from mineral field center for detection cannon placements.
+Prevents structures from blocking probe pathing between nexus and mineral line."""
+
 STALKER_WIDOWMINE_DODGE_RADIUS = 10.0
 """Max distance from a WIDOWMINEBURROWED to consider dodge blink.
 Widow Mine Sentinel Missile range is ~5 tiles; 10 gives margin for
@@ -525,6 +537,10 @@ class BuildProfile:
     forge_count: Union[int, Callable]
     chrono_priority: list[UnitTypeId]
     conditional_structures: list[tuple[UnitTypeId, Callable]]
+    detection_cannons: Union[bool, Callable] = False
+    """Whether to build Pylon+PhotonCannon behind mineral lines at each base when
+detection is needed. Set True for builds without natural detection (e.g. 2021
+Stalker build). Uses _needs_detection_cannons predicate when callable."""
 
 
 # --- 2023 PvT Standard (Robo-Centric) ---
@@ -621,6 +637,23 @@ def _needs_observer(bot) -> bool:
     return False
 
 
+def _needs_detection_cannons(bot) -> bool:
+    """Return True if cloaked/burrowed threats are detected.
+    This is the trigger condition — once True, the detection cannon system activates
+    for ALL bases simultaneously and continues until every base is complete, even
+    if the threat moves out of vision or dies. New expansions also get protection.
+    """
+    for unit in bot.enemy_units:
+        if unit.type_id in _CLOAKED_THREAT_UNITS:
+            return True
+        if unit.is_cloaked or unit.is_burrowed:
+            return True
+    for structure in bot.enemy_structures:
+        if structure.type_id in _CLOAKED_THREAT_STRUCTURES:
+            return True
+    return False
+
+
 # --- 2021 PvT Stalker-Centric ---
 # Twilight + Blink opener, Stalker/Zealot army, 2 gas, aggressive gateway scaling.
 PVT_STALKER_2021_PROFILE = BuildProfile(
@@ -650,6 +683,7 @@ PVT_STALKER_2021_PROFILE = BuildProfile(
         UnitTypeId.NEXUS,
     ],
     conditional_structures=[(UnitTypeId.ROBOTICSFACILITY, _needs_robo_for_detection)],  # Reactive Robo for detection
+    detection_cannons=True,  # Build Pylon+Cannon behind mineral lines when detection is needed
 )
 
 # Lookup dict: build name (from protoss_builds.yml) → BuildProfile

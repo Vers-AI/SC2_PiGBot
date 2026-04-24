@@ -161,6 +161,10 @@ class PiG_Bot(AresBot):
         self._mass_recall_last_cast_time: float = -999.0  # Game time of last mass recall cast (global 130s cooldown)
         self._mass_recall_pending: bool = False  # True when units should cluster before recall fires
 
+        # Detection cannon state (per-base Pylon+Cannon behind mineral lines)
+        self._detection_cannon_state: dict[int, str] = {}  # nexus tag → state
+        self._detection_cannon_triggered: bool = False  # Sticky: True once a cloaked threat is ever seen
+
 
 
     async def on_start(self) -> None:
