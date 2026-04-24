@@ -13,6 +13,7 @@ from cython_extensions import cy_distance_to
 from bot.constants import (
     MASS_RECALL_COOLDOWN,
     MASS_RECALL_ENERGY_COST,
+    get_active_profile,
 )
 
 
@@ -106,10 +107,9 @@ def use_chronoboost(bot) -> bool:
     """
     Uses Chronoboost on the highest priority structure that would benefit from it.
 
-    Prioritizes structures based on production/building speed impact:
-    1. Research buildings (Forge, Cybernetics Core, Twilight Council, Robotics Bay)
-    2. Production buildings (Gateways, Robotics Facilities, Stargates)
-    3. Economic buildings (Nexus)
+    Priority order comes from the active BuildProfile's chrono_priority field,
+    so each build can define its own chrono target order (e.g., Twilight first
+    for blink-heavy builds, RoboBay first for robo-centric builds).
 
     Only boosts structures that are actively producing/researching and don't already have chronoboost.
 
@@ -130,38 +130,27 @@ def use_chronoboost(bot) -> bool:
     if not available_nexuses:
         return False
 
-    # Chronoboost priority: research > production > economy
-    priority_structures = [
-        # Research buildings
-        UnitTypeId.FORGE,
-        UnitTypeId.CYBERNETICSCORE,
-        UnitTypeId.TWILIGHTCOUNCIL,
-        UnitTypeId.ROBOTICSBAY,
-
-        # Production buildings
-        UnitTypeId.GATEWAY,
-        UnitTypeId.ROBOTICSFACILITY,
-        UnitTypeId.STARGATE,
-
-        # Economic buildings
-        UnitTypeId.NEXUS,
-        
-
-    ]
+    # Chrono priority from active BuildProfile (each build defines its own order)
+    priority_structures = get_active_profile(bot).chrono_priority
 
     for structure_type in priority_structures:
         # Only boost active structures without existing chronoboost and >30s remaining
         candidates = []
         for structure in bot.structures(structure_type).ready:
+            # Skip Gateways morphing into Warpgates — chrono on a morph is wasted
+            if structure.type_id == UnitTypeId.GATEWAY and structure.orders:
+                if any(order.ability.id == AbilityId.MORPH_WARPGATE for order in structure.orders):
+                    continue
             if not structure.has_buff(BuffId.CHRONOBOOSTENERGYCOST) and structure.is_active:
                 remaining_time = get_remaining_activity_time(bot, structure)
                 
-                # Always boost probe production regardless of remaining time
+                # Nexus producing probes: always chrono (probes warp fast, chrono = extra probe per cycle)
+                # Research/production: only chrono if >30s remaining (shorter durations waste energy)
                 is_probe_production = (structure.type_id == UnitTypeId.NEXUS and 
                                      structure.orders and 
                                      any(order.ability.id == AbilityId.NEXUSTRAIN_PROBE for order in structure.orders))
                 
-                if remaining_time > 30.0 or is_probe_production:
+                if is_probe_production or remaining_time > 30.0:
                     candidates.append(structure)
 
         if candidates:

@@ -37,23 +37,11 @@ from bot.constants import (
     PVT_STALKER_2021_PROFILE,
     PVZ_STANDARD_PROFILE,
     PVP_2GATE_PROFILE,
+    _resolve,
+    get_active_profile,
 )
 from ares.dicts.cost_dict import COST_DICT
 
-
-def _resolve(value, bot):
-    """Resolve a BuildProfile field that may be int or Callable[[bot], int]."""
-    return value(bot) if callable(value) else value
-
-
-def get_active_profile(bot) -> BuildProfile:
-    """Look up the BuildProfile for the currently active build order.
-
-    Falls back to PVT_STANDARD_2023_PROFILE for unknown build names,
-    ensuring no regression for builds not yet in the profile dict.
-    """
-    name = bot.build_order_runner.chosen_opening
-    return BUILD_PROFILES.get(name, PVT_STANDARD_2023_PROFILE)
 
 def get_freeflow_mode(bot) -> bool:
     """

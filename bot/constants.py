@@ -509,7 +509,7 @@ class BuildProfile:
     """Bundles all build-specific macro settings for plug-and-play build selection.
 
     Fields accept int for static values or Callable[[bot], int] for dynamic ones.
-    The _resolve() helper in macro.py handles both transparently.
+    The _resolve() helper handles both transparently.
     """
     army_composition_0: dict[UnitTypeId, dict]
     army_composition_1: dict[UnitTypeId, dict]
@@ -521,6 +521,7 @@ class BuildProfile:
     observer_target: int
     gateway_thresholds: list[tuple[int, int]]
     forge_count: Union[int, Callable]
+    chrono_priority: list[UnitTypeId]
 
 
 # --- 2023 PvT Standard (Robo-Centric) ---
@@ -547,6 +548,15 @@ PVT_STANDARD_2023_PROFILE = BuildProfile(
     observer_target=3,
     gateway_thresholds=[(1, 3), (3, 5), (5, 8)],
     forge_count=lambda bot: 2 if len(bot.townhalls.ready) >= 4 else (1 if len(bot.townhalls.ready) >= 2 else 0),
+    chrono_priority=[
+        UnitTypeId.ROBOTICSBAY,
+        UnitTypeId.FORGE,
+        UnitTypeId.TWILIGHTCOUNCIL,
+        UnitTypeId.CYBERNETICSCORE,
+        UnitTypeId.ROBOTICSFACILITY,
+        UnitTypeId.GATEWAY,
+        UnitTypeId.NEXUS,
+    ],
 )
 
 # --- 2021 PvT Stalker-Centric ---
@@ -570,6 +580,13 @@ PVT_STALKER_2021_PROFILE = BuildProfile(
     observer_target=0,
     gateway_thresholds=[(1, 3), (3, 8), (4, 12)],
     forge_count=1,
+    chrono_priority=[
+        UnitTypeId.TWILIGHTCOUNCIL,
+        UnitTypeId.FORGE,
+        UnitTypeId.CYBERNETICSCORE,
+        UnitTypeId.GATEWAY,
+        UnitTypeId.NEXUS,
+    ],
 )
 
 # Lookup dict: build name (from protoss_builds.yml) → BuildProfile
@@ -603,6 +620,15 @@ PVZ_STANDARD_PROFILE = BuildProfile(
     observer_target=3,
     gateway_thresholds=[(1, 3), (3, 5), (5, 8)],
     forge_count=lambda bot: 2 if len(bot.townhalls.ready) >= 4 else (1 if len(bot.townhalls.ready) >= 2 else 0),
+    chrono_priority=[
+        UnitTypeId.ROBOTICSBAY,
+        UnitTypeId.FORGE,
+        UnitTypeId.TWILIGHTCOUNCIL,
+        UnitTypeId.CYBERNETICSCORE,
+        UnitTypeId.ROBOTICSFACILITY,
+        UnitTypeId.GATEWAY,
+        UnitTypeId.NEXUS,
+    ],
 )
 
 # --- PvP 2-Gate Expand ---
@@ -629,6 +655,15 @@ PVP_2GATE_PROFILE = BuildProfile(
     observer_target=2,
     gateway_thresholds=[(1, 3), (3, 5), (5, 8)],
     forge_count=lambda bot: 2 if len(bot.townhalls.ready) >= 4 else (1 if len(bot.townhalls.ready) >= 2 else 0),
+    chrono_priority=[
+        UnitTypeId.TWILIGHTCOUNCIL,
+        UnitTypeId.ROBOTICSBAY,
+        UnitTypeId.FORGE,
+        UnitTypeId.CYBERNETICSCORE,
+        UnitTypeId.ROBOTICSFACILITY,
+        UnitTypeId.GATEWAY,
+        UnitTypeId.NEXUS,
+    ],
 )
 
 # Add all profiles to the lookup dict
@@ -636,3 +671,18 @@ BUILD_PROFILES.update({
     "B2GM_PVZ_Standard_Build": PVZ_STANDARD_PROFILE,
     "B2GM_PVP_2-Gate_Expand": PVP_2GATE_PROFILE,
 })
+
+
+def _resolve(value, bot):
+    """Resolve a BuildProfile field that may be int or Callable[[bot], int]."""
+    return value(bot) if callable(value) else value
+
+
+def get_active_profile(bot) -> BuildProfile:
+    """Look up the BuildProfile for the currently active build order.
+
+    Falls back to PVT_STANDARD_2023_PROFILE for unknown build names,
+    ensuring no regression for builds not yet in the profile dict.
+    """
+    name = bot.build_order_runner.chosen_opening
+    return BUILD_PROFILES.get(name, PVT_STANDARD_2023_PROFILE)
