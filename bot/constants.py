@@ -16,6 +16,8 @@ from typing import Callable, Union
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.upgrade_id import UpgradeId
 
+from cython_extensions import cy_structure_pending_ares
+
 # ===== SQUAD CONFIGURATION =====
 ATTACKING_SQUAD_RADIUS = 9.0
 """Squad radius for ATTACKING role units - looser formation for army mobility"""
@@ -518,10 +520,11 @@ class BuildProfile:
     conditional_upgrades: list[tuple[UpgradeId, Callable]]
     gas_target: Union[int, Callable]
     worker_cap: Union[int, Callable]
-    observer_target: int
+    observer_target: Union[int, Callable]
     gateway_thresholds: list[tuple[int, int]]
     forge_count: Union[int, Callable]
     chrono_priority: list[UnitTypeId]
+    conditional_structures: list[tuple[UnitTypeId, Callable]]
 
 
 # --- 2023 PvT Standard (Robo-Centric) ---
@@ -557,7 +560,61 @@ PVT_STANDARD_2023_PROFILE = BuildProfile(
         UnitTypeId.GATEWAY,
         UnitTypeId.NEXUS,
     ],
+    conditional_structures=[],  # No reactive structures needed — Robo is in core path
 )
+
+# --- Detection predicate for 2021 Stalker build ---
+# The 2021 build has no Robo in its core path, so it can't build Observers.
+# Two separate predicates:
+#   _needs_robo_for_detection: triggers Robo construction (stops once Robo exists)
+#   _needs_observer: triggers Observer training (stays True as long as detection is needed)
+_CLOAKED_THREAT_UNITS = {
+    UnitTypeId.BANSHEE, UnitTypeId.WRAITH, UnitTypeId.DARKTEMPLAR,
+    UnitTypeId.LURKERMP, UnitTypeId.LURKERMPBURROWED,
+    UnitTypeId.WIDOWMINE, UnitTypeId.WIDOWMINEBURROWED,
+}
+_CLOAKED_THREAT_STRUCTURES = {
+    UnitTypeId.ARMORY, UnitTypeId.STARPORTTECHLAB,
+    UnitTypeId.FACTORYTECHLAB,
+    UnitTypeId.DARKSHRINE, UnitTypeId.LURKERDENMP,
+}
+
+
+def _needs_robo_for_detection(bot) -> bool:
+    """Return True if the 2021 Stalker build should build a Robo for detection.
+    Stops triggering once a Robo exists or is pending (no duplicate orders).
+    """
+    if bot.structures(UnitTypeId.ROBOTICSFACILITY).amount > 0:
+        return False
+    if cy_structure_pending_ares(bot, UnitTypeId.ROBOTICSFACILITY) > 0:
+        return False
+
+    for unit in bot.enemy_units:
+        if unit.type_id in _CLOAKED_THREAT_UNITS:
+            return True
+
+    for structure in bot.enemy_structures:
+        if structure.type_id in _CLOAKED_THREAT_STRUCTURES:
+            return True
+
+    return False
+
+
+def _needs_observer(bot) -> bool:
+    """Return True if the 2021 Stalker build should train an Observer.
+    Stays True as long as detection-requiring threats exist, even after the Robo is built.
+    This ensures the Observer actually gets trained after the Robo completes.
+    """
+    for unit in bot.enemy_units:
+        if unit.type_id in _CLOAKED_THREAT_UNITS:
+            return True
+
+    for structure in bot.enemy_structures:
+        if structure.type_id in _CLOAKED_THREAT_STRUCTURES:
+            return True
+
+    return False
+
 
 # --- 2021 PvT Stalker-Centric ---
 # Twilight + Blink opener, Stalker/Zealot army, 2 gas, aggressive gateway scaling.
@@ -577,7 +634,7 @@ PVT_STALKER_2021_PROFILE = BuildProfile(
     conditional_upgrades=[],  # No reactive upgrades in core path
     gas_target=2,
     worker_cap=70,
-    observer_target=0,
+    observer_target=lambda bot: 1 if _needs_observer(bot) else 0,
     gateway_thresholds=[(1, 3), (3, 8), (4, 12)],
     forge_count=1,
     chrono_priority=[
@@ -587,6 +644,7 @@ PVT_STALKER_2021_PROFILE = BuildProfile(
         UnitTypeId.GATEWAY,
         UnitTypeId.NEXUS,
     ],
+    conditional_structures=[(UnitTypeId.ROBOTICSFACILITY, _needs_robo_for_detection)],  # Reactive Robo for detection
 )
 
 # Lookup dict: build name (from protoss_builds.yml) → BuildProfile
@@ -629,6 +687,7 @@ PVZ_STANDARD_PROFILE = BuildProfile(
         UnitTypeId.GATEWAY,
         UnitTypeId.NEXUS,
     ],
+    conditional_structures=[],  # No reactive structures needed — Robo is in core path
 )
 
 # --- PvP 2-Gate Expand ---
@@ -664,6 +723,7 @@ PVP_2GATE_PROFILE = BuildProfile(
         UnitTypeId.GATEWAY,
         UnitTypeId.NEXUS,
     ],
+    conditional_structures=[],  # No reactive structures needed — Robo is in core path
 )
 
 # Add all profiles to the lookup dict

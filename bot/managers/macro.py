@@ -830,10 +830,11 @@ def select_army_composition(bot, main_army: Units) -> dict:
 
 def _train_observers(bot) -> None:
     """Train observers to target count from the active BuildProfile.
-    Returns early if profile says 0 observers (e.g., 2021 Stalker build has no Robo).
+    Supports dynamic observer_target (e.g., 2021 build returns 1 when detection needed, 0 otherwise).
+    Returns early if profile says 0 observers and no detection trigger is active.
     """
     profile = get_active_profile(bot)
-    target_count = profile.observer_target
+    target_count = _resolve(profile.observer_target, bot)
     if target_count == 0:
         return
 
@@ -932,6 +933,11 @@ async def handle_macro(
         
         if current_forges < desired_forges and bot.can_afford(UnitTypeId.FORGE):
             bot.register_behavior(BuildStructure(production_location, UnitTypeId.FORGE))
+    
+    # Reactive structures from BuildProfile (e.g., Robo for detection in Stalker build)
+    for structure_type, predicate in profile.conditional_structures:
+        if predicate(bot) and bot.can_afford(structure_type):
+            bot.register_behavior(BuildStructure(production_location, structure_type))
     
     macro_plan: MacroPlan = MacroPlan()
     
