@@ -24,6 +24,11 @@ BuildChoices:
             - B2GM_PVZ_Standard_Build
 
     # Can also use specific opponent ids (overrides race options above)
+    81fa0acc-93ea-479c-9ba5-08ae63b9e3f5:
+        BotName: MicroMachine
+        Cycle:
+            - B2GM_PVT_Stalker_Centric_2021
+
     test_123:
         BotName: test
         Cycle:
