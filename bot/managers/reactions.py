@@ -632,6 +632,27 @@ def threat_detection(bot, main_army: Units) -> None:
         elif threat_ratio >= UNDER_ATTACK_RATIO_THRESHOLD:
             bot._under_attack = True
 
+    # Detect cloaked/burrowed enemies near bases that need detection
+    # These may not appear in ground_near/flying_near if partially visible
+    # but still pose a threat our defenders can't fight without an observer
+    cloaked_threat_positions: list[Point2] = []
+    if bot.townhalls:
+        th_positions = [th.position for th in bot.townhalls]
+        enemies_near_bases = bot.mediator.get_units_in_range(
+            start_points=th_positions,
+            distances=18,
+            query_tree=UnitTreeQueryType.AllEnemy,
+            return_as_dict=False,
+        )
+        for result in enemies_near_bases:
+            for enemy in result:
+                if not (enemy.is_cloaked or enemy.is_burrowed):
+                    continue
+                if enemy.is_revealed:
+                    continue
+                cloaked_threat_positions.append(enemy.position)
+    bot._cloaked_threat_positions = cloaked_threat_positions
+
     # Per-base defender allocation
     if all_threats:
         main_army_should_respond = False

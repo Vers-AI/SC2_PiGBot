@@ -12,8 +12,16 @@ from sc2.ids.unit_typeid import UnitTypeId
 from ares.behaviors.combat import CombatManeuver
 from ares.behaviors.combat.individual import KeepUnitSafe, PathUnitToTarget, UseAbility
 from ares.consts import BuildOrderOptions, UnitRole, UnitTreeQueryType, WORKER_TYPES
+from ares.managers.squad_manager import UnitSquad
 from bot.combat import attack_target
-from bot.constants import FRESH_INTEL_THRESHOLD, MEMORY_EXPIRY_TIME, VISIBLE_AGE_THRESHOLD
+from bot.constants import (
+    ATTACKING_SQUAD_RADIUS,
+    DEFENDER_SQUAD_RADIUS,
+    FRESH_INTEL_THRESHOLD,
+    MEMORY_EXPIRY_TIME,
+    UNIT_ENEMY_DETECTION_RANGE,
+    VISIBLE_AGE_THRESHOLD,
+)
 from bot.utilities.intel import get_enemy_intel_quality
 from cython_extensions import cy_distance_to
 
@@ -385,6 +393,184 @@ def control_build_runner_scout(bot) -> None:
         bot.register_behavior(actions)
 
 
+def _find_detection_targets(bot) -> list[tuple[Unit, Point2]]:
+    """
+    Find cloaked/burrowed enemies near any combat squad or base threat that need detection.
+
+    Scans around ATTACKING and BASE_DEFENDER squad positions, plus any
+    cloaked_threat_positions set by threat_detection (base-proximity invisible
+    enemies). Uses UNIT_ENEMY_DETECTION_RANGE. Returns a list of
+    (enemy_unit, nearest_scan_position) sorted by closest-first, skipping
+    units that are already revealed.
+
+    Returns:
+        list[tuple[Unit, Point2]]: (invisible enemy unit, nearest scan position) pairs
+    """
+    targets: list[tuple[Unit, Point2]] = []
+    seen_tags: set[int] = set()
+
+    # Collect scan positions from ATTACKING and BASE_DEFENDER roles
+    scan_positions: list[Point2] = []
+    try:
+        attacking_squads: list[UnitSquad] = bot.mediator.get_squads(
+            role=UnitRole.ATTACKING, squad_radius=ATTACKING_SQUAD_RADIUS
+        )
+        scan_positions.extend(s.squad_position for s in attacking_squads)
+    except Exception:
+        pass
+    try:
+        defender_squads: list[UnitSquad] = bot.mediator.get_squads(
+            role=UnitRole.BASE_DEFENDER, squad_radius=DEFENDER_SQUAD_RADIUS
+        )
+        scan_positions.extend(s.squad_position for s in defender_squads)
+    except Exception:
+        pass
+
+    # Also scan around cloaked threat positions detected by threat_detection
+    # This catches invisible enemies near bases before BASE_DEFENDER squads form
+    scan_positions.extend(getattr(bot, '_cloaked_threat_positions', []))
+
+    if not scan_positions:
+        return targets
+
+    # Query enemies near each scan position, dedup by tag
+    all_enemy_results = bot.mediator.get_units_in_range(
+        start_points=scan_positions,
+        distances=UNIT_ENEMY_DETECTION_RANGE,
+        query_tree=UnitTreeQueryType.AllEnemy,
+        return_as_dict=False,
+    )
+
+    # Build a map: enemy tag → list of scan positions it's near
+    enemy_to_positions: dict[int, list[Point2]] = {}
+    for result, scan_pos in zip(all_enemy_results, scan_positions):
+        for enemy in result:
+            if enemy.tag in seen_tags:
+                continue
+            seen_tags.add(enemy.tag)
+            if not (enemy.is_cloaked or enemy.is_burrowed):
+                continue
+            if enemy.is_revealed:
+                continue
+            enemy_to_positions.setdefault(enemy.tag, []).append(scan_pos)
+
+    # For each invisible enemy, find the closest scan position
+    for enemy_tag, pos_list in enemy_to_positions.items():
+        enemy = None
+        for result, _ in zip(all_enemy_results, scan_positions):
+            for u in result:
+                if u.tag == enemy_tag:
+                    enemy = u
+                    break
+            if enemy:
+                break
+        if not enemy:
+            continue
+        closest_pos = min(pos_list, key=lambda p: cy_distance_to(enemy.position, p))
+        targets.append((enemy, closest_pos))
+
+    # Sort by proximity to their closest squad position
+    targets.sort(key=lambda t: cy_distance_to(t[0].position, t[1]))
+    return targets
+
+
+def _assign_detection_targets(
+    bot,
+    all_observers: Units,
+    detection_targets: list[tuple[Unit, Point2]],
+) -> dict[int, Unit]:
+    """
+    Greedily assign observers to detection targets by closest-pair matching.
+
+    Algorithm:
+    1. Clean up stale assignments (dead observers, dead/revealed targets)
+    2. For each unassigned detection target, find the closest free observer
+    3. Assign and mark that observer as used
+
+    Returns:
+        dict[int, Unit]: observer tag → enemy Unit to reveal
+    """
+    assignments: dict[int, Unit] = {}
+    live_observer_tags = {o.tag for o in all_observers}
+
+    # Clean up stale assignments (dead observers, dead/revealed targets)
+    fresh_assignments: dict[int, int] = {}
+    detection_target_tags = {t[0].tag for t in detection_targets}
+    for obs_tag, enemy_tag in bot._observer_detection_assignments.items():
+        if obs_tag not in live_observer_tags:
+            continue
+        if enemy_tag not in detection_target_tags:
+            continue
+        fresh_assignments[obs_tag] = enemy_tag
+    bot._observer_detection_assignments = fresh_assignments
+
+    # Already-assigned observers and their targets
+    assigned_observers: set[int] = set(fresh_assignments.keys())
+    assigned_targets: set[int] = set(fresh_assignments.values())
+
+    # Free observers not on detection duty
+    free_observers = [o for o in all_observers if o.tag not in assigned_observers]
+    if not free_observers or not detection_targets:
+        # Rebuild the return dict from cleaned assignments
+        for obs_tag, enemy_tag in bot._observer_detection_assignments.items():
+            for t_enemy, _ in detection_targets:
+                if t_enemy.tag == enemy_tag:
+                    assignments[obs_tag] = t_enemy
+                    break
+        return assignments
+
+    # Greedy: for each unassigned target, find the closest free observer
+    unassigned_targets = [t for t in detection_targets if t[0].tag not in assigned_targets]
+    for target_enemy, squad_pos in unassigned_targets:
+        if not free_observers:
+            break
+        closest_obs = min(
+            free_observers,
+            key=lambda o: cy_distance_to(o.position, target_enemy.position),
+        )
+        free_observers.remove(closest_obs)
+        bot._observer_detection_assignments[closest_obs.tag] = target_enemy.tag
+        assignments[closest_obs.tag] = target_enemy
+
+    # Include existing assignments in return
+    for obs_tag, enemy_tag in bot._observer_detection_assignments.items():
+        if obs_tag not in assignments:
+            for t_enemy, _ in detection_targets:
+                if t_enemy.tag == enemy_tag:
+                    assignments[obs_tag] = t_enemy
+                    break
+
+    return assignments
+
+
+def _control_detection_observer(bot, observer: Unit, target_enemy: Unit) -> None:
+    """
+    Control an observer assigned to reveal a specific cloaked/burrowed enemy.
+
+    1. Unmorph if in siege mode
+    2. KeepUnitSafe if taking shield damage
+    3. Path toward the target enemy position using air grid
+    """
+    if observer.type_id == UnitTypeId.OBSERVERSIEGEMODE:
+        observer(AbilityId.MORPH_OBSERVERMODE)
+        return
+
+    actions = CombatManeuver()
+    air_grid = bot.mediator.get_air_grid
+
+    if observer.shield_percentage < 1:
+        actions.add(KeepUnitSafe(unit=observer, grid=air_grid))
+    else:
+        actions.add(PathUnitToTarget(
+            unit=observer,
+            target=target_enemy.position,
+            grid=air_grid,
+            danger_distance=8,
+        ))
+
+    bot.register_behavior(actions)
+
+
 def control_observers(bot, all_observers: Units, main_army: Units) -> None:
     """
     Coordinate multiple observers with different roles, adapting to the game situation.
@@ -461,9 +647,20 @@ def control_observers(bot, all_observers: Units, main_army: Units) -> None:
     
     bot._hunting_observer_tag = hunter_tag
     
+    # --- Phase 2.5: Assign observers to cloaked/burrowed detection targets ---
+    detection_targets = _find_detection_targets(bot)
+    detection_assignments = _assign_detection_targets(
+        bot, all_observers, detection_targets
+    )
+    
     # --- Phase 3: Per-observer behavior dispatch ---
     for obs in all_observers:
-        if obs.tag == hunter_tag:
+        # Detection override: if this observer is assigned to a cloaked/burrowed
+        # target, that takes priority over normal role behavior (above blind ramp
+        # but below KeepUnitSafe)
+        if obs.tag in detection_assignments:
+            _control_detection_observer(bot, obs, detection_assignments[obs.tag])
+        elif obs.tag == hunter_tag:
             _control_hunting_observer(bot, obs)
         elif obs.tag == bot.observer_assignments["army"]:
             control_army_observer(bot, obs, main_army)
@@ -566,20 +763,18 @@ def _get_forward_army_center(army: Units, target_point: Point2) -> Point2:
     return Point2((x, y))
 
 
-# Detection search radius around the forward army
-_DETECT_SEARCH_RADIUS = 15.0
-
-
 def control_army_observer(bot, observer: Optional[Unit], main_army: Units) -> None:
     """
     Control the army observer to follow and provide vision for the main army.
-    
+
     Behavior priority:
     1. Flee if taking damage
-    2. Move to invisible enemy (is_cloaked or is_burrowed) near army for detection
-    3. Provide vision for army blocked by blind ramp (enemies on high ground)
-    4. Lead ahead of the forward army units toward the attack target
-    
+    2. Provide vision for army blocked by blind ramp (enemies on high ground)
+    3. Lead ahead of the forward army units toward the attack target
+
+    Detection of cloaked/burrowed units is now handled by the shared detection
+    system in control_observers (Phase 2.5) which assigns the closest observer.
+
     Parameters:
     - bot: The bot instance
     - observer: The army observer unit
@@ -587,59 +782,36 @@ def control_army_observer(bot, observer: Optional[Unit], main_army: Units) -> No
     """
     if not observer:
         return
-    
+
     # Army observer should never be in siege mode — unmorph if promoted from
     # a primary that was already sieged (see on_unit_destroyed promotion path).
     if observer.type_id == UnitTypeId.OBSERVERSIEGEMODE:
         observer(AbilityId.MORPH_OBSERVERMODE)
         return
-    
+
     actions = CombatManeuver()
     air_grid = bot.mediator.get_air_grid
-    
+
     if observer.shield_percentage < 1:
         actions.add(KeepUnitSafe(unit=observer, grid=air_grid))
     elif main_army:
         target_point = attack_target(bot, main_army.center)
         forward_center = _get_forward_army_center(main_army, target_point)
-        fwd_pos = forward_center
-        
-        # Find invisible enemies near the forward army.
-        # Uses ARES KDTree query around fwd_pos for O(log n) performance,
-        # then filters for cloaked/burrowed units that need detection.
-        closest_invis = None
-        closest_dist = float("inf")
-        enemies_near_army = bot.mediator.get_units_in_range(
-            start_points=[fwd_pos],
-            distances=_DETECT_SEARCH_RADIUS,
-            query_tree=UnitTreeQueryType.AllEnemy,
-        )[0]
-        for enemy in enemies_near_army:
-            if not (enemy.is_cloaked or enemy.is_burrowed):
-                continue
-            if enemy.is_cloaked and enemy.is_revealed:
-                continue
-            d_fwd = cy_distance_to(enemy.position, fwd_pos)
-            if d_fwd < closest_dist:
-                closest_dist = d_fwd
-                closest_invis = enemy
-        
-        if closest_invis:
-            follow_target = closest_invis.position
-        elif bot._blind_ramp_target:
+
+        if bot._blind_ramp_target:
             follow_target = bot._blind_ramp_target
         else:
             # Lead ahead of the forward army toward the attack target
             lead_distance = 10
             tentative = Point2(forward_center.towards(target_point, lead_distance))
-            
+
             try:
                 influence = air_grid[int(tentative.x)][int(tentative.y)]
                 if influence > 1:
                     lead_distance = 5
             except Exception:
                 lead_distance = 8
-            
+
             follow_target = Point2(forward_center.towards(target_point, lead_distance))
         
         # Use the air grid to route around static defense (spores, cannons, turrets).

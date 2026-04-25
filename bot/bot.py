@@ -87,6 +87,7 @@ class PiG_Bot(AresBot):
             "patrol": [],         # Additional observers (map locations)
         }
         self.observer_targets = {}  # Maps observer.tag -> current target
+        self._observer_detection_assignments: dict[int, int] = {}  # observer tag → enemy unit tag (detection duty)
 
         # Flags for in-game logic
         self._commenced_attack = False
@@ -147,6 +148,7 @@ class PiG_Bot(AresBot):
         self._halu_scout_waypoints: dict = {}  # {tag: {'waypoints': list[Point2], 'idx': int}} per-Phoenix waypoints
         self._halu_scout_pending_role: str = ""  # Role for next hallucinated Phoenix (set before cast, consumed on spawn)
         self._blind_ramp_target: Optional[Point2] = None  # Set per-frame by combat when army blocked by blind ramp
+        self._cloaked_threat_positions: list[Point2] = []  # Positions of cloaked/burrowed enemies near bases (set per-frame by threat_detection)
 
         # Blink snipe state (group snipe system)
         self._snipe_committed: dict[int, int] = {}  # tag → expiry_frame (skip-set for per-unit micro)
@@ -297,6 +299,7 @@ class PiG_Bot(AresBot):
 
         # Reset per-frame flags (set by combat during this step)
         self._blind_ramp_target = None
+        self._cloaked_threat_positions = []
 
         # Retrieve roles (initial fetch)
         main_army = self.mediator.get_units_from_role(role=UnitRole.ATTACKING)
@@ -566,6 +569,14 @@ class PiG_Bot(AresBot):
         # Clean up observer targets if needed
         if unit_tag in self.observer_targets:
             del self.observer_targets[unit_tag]
+
+        # Clean up detection assignments if observer destroyed
+        if unit_tag in self._observer_detection_assignments:
+            del self._observer_detection_assignments[unit_tag]
+        # Also remove if the observed enemy target was destroyed
+        self._observer_detection_assignments = {
+            k: v for k, v in self._observer_detection_assignments.items() if v != unit_tag
+        }
 
     async def on_unit_type_changed(self, unit: Unit, previous_type: UnitTypeId) -> None:
         """Called when a unit changes type, like Disruptor firing a Nova."""

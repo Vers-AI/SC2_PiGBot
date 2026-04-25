@@ -920,14 +920,28 @@ def render_observer_debug(bot) -> None:
     hunt_mode = getattr(bot, '_observer_hunt_mode', False)
     urgency = getattr(bot, '_intel_urgency', 0.0)
     hunter_tag = getattr(bot, '_hunting_observer_tag', None)
+    detection_assignments = getattr(bot, '_observer_detection_assignments', {})
     
     for obs in observers:
         tag = obs.tag
         is_siege = obs.type_id == UnitTypeId.OBSERVERSIEGEMODE
         target_pos = None  # For drawing line to target
         
-        # Hunting override takes priority over role label
-        if tag == hunter_tag:
+        # Detection override takes priority (above hunting and role labels)
+        if tag in detection_assignments:
+            enemy_tag = detection_assignments[tag]
+            enemy_unit = None
+            for enemy in bot.enemy_units:
+                if enemy.tag == enemy_tag:
+                    enemy_unit = enemy
+                    break
+            if enemy_unit:
+                target_pos = enemy_unit.position
+                label = f"DETECT {enemy_unit.type_id.name[:4]}"
+            else:
+                label = "DETECT ?"
+            color = (255, 0, 255)  # Magenta
+        elif tag == hunter_tag:
             label, color = "HUNT", (255, 165, 0)
         elif tag == assignments.get("army"):
             label, color = "ARMY", (0, 200, 255)
@@ -990,8 +1004,9 @@ def render_observer_debug(bot) -> None:
         )
     
     _y = min(getattr(bot, '_debug_y', 0.46), 0.95)
+    detect_count = len(detection_assignments)
     bot.client.debug_text_2d(
-        f"Obs: ARMY:{army} PRI:{pri} PAT:{patrol_count} {hunt_str} Halu:{hallu_count} Urg:{urgency:.2f}",
+        f"Obs: ARMY:{army} PRI:{pri} PAT:{patrol_count} DETECT:{detect_count} {hunt_str} Halu:{hallu_count} Urg:{urgency:.2f}",
         Point2((0.1, _y)), None, 12
     )
     bot._debug_y = _y + 0.018
