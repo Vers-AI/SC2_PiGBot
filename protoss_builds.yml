@@ -85,6 +85,7 @@ Builds:
             - 16 WORKER_SCOUT:
                 [enemy_spawn, enemy_nat, map_center, fourth, third, enemy_nat]
             - 16 GAS
+            - 18 CHRONO @ NEXUS 
             - 20 EXPAND
             - 20 CORE @ reaper_wall
             - 21 PYLON
@@ -94,19 +95,20 @@ Builds:
             - 23 STALKER
             - 25 CHRONO @ NEXUS
             - 25 STALKER
-            - 30 TWILIGHTCOUNCIL
+            - 26 TWILIGHTCOUNCIL
             - 33 PYLON
             - 36 BLINKTECH
             - 36 CHRONO @ TWILIGHTCOUNCIL
-            - 38 GATEWAY
-            - 38 GATEWAY
+            - 36 SENTRY
+            - 36 GATEWAY x2
             - 38 CHRONO @ TWILIGHTCOUNCIL
             - 40 FORGE
+            - 0 STALKER
             - 42 PROTOSSGROUNDWEAPONSLEVEL1
             - 42 CHRONO @ FORGE
             - 42 CHRONO @ TWILIGHTCOUNCIL
             - 46 EXPAND
-            - 48 PYLON
+            
 
     B2GM_PVZ_Standard_Build:
         # Build constant worker production till this supply
