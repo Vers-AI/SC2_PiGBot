@@ -727,6 +727,10 @@ def merge_high_templars(bot) -> None:
     Archon-in-waiting). The Archon-percentage switch to army_1 handles
     the loop brake, not the count gate.
 
+    Gas gate: If the active profile has archon_switch_gas_requirement > 0,
+    merging is blocked until enough gas geysers are built. This prevents
+    premature Archon creation when the economy can't sustain HT production.
+
     Pairs are selected by proximity: sort candidates by energy (lowest
     first), then find the closest neighbor. This produces Archons that
     arrive at the fight faster than arbitrary pairing.
@@ -737,6 +741,16 @@ def merge_high_templars(bot) -> None:
     Call once per frame from the combat loop (not macro — HT lifecycle
     belongs with HT micro logic).
     """
+    # Gas gate: block merging until we have enough gas infrastructure
+    # to sustain HT production. Profiles with requirement=0 skip this check.
+    from bot.constants import get_active_profile, _resolve
+    profile = get_active_profile(bot)
+    gas_requirement = _resolve(profile.archon_switch_gas_requirement, bot)
+    if gas_requirement > 0:
+        gas_geysers = bot.structures(UnitTypeId.ASSIMILATOR).amount + bot.structures(UnitTypeId.ASSIMILATORRICH).amount
+        if gas_geysers < gas_requirement:
+            return  # Not enough gas to sustain HT→Archon production yet
+
     all_hts = bot.units(UnitTypeId.HIGHTEMPLAR).ready
     if bot.enemy_race == Race.Protoss:
         # PvP: if enemy has Carriers, hold HTs for Storm instead of merging

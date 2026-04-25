@@ -10,13 +10,20 @@ Organization:
 - Unit filtering sets (ignore lists, priority targets)
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Union
 
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.upgrade_id import UpgradeId
 
 from cython_extensions import cy_structure_pending_ares
+
+# Lazy import to avoid circular dependency — get_economy_state is only called inside lambdas
+# that execute at runtime, so the import resolves correctly by then.
+def _get_economy_state(bot):
+    """Runtime proxy for get_economy_state to avoid circular imports at module load time."""
+    from bot.utilities.performance_monitor import get_economy_state
+    return get_economy_state(bot)
 
 # ===== SQUAD CONFIGURATION =====
 ATTACKING_SQUAD_RADIUS = 9.0
@@ -537,10 +544,20 @@ class BuildProfile:
     forge_count: Union[int, Callable]
     chrono_priority: list[UnitTypeId]
     conditional_structures: list[tuple[UnitTypeId, Callable]]
+    army_composition_2: dict[UnitTypeId, dict] = field(default_factory=dict)  # Post-Archon composition (used when archon % >= threshold)
     detection_cannons: Union[bool, Callable] = False
     """Whether to build Pylon+PhotonCannon behind mineral lines at each base when
 detection is needed. Set True for builds without natural detection (e.g. 2021
 Stalker build). Uses _needs_detection_cannons predicate when callable."""
+    economy_switch_threshold: Union[str, None] = None
+    """Economy state that triggers a one-way switch from army_composition_0 to
+army_composition_1. Valid values: 'moderate', 'full', or None (no switch).
+Once triggered, the switch never reverts even if economy drops."""
+    archon_switch_gas_requirement: Union[int, Callable] = 0
+    """Minimum gas geysers required for the Archon switch to trigger.
+Prevents the Archon composition switch until gas infrastructure can sustain
+HT production. Default 0 = no gas requirement (always allow switch).
+Set to 6 for gas-gated builds like the 2021 Stalker build."""
 
 
 # --- 2023 PvT Standard (Robo-Centric) ---
@@ -656,27 +673,37 @@ def _needs_detection_cannons(bot) -> bool:
 
 # --- 2021 PvT Stalker-Centric ---
 # Twilight + Blink opener, Stalker/Zealot army, 2 gas, aggressive gateway scaling.
+# Economy-gated: switches to HT/Sentry composition at moderate economy.
+# Upgrades gated by economy: Weapons/Armor 2 at moderate+, 3 at full.
 PVT_STALKER_2021_PROFILE = BuildProfile(
     army_composition_0={},  # Set at runtime from macro.py PVT_STALKER_2021_ARMY
-    army_composition_1={},  # Same as _0 (no archon switch)
-    archon_switch_threshold=1.0,  # Never switches — no HT in core path
+    army_composition_1={},  # Set at runtime from macro.py PVT_STALKER_2021_ARMY_MODERATE
+    army_composition_2={},  # Set at runtime from macro.py PVT_STALKER_2021_ARMY_FULL
+    archon_switch_threshold=0.15,  # Switch to post-Archon comp when Archons reach 15%
     upgrade_order=[
         UpgradeId.WARPGATERESEARCH,
         UpgradeId.BLINKTECH,
         UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1,
         UpgradeId.PROTOSSGROUNDARMORSLEVEL1,
-        UpgradeId.PROTOSSGROUNDARMORSLEVEL2,
-        UpgradeId.PROTOSSGROUNDWEAPONSLEVEL2,
+        UpgradeId.PSISTORMTECH,
         UpgradeId.CHARGE,
     ],
-    conditional_upgrades=[],  # No reactive upgrades in core path
-    gas_target=2,
+    conditional_upgrades=[
+        # Moderate+ economy: Weapons 2 and Armor 2
+        (UpgradeId.PROTOSSGROUNDWEAPONSLEVEL2, lambda bot: _get_economy_state(bot) in ("moderate", "full")),
+        (UpgradeId.PROTOSSGROUNDARMORSLEVEL2, lambda bot: _get_economy_state(bot) in ("moderate", "full")),
+        # Full economy only: Weapons 3 and Armor 3
+        (UpgradeId.PROTOSSGROUNDWEAPONSLEVEL3, lambda bot: _get_economy_state(bot) == "full"),
+        (UpgradeId.PROTOSSGROUNDARMORSLEVEL3, lambda bot: _get_economy_state(bot) == "full"),
+    ],
+    gas_target=lambda bot: len(bot.townhalls) * 2,  # Scales with bases (same as 2023)
     worker_cap=70,
     observer_target=lambda bot: 1 if _needs_observer(bot) else 0,
     gateway_thresholds=[(1, 3), (3, 8), (4, 12)],
     forge_count=1,
     chrono_priority=[
         UnitTypeId.TWILIGHTCOUNCIL,
+        UnitTypeId.TEMPLARARCHIVE,  # Psionic Storm research
         UnitTypeId.FORGE,
         UnitTypeId.CYBERNETICSCORE,
         UnitTypeId.GATEWAY,
@@ -684,6 +711,8 @@ PVT_STALKER_2021_PROFILE = BuildProfile(
     ],
     conditional_structures=[(UnitTypeId.ROBOTICSFACILITY, _needs_robo_for_detection)],  # Reactive Robo for detection
     detection_cannons=True,  # Build Pylon+Cannon behind mineral lines when detection is needed
+    economy_switch_threshold="moderate",  # One-way switch to HT/Sentry composition at moderate economy
+    archon_switch_gas_requirement=6,  # Need 6 gas geysers before Archon switch (sustains HT production)
 )
 
 # Lookup dict: build name (from protoss_builds.yml) → BuildProfile

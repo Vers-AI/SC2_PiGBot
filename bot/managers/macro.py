@@ -193,12 +193,33 @@ PVT_STALKER_2021_ARMY = {
     UnitTypeId.ZEALOT: {"proportion": 0.35, "priority": 1},
 }
 
+# 2021 PvT Stalker-Centric moderate economy army: adds HT + Sentry for Storm/Feedback
+# Proportions: Stalker/Zealot scaled down to 80% of base, HT 15%, Sentry 5%
+PVT_STALKER_2021_ARMY_MODERATE = {
+    UnitTypeId.STALKER: {"proportion": 0.52, "priority": 0},
+    UnitTypeId.HIGHTEMPLAR: {"proportion": 0.13, "priority": 1},
+    UnitTypeId.ZEALOT: {"proportion": 0.33, "priority": 2},
+    UnitTypeId.SENTRY: {"proportion": 0.02, "priority": 3},
+}
+
+# 2021 PvT Stalker-Centric post-Archon army: HTs have merged into Archons,
+# redistribute HT proportion to Stalker/Zealot. Keep small HT production for Storm.
+# Mirrors the 2023 profile's Archon switch pattern: stop heavy HT production,
+# let existing HTs merge, keep a small HT line for Storm/Feedback.
+PVT_STALKER_2021_ARMY_FULL = {
+    UnitTypeId.STALKER: {"proportion": 0.50, "priority": 0},
+    UnitTypeId.ZEALOT: {"proportion": 0.35, "priority": 1},
+    UnitTypeId.HIGHTEMPLAR: {"proportion": 0.10, "priority": 2},
+    UnitTypeId.SENTRY: {"proportion": 0.05, "priority": 3},
+}
+
 # Wire army composition dicts into BuildProfile instances
 # (profiles are defined in constants.py with empty dicts to avoid circular imports)
 PVT_STANDARD_2023_PROFILE.army_composition_0 = STANDARD_ARMY_0
 PVT_STANDARD_2023_PROFILE.army_composition_1 = STANDARD_ARMY_1
 PVT_STALKER_2021_PROFILE.army_composition_0 = PVT_STALKER_2021_ARMY
-PVT_STALKER_2021_PROFILE.army_composition_1 = PVT_STALKER_2021_ARMY  # Same — no archon switch
+PVT_STALKER_2021_PROFILE.army_composition_1 = PVT_STALKER_2021_ARMY_MODERATE  # Economy switch at moderate
+PVT_STALKER_2021_PROFILE.army_composition_2 = PVT_STALKER_2021_ARMY_FULL  # Archon switch at 15%
 PVZ_STANDARD_PROFILE.army_composition_0 = STANDARD_ARMY_0  # Same robo-centric comp as PvT
 PVZ_STANDARD_PROFILE.army_composition_1 = STANDARD_ARMY_1
 PVP_2GATE_PROFILE.army_composition_0 = PVP_ARMY_0
@@ -229,7 +250,7 @@ PVP_2GATE_PROFILE.conditional_upgrades = [
     (UpgradeId.EXTENDEDTHERMALLANCE, _thermal_lance_predicate),
     (UpgradeId.PSISTORMTECH, _storm_predicate),
 ]
-# 2021 profile: no conditional upgrades (no Robo, no TemplarArchive in core path)
+# 2021 profile: conditional upgrades are economy-gated (Weapons/Armor 2-3)
 
 # ===== PRODUCTION NUDGING =====
 # Uses COUNTER_TABLE to shift army proportions toward unit types that are
@@ -781,10 +802,11 @@ def select_army_composition(bot, main_army: Units) -> dict:
     and observed enemy composition.
     
     Steps:
-        1. Pick base composition from profile
-        2. Apply archon switch if applicable
-        3. Apply counter-table-driven proportion nudges based on enemy comp
-        4. Cache the nudged result on bot._last_nudged_comp for debug display
+        1. Pick base composition from profile (army_composition_0)
+        2. Apply economy switch if threshold met (army_composition_0 → army_composition_1)
+        3. Apply archon switch if threshold met (→ army_composition_2, or army_1 fallback)
+        4. Apply counter-table-driven proportion nudges based on enemy comp
+        5. Cache the nudged result on bot._last_nudged_comp for debug display
     
     Returns:
         dict: The selected (and possibly nudged) army composition dictionary
@@ -794,15 +816,34 @@ def select_army_composition(bot, main_army: Units) -> dict:
     # All builds now have dedicated profiles — use profile compositions directly
     selected_composition = profile.army_composition_0
     army_1 = profile.army_composition_1
+    army_2 = profile.army_composition_2 if profile.army_composition_2 else army_1  # Fallback for profiles without army_2
     threshold = profile.archon_switch_threshold
     
+    # Economy switch: one-way transition from army_composition_0 to army_composition_1
+    # Once triggered, never reverts even if economy drops (sticky flag)
+    if profile.economy_switch_threshold is not None:
+        if not hasattr(bot, '_economy_switch_triggered'):
+            bot._economy_switch_triggered = False
+        
+        economy_state = get_economy_state(bot)
+        econ_threshold = profile.economy_switch_threshold
+        
+        if not bot._economy_switch_triggered:
+            if ((econ_threshold == "moderate" and economy_state in ("moderate", "full"))
+                    or (econ_threshold == "full" and economy_state == "full")):
+                bot._economy_switch_triggered = True
+        
+        if bot._economy_switch_triggered:
+            selected_composition = army_1
+    
     # Switch composition when Archon percentage exceeds threshold
+    # Uses army_2 (post-Archon) if available, otherwise army_1 (legacy behavior)
     if main_army and len(main_army) > 0:
         archon_count = sum(1 for unit in main_army if unit.type_id == UnitTypeId.ARCHON)
         archon_percentage = archon_count / len(main_army) if len(main_army) > 0 else 0
         
         if archon_percentage >= threshold:
-            selected_composition = army_1
+            selected_composition = army_2
     
     # === Nudge pipeline: counter-table → resource-pressure → priority reorder ===
     
