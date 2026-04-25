@@ -46,7 +46,7 @@ Builds:
             - 16 GATEWAY @ reaper_wall
             - 16 CHRONO @ NEXUS
             - 16 WORKER_SCOUT:
-                [enemy_spawn, enemy_nat, map_center, fourth,third, enemy_nat,nat,spawn]
+                [enemy_spawn, enemy_nat, map_center, fourth,third, enemy_nat]
             - 16 GAS
             - 20 EXPAND
             - 20 CORE @ reaper_wall
@@ -83,7 +83,7 @@ Builds:
             - 16 GATEWAY @ reaper_wall
             - 16 CHRONO @ NEXUS
             - 16 WORKER_SCOUT:
-                [enemy_spawn, enemy_nat, map_center, fourth, third, enemy_nat, nat, spawn]
+                [enemy_spawn, enemy_nat, map_center, fourth, third, enemy_nat]
             - 16 GAS
             - 20 EXPAND
             - 20 CORE @ reaper_wall
@@ -92,7 +92,7 @@ Builds:
             - 22 WARPGATERESEARCH
             - 22 CHRONO @ CYBERNETICSCORE
             - 23 STALKER
-            - 25 CHRONO @ GATEWAY
+            - 25 CHRONO @ NEXUS
             - 25 STALKER
             - 30 TWILIGHTCOUNCIL
             - 33 PYLON
@@ -100,9 +100,11 @@ Builds:
             - 36 CHRONO @ TWILIGHTCOUNCIL
             - 38 GATEWAY
             - 38 GATEWAY
+            - 38 CHRONO @ TWILIGHTCOUNCIL
             - 40 FORGE
             - 42 PROTOSSGROUNDWEAPONSLEVEL1
             - 42 CHRONO @ FORGE
+            - 42 CHRONO @ TWILIGHTCOUNCIL
             - 46 EXPAND
             - 48 PYLON
 
