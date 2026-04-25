@@ -104,14 +104,27 @@ def get_hunt_target(bot, unit: Unit) -> Point2:
     return current_target
 
 
-def control_worker_scout(bot) -> None:
-    """
-    Send a worker scout when intel is stale in early game and no observers available.
+def _build_order_has_worker_scout(bot) -> bool:
+    """Check if the build order contains a WORKER_SCOUT step (pending or started).
     
-    Triggers when:
-    - Early game (game_state == 0)
-    - Intel urgency is high (> threshold)
-    - No observers available
+    Purpose: Avoid sending a duplicate worker scout when the build runner will
+    (or already has) sent one. The build runner's scout gets safe pathing via
+    control_build_runner_scout, so our own worker scout is redundant.
+    """
+    for step in bot.build_order_runner.build_order:
+        if step.command == BuildOrderOptions.WORKER_SCOUT:
+            return True
+    return False
+
+
+def control_worker_scout(bot) -> None:
+    """Manage worker scouts sent by our code (SCOUTING role).
+    
+    If the build order has a WORKER_SCOUT step, we do NOT send our own worker
+    scout — the build runner sends one and control_build_runner_scout gives it
+    safe pathing. This function only handles:
+    - Recalling existing SCOUTING workers when no longer needed
+    - Sending our own worker scout only when the build order has no WORKER_SCOUT
     """
     # First: check if we have worker scouts that should be recalled
     # (observer available, or no longer early game, or under attack)
@@ -125,11 +138,15 @@ def control_worker_scout(bot) -> None:
     build_runner_scouts = bot.mediator.get_units_from_role(role=UnitRole.BUILD_RUNNER_SCOUT)
     build_runner_worker_scouts = build_runner_scouts.filter(lambda u: u.type_id in WORKER_TYPES)
     
+    # Check if build order has a WORKER_SCOUT step — if so, don't send our own
+    build_order_has_scout = _build_order_has_worker_scout(bot)
+    
     should_recall = (
         bot.units(UnitTypeId.OBSERVER).amount > 0 or
         bot._under_attack or
         bot._intel_urgency <= HUNT_URGENCY_THRESHOLD or  # Intel is fresh, no longer need scout
-        bool(build_runner_worker_scouts)  # Build runner scout exists, no need for extra
+        bool(build_runner_worker_scouts) or  # Build runner scout exists, no need for extra
+        build_order_has_scout  # Build order will send (or has sent) a scout
     )
     
     if worker_scouts and should_recall:
@@ -140,6 +157,11 @@ def control_worker_scout(bot) -> None:
             bot.mediator.assign_role(tag=scout.tag, role=UnitRole.GATHERING)
         # Reset flag so we can send another scout if needed
         bot._worker_scout_sent_this_stale_period = False
+        return
+    
+    # If the build order has a WORKER_SCOUT step, don't send our own.
+    # The build runner will send one, and control_build_runner_scout handles it.
+    if build_order_has_scout:
         return
     
     # Don't scout if we're under attack - need workers for defense
@@ -162,9 +184,6 @@ def control_worker_scout(bot) -> None:
     # (already queried at top of function, reuse the variable)
     if build_runner_worker_scouts:
         return
-    
-    # Check if we already have a worker scout assigned
-    # (already queried at top of function, reuse the variable)
     
     # If flag is set but no worker scouts exist, reset the flag (scout died)
     if bot._worker_scout_sent_this_stale_period and not worker_scouts:
@@ -196,6 +215,7 @@ def control_worker_scout(bot) -> None:
             ))
         
         bot.register_behavior(actions)
+        
     else:
         # Need to assign a new worker scout
         worker = bot.mediator.select_worker(target_position=bot.start_location)
@@ -306,6 +326,7 @@ def control_build_runner_scout(bot) -> None:
     scouts = bot.mediator.get_units_from_role(
         role=UnitRole.BUILD_RUNNER_SCOUT, unit_type=bot.worker_type
     )
+
     if not scouts:
         # Clean up stale waypoint entries
         if bot._br_scout_waypoints:
@@ -955,3 +976,4 @@ def control_hallucination_scouts(bot) -> None:
                 sense_danger=False,
             ))
             bot.register_behavior(actions)
+
