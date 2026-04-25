@@ -1,6 +1,7 @@
 # bot/managers/structure_manager.py
 # Purpose: Nexus ability management (Chronoboost, Energy Recharge, Mass Recall)
-# Key Decisions: All Nexus-cast abilities consolidated here for consistent energy management
+# Key Decisions: All Nexus-cast abilities consolidated here for consistent energy management;
+#   urgent Observer production gets chrono priority over the build profile list
 # Limitations: Mass Recall combat-trigger logic remains in combat.py
 
 from sc2.ids.unit_typeid import UnitTypeId
@@ -15,6 +16,10 @@ from bot.constants import (
     MASS_RECALL_ENERGY_COST,
     get_active_profile,
 )
+
+# When intel urgency exceeds this, observer production is considered urgent
+# (same threshold used by scouting to dispatch hunters)
+_URGENT_OBSERVER_URGENCY = 0.5
 
 
 def _get_recall_nexus_tag(bot) -> int | None:
@@ -103,6 +108,22 @@ def use_recharge(bot, main_army: Units) -> bool:
     return True
 
 
+def _is_urgent_observer_needed(bot) -> bool:
+    """Return True if detection is urgently needed right now.
+
+    Triggers when either:
+    1. Cloaked/burrowed enemies are near our bases (set per-frame by threat_detection)
+    2. Intel urgency is high — we're blind and need scouting coverage
+    """
+    # Cloaked threats near bases — need detection immediately
+    if getattr(bot, '_cloaked_threat_positions', None):
+        return True
+    # Intel urgency — we've lost sight of the enemy army
+    if getattr(bot, '_intel_urgency', 0.0) > _URGENT_OBSERVER_URGENCY:
+        return True
+    return False
+
+
 def use_chronoboost(bot) -> bool:
     """
     Uses Chronoboost on the highest priority structure that would benefit from it.
@@ -129,6 +150,28 @@ def use_chronoboost(bot) -> bool:
 
     if not available_nexuses:
         return False
+
+    # Urgent observer: if a Robo is building an Observer and detection is urgently
+    # needed (cloaked threats near bases or high intel urgency), chrono the Robo
+    # ahead of the normal priority list. Observers take ~22s; chrono cuts that to ~15s,
+    # which can be decisive when we're blind or under cloaked attack.
+    if _is_urgent_observer_needed(bot):
+        # Observer training ability
+        observer_train_ability = (
+            bot.game_data.units[UnitTypeId.OBSERVER.value].creation_ability.id
+        )
+        for robo in bot.structures(UnitTypeId.ROBOTICSFACILITY).ready:
+            if (not robo.has_buff(BuffId.CHRONOBOOSTENERGYCOST)
+                    and robo.is_active):
+                # Verify the Robo is actually training an Observer
+                if robo.orders and any(
+                    order.ability.id == observer_train_ability
+                    for order in robo.orders
+                ):
+                    closest_nexus = min(available_nexuses,
+                                        key=lambda n: cy_distance_to(n.position, robo.position))
+                    closest_nexus(AbilityId.EFFECT_CHRONOBOOSTENERGYCOST, robo)
+                    return True
 
     # Chrono priority from active BuildProfile (each build defines its own order)
     priority_structures = get_active_profile(bot).chrono_priority
