@@ -63,6 +63,8 @@ TACTICAL_BONUS: dict[UnitTypeId, float] = {
     UnitTypeId.VIPER:             18.0,  # Abduct / blinding cloud (army_value 18.7)
     UnitTypeId.SENTRY:            15.0,  # Guardian shield / forcefields (army_value 6.2)
     UnitTypeId.ORACLE:            10.0,  # Revelation / harass (army_value 19.0)
+    UnitTypeId.BANSHEE:            8.0,  # Cloaked harass, Stalker counter (army_value 15.7)
+    UnitTypeId.TEMPEST:           12.0,  # Long-range siege, killing removes pressure (army_value 28.0)
     UnitTypeId.RAVEN:             10.0,  # Detection + abilities (army_value 12.4)
 
     # Siege / zone denial: positional threat undervalued by cost

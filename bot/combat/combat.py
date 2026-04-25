@@ -84,7 +84,7 @@ from bot.combat.unit_micro import (
 from bot.combat.formation import execute_fan_out, clear_formation_state
 from bot.combat.target_scoring import select_target, update_upgrades
 from bot.combat.force_field_split import compute_ff_split, compute_ff_ramp_block
-from bot.combat.group_snipe import try_commit_snipe, execute_snipe_a, execute_snipe_b
+from bot.combat.group_snipe import try_commit_snipe, execute_snipe_a, execute_snipe_b, execute_focus
 from bot.combat.group_chase import try_commit_chase, execute_chase
 from ares.dicts.unit_data import UNIT_DATA
 from bot.utilities.debug import (
@@ -105,6 +105,7 @@ from bot.utilities.debug import (
     render_ff_split_debug,
     render_snipe_debug,
     render_chase_debug,
+    render_focus_debug,
     render_micro_state_debug,
 )
 from bot.utilities.intel import get_enemy_intel_quality
@@ -465,9 +466,9 @@ def get_formation_move_target(
 
 
 def _expire_snipe_committed(bot) -> None:
-    """Remove expired entries from snipe skip-set and stale _snipe_state entries.
+    """Remove expired entries from snipe/focus skip-sets and stale state entries.
 
-    Safety net: if a snipe state outlives its skip-set, clean it up to prevent
+    Safety net: if a state outlives its skip-set, clean it up to prevent
     stale state machines from conflicting with per-unit micro.
     """
     from bot.combat.group_snipe import SNIPE_EXIT_FRAMES
@@ -489,6 +490,11 @@ def _expire_snipe_committed(bot) -> None:
         for tag in info["stalker_tags"]:
             bot._snipe_committed.pop(tag, None)
         del bot._snipe_state[sid]
+
+    # Expire focus-fire skip-set entries
+    expired_focus = [tag for tag, expiry in bot._focus_committed.items() if game_loop >= expiry]
+    for tag in expired_focus:
+        bot._focus_committed.pop(tag, None)
 
 
 def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSquad]) -> Point2:
@@ -717,6 +723,7 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                 if u.type_id == UnitTypeId.STALKER
                 and u.tag not in bot._snipe_committed
                 and u.tag not in bot._chase_committed
+                and u.tag not in bot._focus_committed
             ]
             if can_engage and squad_stalkers and all_close:
                 try_commit_snipe(
@@ -735,13 +742,21 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
             # Debug: render snipe state
             render_snipe_debug(bot, squad.squad_id)
 
-            # --- Blink chase evaluation (after snipe, before per-unit micro) ---
-            # Chase retreating enemies if we're winning. Uses stalkers not committed to snipe/chase.
+            # --- Blink focus-fire evaluation (after snipe, before chase) ---
+            # Focus-fire: multi-volley pursuit of harassers (Oracle, Banshee, Tempest, etc.)
+            # Committed inside try_commit_snipe when mode="focus". Uses stalkers not already committed.
+            # Execute active focus-fire (runs every frame for committed squads)
+            execute_focus(bot, squad.squad_id, grid, all_close)
+            render_focus_debug(bot, squad.squad_id)
+
+            # --- Blink chase evaluation (after snipe/focus, before per-unit micro) ---
+            # Chase retreating enemies if we're winning. Uses stalkers not committed to snipe/focus/chase.
             chase_stalkers = [
                 u for u in units
                 if u.type_id == UnitTypeId.STALKER
                 and u.tag not in bot._snipe_committed
                 and u.tag not in bot._chase_committed
+                and u.tag not in bot._focus_committed
             ]
             if can_engage and chase_stalkers and all_close:
                 try_commit_chase(
@@ -808,10 +823,12 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                     continue  # Group command active — skip individual micro
                 if r_unit in ranged_on_unsafe_ground:
                     continue  # Skip units retreating to safer ground
-                # Skip stalkers committed to a group snipe or chase (they get group commands)
+                # Skip stalkers committed to a group snipe, chase, or focus-fire (they get group commands)
                 if r_unit.tag in bot._snipe_committed and bot.state.game_loop < bot._snipe_committed[r_unit.tag]:
                     continue
                 if r_unit.tag in bot._chase_committed and bot.state.game_loop < bot._chase_committed[r_unit.tag]:
+                    continue
+                if r_unit.tag in bot._focus_committed and bot.state.game_loop < bot._focus_committed[r_unit.tag]:
                     continue
                 
                 # Ramp safety: don't attack up ramp without vision (blind disadvantage)
@@ -1938,12 +1955,70 @@ def control_base_defenders(bot, defender_units: Units, threat_position: Point2) 
         enemy_center_mass, _ = cy_find_units_center_mass(all_close, 20.0)
         enemy_center = Point2(enemy_center_mass)
         
+        # --- Blink snipe/focus/chase for defenders ---
+        # Same group micro as main army — defenders face the same harassers.
+        squad_stalkers = [
+            u for u in units
+            if u.type_id == UnitTypeId.STALKER
+            and u.tag not in bot._snipe_committed
+            and u.tag not in bot._chase_committed
+            and u.tag not in bot._focus_committed
+        ]
+        if squad_stalkers and all_close:
+            try_commit_snipe(
+                bot=bot,
+                squad_id=squad.squad_id,
+                enemies=all_close,
+                squad_stalkers=squad_stalkers,
+                squad_position=squad_position,
+            )
+        # Execute active snipe (runs every frame for committed squads)
+        snipe_info = bot._snipe_state.get(squad.squad_id)
+        if snipe_info and snipe_info.get("mode") == "b":
+            execute_snipe_b(bot, squad.squad_id, grid)
+        else:
+            execute_snipe_a(bot, squad.squad_id, grid)
+        render_snipe_debug(bot, squad.squad_id)
+
+        # Execute active focus-fire (runs every frame for committed squads)
+        execute_focus(bot, squad.squad_id, grid, all_close)
+        render_focus_debug(bot, squad.squad_id)
+
+        # Chase retreating enemies if we're winning
+        chase_stalkers = [
+            u for u in units
+            if u.type_id == UnitTypeId.STALKER
+            and u.tag not in bot._snipe_committed
+            and u.tag not in bot._chase_committed
+            and u.tag not in bot._focus_committed
+        ]
+        if chase_stalkers and all_close:
+            try_commit_chase(
+                bot=bot,
+                squad_id=squad.squad_id,
+                enemies=all_close,
+                squad_stalkers=chase_stalkers,
+                squad_position=squad_position,
+                can_engage=True,  # Defenders are always engaging
+            )
+        execute_chase(bot, squad.squad_id, grid, all_close)
+        render_chase_debug(bot, squad.squad_id)
+
         # Ranged micro - weighted scoring handles priority targeting
         for r_unit in ranged:
             # Filter enemies to only those this unit can attack and reach
             unit_enemies = get_attackable_enemies(r_unit, all_close, grid)
             if not unit_enemies:
                 continue
+            
+            # Skip stalkers committed to group snipe, chase, or focus-fire
+            if r_unit.type_id == UnitTypeId.STALKER:
+                if r_unit.tag in bot._snipe_committed and bot.state.game_loop < bot._snipe_committed[r_unit.tag]:
+                    continue
+                if r_unit.tag in bot._chase_committed and bot.state.game_loop < bot._chase_committed[r_unit.tag]:
+                    continue
+                if r_unit.tag in bot._focus_committed and bot.state.game_loop < bot._focus_committed[r_unit.tag]:
+                    continue
             
             # Stalkers get blink-aware micro when low health
             if r_unit.type_id == UnitTypeId.STALKER:

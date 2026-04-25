@@ -58,13 +58,6 @@ DISRUPTOR_IGNORE_TYPES: set[UnitTypeId] = COMMON_UNIT_IGNORE_TYPES | {
 }
 """Units to ignore for Disruptor nova targeting - includes workers (too low value)"""
 
-PRIORITY_TARGET_TYPES: set[UnitTypeId] = {
-    UnitTypeId.SIEGETANK,
-    UnitTypeId.SIEGETANKSIEGED,
-    UnitTypeId.COLOSSUS,
-}
-"""High-priority targets that should be focused first in combat"""
-
 # ===== COMBAT PARAMETERS =====
 MELEE_RANGE_THRESHOLD = 3.0
 """Range threshold to classify units as melee vs ranged"""
@@ -489,6 +482,10 @@ CHASE_TACTICAL_MAX = 210
 CHASE_TIMEOUT_FRAMES = 180
 """Maximum chase duration in frames (~8s). One full blink cooldown cycle."""
 
+CHASE_BLINK_GAP_THRESHOLD = 3.0
+"""Distance beyond stalker range at which chase/focus Stalkers blink to close the gap.
+If target is further than stalker_range + threshold, blink toward target."""
+
 TACTICAL_ESCAPE_MAX = 260.0
 """Maximum tactical_grid value along escape corridor for Snipe-B (blink-in, walk-out).
 Above this, the escape lane is too enemy-dominated to walk through."""
@@ -499,6 +496,9 @@ RETREAT_DETECTION_FRAMES = 5
 SNIPE_APPROACH_RANGE_BUFFER = 1.5
 """Buffer added to stalker range when deciding Snipe-A (walk-in) eligibility.
 If target.ground_range <= stalker_range + buffer, stalker can walk into range safely."""
+
+FOCUS_MIN_STALKERS = 2
+"""Minimum Stalkers required to commit a focus-fire. Below this, not worth the commitment."""
 
 # ===== RESOURCE-AWARE PRODUCTION =====
 RESOURCE_PRESSURE_MAX_NUDGE = 0.15

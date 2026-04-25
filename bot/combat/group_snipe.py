@@ -1,11 +1,13 @@
-"""Group blink-snipe helper functions for Stalker micro (Snipe-A and Snipe-B).
+"""Group blink-snipe and focus-fire helper functions for Stalker micro.
 
-Purpose: Damage math, target evaluation, stalker selection, and coordinated sniping.
+Purpose: Damage math, target evaluation, stalker selection, and coordinated execution.
     Snipe-A: walk-in, blink-out (safe, for targets we outrange or match).
     Snipe-B: blink-in, walk-out (riskier, for targets that outrange us).
+    Focus: multi-volley pursuit (blink or walk in, stay on target until dead/abort).
 Key Decisions: Reuses existing TACTICAL_BONUS + army_value for target value; uses python-sc2's
     calculate_damage_vs_target for exact damage math; cy_* for all hot-path geometry.
-    Skip-set pattern (bot._snipe_committed) prevents per-unit micro from overriding group commands.
+    Skip-set pattern (bot._snipe_committed / bot._focus_committed) prevents per-unit micro
+    from overriding group commands.
 Limitations: calculate_damage_vs_target doesn't model Guardian Shield on enemies we haven't
     attacked yet (BuffId check). Overkill buffer compensates.
 """
@@ -21,7 +23,7 @@ from sc2.unit import Unit
 from sc2.units import Units
 
 from ares.behaviors.combat import CombatManeuver
-from ares.behaviors.combat.group import AMoveGroup, GroupUseAbility, PathGroupToTarget
+from ares.behaviors.combat.group import AMoveGroup, GroupUseAbility, PathGroupToTarget, StutterGroupForward
 from ares.dicts.unit_data import UNIT_DATA
 
 from cython_extensions import (
@@ -47,12 +49,24 @@ from bot.constants import (
     SNIPE_APPROACH_RANGE_BUFFER,
     STALKER_BLINK_RANGE,
     TACTICAL_ESCAPE_MAX,
+    CHASE_TACTICAL_MAX,
+    CHASE_BLINK_GAP_THRESHOLD,
+    FOCUS_MIN_STALKERS,
 )
 
 # Combat sim results that allow snipe commitment
 SNIPE_SIM_THRESHOLD = {EngagementResult.TIE, EngagementResult.VICTORY_MARGINAL,
                        EngagementResult.VICTORY_CLOSE, EngagementResult.VICTORY_DECISIVE,
                        EngagementResult.VICTORY_OVERWHELMING, EngagementResult.VICTORY_EMPHATIC}
+
+# Combat sim results that allow focus-fire commitment (more permissive — smaller commitment)
+FOCUS_SIM_THRESHOLD = {EngagementResult.TIE, EngagementResult.VICTORY_MARGINAL,
+                      EngagementResult.VICTORY_CLOSE, EngagementResult.VICTORY_DECISIVE,
+                      EngagementResult.VICTORY_OVERWHELMING, EngagementResult.VICTORY_EMPHATIC}
+
+# Combat sim results that trigger focus-fire abort (tide turned — disengage)
+FOCUS_ABORT_SIM = {EngagementResult.LOSS_DECISIVE, EngagementResult.LOSS_OVERWHELMING,
+                   EngagementResult.LOSS_EMPHATIC}
 
 # Max grid value along the approach corridor (before firing range).
 # Safe cell = 1.0; enemy influence adds cost. ~15 allows walking past
@@ -307,38 +321,44 @@ def find_best_snipe_target(
     squad_position: Point2,
     min_value: float = SNIPE_MIN_TARGET_VALUE,
 ) -> Optional[tuple[Unit, int, list[Unit], str]]:
-    """Find the best target for a group blink snipe (Snipe-A or Snipe-B).
+    """Find the best target for a group blink snipe (Snipe-A, Snipe-B, or Focus).
 
-    Evaluates all enemies by effective_value, determines which mode applies
-    (A = walk-in/blink-out, B = blink-in/walk-out), checks damage math +
-    candidate count, then runs combat sim and corridor safety.
+    Evaluates all enemies by effective_value. Priority:
+    1. Snipe (one-shot): mode "a" or "b" — safest, stalkers retreat after killing.
+    2. Focus (multi-volley): mode "focus" — stalkers stay on target until dead/abort.
 
-    Targets are sorted by value regardless of mode — highest value wins.
+    For snipe targets, checks damage math + candidate count + combat sim + corridor safety.
+    For focus targets, checks isolation + damage math + candidate count + combat sim + corridor safety.
 
     Returns (target, needed_count, selected_stalkers, mode) or None.
-    mode is "a" or "b".
+    mode is "a", "b", or "focus".
 
     Perf: O(e) value scan + O(1) damage calc + O(s) candidate selection + 1 combat sim.
     where e = enemies, s = squad stalkers. Typically e < 30, s < 15.
     """
-    # (value, enemy, mode) — mode determined by range comparison
-    valued: list[tuple[float, Unit, str]] = []
+    # (value, enemy, mode) — mode determined by range/speed comparison
+    snipe_targets: list[tuple[float, Unit, str]] = []
+    focus_targets: list[tuple[float, Unit, str]] = []
+
     for enemy in enemies:
         val = effective_value(enemy)
         if val < min_value:
             continue
         if is_snipe_a_eligible(stalker_sample, enemy):
-            valued.append((val, enemy, "a"))
+            snipe_targets.append((val, enemy, "a"))
         elif is_snipe_b_eligible(stalker_sample, enemy):
-            valued.append((val, enemy, "b"))
+            snipe_targets.append((val, enemy, "b"))
+        # Focus-fire: eligible target type + isolated position
+        elif is_focus_eligible(bot, stalker_sample, enemy):
+            focus_targets.append((val, enemy, "focus"))
 
-    if not valued:
-        return None
+    # Sort snipe targets by value descending, then by current HP ascending
+    snipe_targets.sort(key=lambda x: (x[0], -(x[1].health + x[1].shield)), reverse=True)
+    # Sort focus targets by value descending
+    focus_targets.sort(key=lambda x: (x[0], -(x[1].health + x[1].shield)), reverse=True)
 
-    # Sort by value descending, then by current HP ascending (easiest kill first)
-    valued.sort(key=lambda x: (x[0], -(x[1].health + x[1].shield)), reverse=True)
-
-    for _val, target, mode in valued:
+    # Priority 1: Try snipe (one-shot) targets first — safer than focus-fire
+    for _val, target, mode in snipe_targets:
         needed = stalkers_needed_to_kill(stalker_sample, target)
         if needed <= 0:
             continue
@@ -376,6 +396,43 @@ def find_best_snipe_target(
 
         return target, needed, candidates, mode
 
+    # Priority 2: Try focus-fire (multi-volley) targets
+    for _val, target, mode in focus_targets:
+        needed = stalkers_needed_to_focus(stalker_sample, target)
+        if needed <= 0:
+            continue
+
+        candidates = find_focus_candidates(
+            squad_stalkers, target, needed,
+        )
+        if not candidates:
+            continue
+
+        # Combat sim gate: more permissive than snipe (TIE_OR_BETTER)
+        sim_result = bot.mediator.can_win_fight(
+            own_units=Units(candidates, bot),
+            enemy_units=Units(list(enemies), bot),
+            workers_do_no_damage=True,
+        )
+        if sim_result not in FOCUS_SIM_THRESHOLD:
+            continue
+
+        squad_center = cy_center([c.position for c in candidates])
+
+        # Corridor safety: approach corridor only (we're staying, no escape corridor)
+        if not _is_corridor_safe(bot, squad_center, target.position, stalker_sample, target):
+            continue
+
+        # Blink-in targets: landing must be visible
+        blink_in = should_blink_in(stalker_sample, target)
+        if blink_in:
+            stalker_range = cy_range_vs_target(stalker_sample, target)
+            landing = compute_blink_landing(squad_center, target.position, stalker_range)
+            if not bot.is_visible(landing):
+                continue
+
+        return target, needed, candidates, mode
+
     return None
 
 
@@ -404,12 +461,14 @@ def try_commit_snipe(
     game_loop = bot.state.game_loop
 
     # Cooldown check: don't re-commit too soon after a previous snipe
-    last_commit = bot._snipe_squad_cooldown.get(squad_id, 0)
-    if game_loop - last_commit < SNIPE_COMMIT_COOLDOWN:
+    last_snipe_commit = bot._snipe_squad_cooldown.get(squad_id, 0)
+    if game_loop - last_snipe_commit < SNIPE_COMMIT_COOLDOWN:
         return False
 
-    # Don't stack snipes — only one active snipe per squad
+    # Don't stack — only one active snipe or focus per squad
     if squad_id in bot._snipe_state:
+        return False
+    if squad_id in bot._focus_state:
         return False
 
     # Need at least one stalker with blink to even evaluate
@@ -431,33 +490,59 @@ def try_commit_snipe(
     target, needed, candidates, mode = result
     candidate_tags = {s.tag for s in candidates}
 
-    # Raw kill count (without overkill buffer) — minimum stalkers to one-shot
-    dmg = damage_per_volley(stalker_sample, target)
-    raw_needed = ceil((target.health + target.shield) / dmg) if dmg > 0 else needed
+    if mode == "focus":
+        # Focus-fire: multi-volley pursuit — different state dict and skip-set
+        # TTL is generous — _cleanup_focus releases stalkers when done
+        expiry = game_loop + 800  # ~36s safety net
+        for tag in candidate_tags:
+            bot._focus_committed[tag] = expiry
 
-    # Commit: register in skip-set with TTL
-    expiry = game_loop + SNIPE_EXIT_FRAMES + 200  # generous TTL for full lifecycle
-    for tag in candidate_tags:
-        bot._snipe_committed[tag] = expiry
+        # Precompute blink landing if target outranges or is faster
+        blink_in = should_blink_in(stalker_sample, target)
+        landing = None
+        if blink_in:
+            stalker_range = cy_range_vs_target(stalker_sample, target)
+            squad_center = cy_center([c.position for c in candidates])
+            landing = compute_blink_landing(squad_center, target.position, stalker_range)
 
-    # For Snipe-B, precompute landing spot
-    landing = None
-    if mode == "b":
-        stalker_range = cy_range_vs_target(stalker_sample, target)
-        squad_center = cy_center([c.position for c in candidates])
-        landing = compute_blink_landing(squad_center, target.position, stalker_range)
+        bot._focus_state[squad_id] = {
+            "target_tag": target.tag,
+            "stalker_tags": candidate_tags,
+            "retreat_point": squad_position,
+            "min_to_kill": needed,
+            "mode": mode,
+            "landing": landing,
+            "blink_in": blink_in,
+        }
+    else:
+        # Snipe (A or B): one-shot — original state dict and skip-set
+        # Raw kill count (without overkill buffer) — minimum stalkers to one-shot
+        dmg = damage_per_volley(stalker_sample, target)
+        raw_needed = ceil((target.health + target.shield) / dmg) if dmg > 0 else needed
 
-    # Record snipe state for this squad
-    bot._snipe_state[squad_id] = {
-        "target_tag": target.tag,
-        "stalker_tags": candidate_tags,
-        "retreat_point": squad_position,
-        "commit_frame": game_loop,
-        "min_to_kill": raw_needed,
-        "mode": mode,
-        "landing": landing,  # only used by Snipe-B
-    }
-    bot._snipe_squad_cooldown[squad_id] = game_loop
+        # Commit: register in skip-set with TTL
+        expiry = game_loop + SNIPE_EXIT_FRAMES + 200  # generous TTL for full lifecycle
+        for tag in candidate_tags:
+            bot._snipe_committed[tag] = expiry
+
+        # For Snipe-B, precompute landing spot
+        landing = None
+        if mode == "b":
+            stalker_range = cy_range_vs_target(stalker_sample, target)
+            squad_center = cy_center([c.position for c in candidates])
+            landing = compute_blink_landing(squad_center, target.position, stalker_range)
+
+        # Record snipe state for this squad
+        bot._snipe_state[squad_id] = {
+            "target_tag": target.tag,
+            "stalker_tags": candidate_tags,
+            "retreat_point": squad_position,
+            "commit_frame": game_loop,
+            "min_to_kill": raw_needed,
+            "mode": mode,
+            "landing": landing,  # only used by Snipe-B
+        }
+        bot._snipe_squad_cooldown[squad_id] = game_loop
 
     return True
 
@@ -653,3 +738,265 @@ def _cleanup_snipe(bot, squad_id: str) -> None:
     for tag in state_info["stalker_tags"]:
         bot._snipe_committed.pop(tag, None)
     del bot._snipe_state[squad_id]
+
+
+# ===== FOCUS-FIRE FUNCTIONS =====
+
+def stalkers_needed_to_focus(
+    stalker: Unit,
+    target: Unit,
+) -> int:
+    """Calculate the number of stalkers needed to focus-fire a target.
+
+    Scales naturally with target HP: enough stalkers that each volley deals
+    roughly half the target's HP. Low-HP targets need fewer stalkers,
+    high-HP targets need more. No hard cap — the combat sim gate decides
+    whether the commitment is viable.
+
+    Returns 0 if stalker can't attack the target.
+    Returns at least FOCUS_MIN_STALKERS.
+
+    Perf: ~2µs (one calculate_damage_vs_target call + arithmetic).
+    """
+    dmg = damage_per_volley(stalker, target)
+    if dmg <= 0:
+        return 0
+
+    target_hp = target.health + target.shield
+    # Each volley should deal ~50% of target HP — scales naturally with durability
+    raw_needed = ceil(target_hp / dmg / 2)
+
+    # Mobile targets might dodge — add small buffer
+    buffer = SNIPE_OVERKILL_BUFFER_MOBILE if target.movement_speed > 0 else SNIPE_OVERKILL_BUFFER_STATIC
+    needed = raw_needed + buffer
+
+    if needed < FOCUS_MIN_STALKERS:
+        needed = FOCUS_MIN_STALKERS
+
+    return needed
+
+
+def find_focus_candidates(
+    stalkers: list[Unit],
+    target: Unit,
+    needed: int,
+    max_range: float = 20.0,
+) -> list[Unit]:
+    """Select stalkers for a focus-fire, from those eligible.
+
+    Filters:
+    - Blink ready (EFFECT_BLINK_STALKER in abilities) — required for gap-close
+    - Within max_range of the target
+
+    Sorts by: distance to target (closest first) to minimize travel time.
+    Returns up to `needed` stalkers. Returns empty list if not enough qualify.
+
+    Perf: O(n) filter + O(n log n) sort where n = stalkers in range. Typically n < 20.
+    """
+    nearby: list[Unit] = cy_closer_than(stalkers, max_range, target.position)
+
+    eligible: list[Unit] = [
+        s for s in nearby
+        if AbilityId.EFFECT_BLINK_STALKER in s.abilities
+    ]
+
+    if len(eligible) < needed:
+        return []
+
+    sorted_by_dist: list[Unit] = cy_sorted_by_distance_to(eligible, target.position)
+    return sorted_by_dist[:needed]
+
+
+def is_focus_eligible(
+    bot,
+    stalker_sample: Unit,
+    target: Unit,
+) -> bool:
+    """Check if focus-fire is eligible for this target.
+
+    Focus-fire requires the target to be isolated (low tactical grid value
+    at target position). The value system (TACTICAL_BONUS + army_value) already
+    filters out low-value targets. The approach method (blink vs walk) is
+    determined by should_blink_in() based on range and speed.
+
+    Returns True if the target is isolated enough for a focus-fire commitment.
+
+    Perf: ~1µs (grid lookup).
+    """
+    # Isolation check: grid value at target position must be low enough
+    grid: np.ndarray = bot.mediator.get_ground_grid
+    target_pos = target.position.rounded
+    if not cy_point_below_value(grid, target_pos, CHASE_TACTICAL_MAX):
+        return False
+
+    return True
+
+
+def should_blink_in(stalker_sample: Unit, target: Unit) -> bool:
+    """Determine whether focus-fire should blink in or walk in.
+
+    Blinks in if the target outranges us OR is faster than us.
+    Walks in if we outrange AND are faster (or equal speed).
+
+    Perf: ~300ns (two cy_range_vs_target calls + one movement_speed comparison).
+    """
+    our_range = cy_range_vs_target(stalker_sample, target)
+    their_range = cy_range_vs_target(target, stalker_sample)
+    target_outranges = their_range > our_range + SNIPE_APPROACH_RANGE_BUFFER
+    target_is_faster = target.movement_speed > stalker_sample.movement_speed
+    return target_outranges or target_is_faster
+
+
+# ===== FOCUS-FIRE STATE MACHINE =====
+
+def execute_focus(
+    bot,
+    squad_id: str,
+    grid: np.ndarray,
+    nearby_enemies: Union[Units, list[Unit]],
+) -> None:
+    """Execute focus-fire (multi-volley pursuit) for an active focus operation.
+
+    State machine:
+      APPROACH (first frame, blink-in): GroupUseAbility blink toward target
+      APPROACH (first frame, walk-in): PathGroupToTarget toward target
+      ATTACK (subsequent frames):
+        Target gone/invisible → cleanup
+        Sim LOSS_DECISIVE_OR_WORSE → cleanup (tide turned)
+        Target far + blink ok → GroupUseAbility blink toward target (gap-close)
+        Else → StutterGroupForward toward target (keep attacking)
+
+    nearby_enemies is the same all_close used by the combat loop — scoped
+    to UNIT_ENEMY_DETECTION_RANGE. Used for combat sim abort check.
+    """
+    if squad_id not in bot._focus_state:
+        return
+
+    info = bot._focus_state[squad_id]
+    target_tag = info["target_tag"]
+    stalker_tags: set[int] = info["stalker_tags"]
+    retreat = info["retreat_point"]
+    blink_in = info.get("blink_in", False)
+
+    # Resolve live stalkers
+    stalkers = [u for u in bot.units if u.tag in stalker_tags]
+    if not stalkers:
+        _cleanup_focus(bot, squad_id)
+        return
+
+    tags = {s.tag for s in stalkers}
+
+    # Resolve target from nearby enemies only (not global)
+    target: Optional[Unit] = None
+    for u in nearby_enemies:
+        if u.tag == target_tag:
+            target = u
+            break
+
+    # --- Target gone/invisible → cleanup ---
+    if target is None or not target.is_visible:
+        _cleanup_focus(bot, squad_id)
+        return
+
+    # --- Combat sim abort: tide turned against us ---
+    enemy_list = list(nearby_enemies) if nearby_enemies else []
+    if enemy_list:
+        sim_result = bot.mediator.can_win_fight(
+            own_units=Units(stalkers, bot),
+            enemy_units=Units(enemy_list, bot),
+            workers_do_no_damage=True,
+        )
+        if sim_result in FOCUS_ABORT_SIM:
+            _cleanup_focus(bot, squad_id)
+            return
+
+    # --- Blink approach (first frame only, if target outranges or is faster) ---
+    if not info.get("_approached"):
+        info["_approached"] = True
+        maneuver = CombatManeuver()
+
+        if blink_in:
+            # Blink to close the gap (like Snipe-B)
+            landing = info.get("landing")
+            if landing is not None:
+                maneuver.add(GroupUseAbility(
+                    ability=AbilityId.EFFECT_BLINK_STALKER,
+                    group=stalkers,
+                    group_tags=tags,
+                    target=landing,
+                    sync_command=True,
+                ))
+            else:
+                # Fallback: blink toward target position
+                maneuver.add(GroupUseAbility(
+                    ability=AbilityId.EFFECT_BLINK_STALKER,
+                    group=stalkers,
+                    group_tags=tags,
+                    target=target.position,
+                    sync_command=True,
+                ))
+        else:
+            # Walk in (like Snipe-A) — target is in range or slower
+            stalker_center = Point2(cy_center(stalkers))
+            maneuver.add(PathGroupToTarget(
+                start=stalker_center,
+                group=stalkers,
+                group_tags=tags,
+                grid=grid,
+                target=target.position,
+                success_at_distance=2.0,
+            ))
+
+        bot.register_behavior(maneuver)
+        return
+
+    # --- Ongoing attack: StutterGroupForward to stay on target ---
+    stalker_center = Point2(cy_center(stalkers))
+    dist_to_target = cy_distance_to(stalker_center, target.position)
+
+    maneuver = CombatManeuver()
+
+    # Blink gap-close: if target is pulling away beyond range + threshold
+    # Land right on top of the target (same as initial blink-in) so we're
+    # practically touching them — negates range advantage and splash.
+    stalker_range = cy_range_vs_target(stalkers[0], target)
+    if dist_to_target > stalker_range + CHASE_BLINK_GAP_THRESHOLD:
+        has_blink = any(
+            AbilityId.EFFECT_BLINK_STALKER in s.abilities for s in stalkers
+        )
+        if has_blink:
+            blink_stalkers = [
+                s for s in stalkers
+                if AbilityId.EFFECT_BLINK_STALKER in s.abilities
+            ]
+            blink_tags = {s.tag for s in blink_stalkers}
+            landing = compute_blink_landing(stalker_center, target.position, stalker_range)
+            maneuver.add(GroupUseAbility(
+                ability=AbilityId.EFFECT_BLINK_STALKER,
+                group=blink_stalkers,
+                group_tags=blink_tags,
+                target=landing,
+                sync_command=True,
+            ))
+            bot.register_behavior(maneuver)
+            return
+
+    # Normal pursuit: stutter forward toward target
+    maneuver.add(StutterGroupForward(
+        group=stalkers,
+        group_tags=tags,
+        group_position=stalker_center,
+        target=target.position,
+        enemies=Units(nearby_enemies, bot) if nearby_enemies else Units([], bot),
+    ))
+    bot.register_behavior(maneuver)
+
+
+def _cleanup_focus(bot, squad_id: str) -> None:
+    """Remove all focus-fire state for a squad, releasing stalkers back to normal micro."""
+    if squad_id not in bot._focus_state:
+        return
+    state_info = bot._focus_state[squad_id]
+    for tag in state_info["stalker_tags"]:
+        bot._focus_committed.pop(tag, None)
+    del bot._focus_state[squad_id]

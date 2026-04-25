@@ -37,13 +37,11 @@ from bot.combat.group_snipe import effective_value
 from bot.constants import (
     CHASE_MIN_VALUE,
     CHASE_TIMEOUT_FRAMES,
+    CHASE_BLINK_GAP_THRESHOLD,
 )
 
 # Fraction of enemies that must face away from squad to count as "retreating"
 CHASE_RETREAT_FACING_RATIO = 0.5
-
-# Blink gap-close triggers when target is further than stalker range + this
-CHASE_BLINK_GAP_THRESHOLD = 3.0
 
 
 def is_enemy_retreating(

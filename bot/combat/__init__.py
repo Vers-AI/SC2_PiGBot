@@ -8,7 +8,6 @@ from bot.constants import (
     DEFENDER_SQUAD_RADIUS,
     COMMON_UNIT_IGNORE_TYPES,
     DISRUPTOR_IGNORE_TYPES,
-    PRIORITY_TARGET_TYPES,
     MELEE_RANGE_THRESHOLD,
     STAY_AGGRESSIVE_DURATION,
     TARGET_LOCK_DISTANCE,
@@ -63,6 +62,7 @@ from bot.combat.group_snipe import (
     try_commit_snipe,
     execute_snipe_a,
     execute_snipe_b,
+    execute_focus,
 )
 
 from bot.combat.group_chase import (
@@ -76,7 +76,6 @@ __all__ = [
     "DEFENDER_SQUAD_RADIUS",
     "COMMON_UNIT_IGNORE_TYPES",
     "DISRUPTOR_IGNORE_TYPES",
-    "PRIORITY_TARGET_TYPES",
     "MELEE_RANGE_THRESHOLD",
     "STAY_AGGRESSIVE_DURATION",
     "TARGET_LOCK_DISTANCE",
@@ -118,6 +117,7 @@ __all__ = [
     "try_commit_snipe",
     "execute_snipe_a",
     "execute_snipe_b",
+    "execute_focus",
     # Group chase
     "try_commit_chase",
     "execute_chase",

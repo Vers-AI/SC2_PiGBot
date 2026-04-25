@@ -157,6 +157,10 @@ class PiG_Bot(AresBot):
         self._chase_committed: dict[int, int] = {}  # tag → expiry_frame (skip-set for per-unit micro)
         self._chase_state: dict[str, dict] = {}  # squad_id → {target_tag, stalker_tags, ...}
 
+        # Blink focus-fire state (group focus-fire system)
+        self._focus_committed: dict[int, int] = {}  # tag → expiry_frame (skip-set for per-unit micro)
+        self._focus_state: dict[str, dict] = {}  # squad_id → {target_tag, stalker_tags, ...}
+
         # Mass Recall state (Nexus emergency evacuation)
         self._mass_recall_last_cast_time: float = -999.0  # Game time of last mass recall cast (global 130s cooldown)
         self._mass_recall_pending: bool = False  # True when units should cluster before recall fires
@@ -550,6 +554,14 @@ class PiG_Bot(AresBot):
                 info["stalker_tags"].discard(unit_tag)
                 if not info["stalker_tags"]:
                     del self._chase_state[sid]
+
+        # Clean up blink focus-fire state if a committed stalker dies
+        self._focus_committed.pop(unit_tag, None)
+        for sid, info in list(self._focus_state.items()):
+            if unit_tag in info["stalker_tags"]:
+                info["stalker_tags"].discard(unit_tag)
+                if not info["stalker_tags"]:
+                    del self._focus_state[sid]
 
         # Clean up observer targets if needed
         if unit_tag in self.observer_targets:
