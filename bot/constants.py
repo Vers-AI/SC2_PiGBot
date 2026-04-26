@@ -16,7 +16,7 @@ from typing import Callable, Union
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.upgrade_id import UpgradeId
 
-from cython_extensions import cy_structure_pending_ares
+from cython_extensions import cy_structure_pending_ares, cy_unit_pending
 
 # Lazy import to avoid circular dependency — get_economy_state is only called inside lambdas
 # that execute at runtime, so the import resolves correctly by then.
@@ -540,6 +540,7 @@ class BuildProfile:
     gas_target: Union[int, Callable]
     worker_cap: Union[int, Callable]
     observer_target: Union[int, Callable]
+    warp_prism_target: Union[int, Callable]
     gateway_thresholds: list[tuple[int, int]]
     forge_count: Union[int, Callable]
     chrono_priority: list[UnitTypeId]
@@ -582,6 +583,7 @@ PVT_STANDARD_2023_PROFILE = BuildProfile(
     gas_target=lambda bot: len(bot.townhalls) * 2,
     worker_cap=lambda bot: 90 if bot.game_state >= 1 else 66,
     observer_target=3,
+    warp_prism_target=lambda bot: 1 if _needs_warp_prism(bot) else 0,
     gateway_thresholds=[(1, 3), (3, 5), (5, 8)],
     forge_count=lambda bot: 2 if len(bot.townhalls.ready) >= 4 else (1 if len(bot.townhalls.ready) >= 2 else 0),
     chrono_priority=[
@@ -671,6 +673,21 @@ def _needs_detection_cannons(bot) -> bool:
     return False
 
 
+def _needs_warp_prism(bot) -> bool:
+    """Return True if the active build should build a Warp Prism.
+    Requires completed Robo, TemplarArchive, and RoboticBay, plus supply >= 60.
+    Only triggers when no Warp Prism exists or is pending (limits to 1 total).
+    """
+    total_prisms = (bot.units(UnitTypeId.WARPPRISM).amount +
+                    bot.units(UnitTypeId.WARPPRISMPHASING).amount +
+                    cy_unit_pending(bot, UnitTypeId.WARPPRISM))
+    return (bot.structures(UnitTypeId.ROBOTICSFACILITY).ready
+            and bot.structures(UnitTypeId.TEMPLARARCHIVE).ready
+            and bot.structures(UnitTypeId.ROBOTICSBAY).ready
+            and bot.supply_used >= 60
+            and total_prisms == 0)
+
+
 # --- 2021 PvT Stalker-Centric ---
 # Twilight + Blink opener, Stalker/Zealot army, 2 gas, aggressive gateway scaling.
 # Economy-gated: switches to HT/Sentry composition at moderate economy.
@@ -699,6 +716,7 @@ PVT_STALKER_2021_PROFILE = BuildProfile(
     gas_target=lambda bot: len(bot.townhalls) * 2,  # Scales with bases (same as 2023)
     worker_cap=70,
     observer_target=lambda bot: 1 if _needs_observer(bot) else 0,
+    warp_prism_target=lambda bot: 1 if _get_economy_state(bot) in ("moderate", "full") else 0,
     gateway_thresholds=[(1, 3), (3, 8), (4, 12)],
     forge_count=1,
     chrono_priority=[
@@ -744,6 +762,7 @@ PVZ_STANDARD_PROFILE = BuildProfile(
     gas_target=lambda bot: len(bot.townhalls) * 2,
     worker_cap=lambda bot: 90 if bot.game_state >= 1 else 66,
     observer_target=3,
+    warp_prism_target=0,  # No Warp Prism in PvZ standard
     gateway_thresholds=[(1, 3), (3, 5), (5, 8)],
     forge_count=lambda bot: 2 if len(bot.townhalls.ready) >= 4 else (1 if len(bot.townhalls.ready) >= 2 else 0),
     chrono_priority=[
@@ -780,6 +799,7 @@ PVP_2GATE_PROFILE = BuildProfile(
     gas_target=lambda bot: len(bot.townhalls) * 2,
     worker_cap=lambda bot: 90 if bot.game_state >= 1 else 66,
     observer_target=2,
+    warp_prism_target=0,  # No Warp Prism in PvP standard
     gateway_thresholds=[(1, 3), (3, 5), (5, 8)],
     forge_count=lambda bot: 2 if len(bot.townhalls.ready) >= 4 else (1 if len(bot.townhalls.ready) >= 2 else 0),
     chrono_priority=[

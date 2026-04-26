@@ -732,17 +732,28 @@ def get_desired_upgrades(bot) -> list[UpgradeId]:
     return upgrades
 
 
-def require_warp_prism(bot) -> bool:
-    """Returns True if WarpPrism should be built. Limits to 1 total."""
-    # Check both forms: transport mode and phasing mode
-    total_prisms = (bot.units(UnitTypeId.WARPPRISM).amount + 
+def _train_warp_prism(bot) -> None:
+    """Train Warp Prisms to target count from the active BuildProfile.
+    Supports dynamic warp_prism_target (e.g., 2023 build returns 1 when tech/supply met, 0 otherwise).
+    Returns early if profile says 0 warp prisms.
+    """
+    profile = get_active_profile(bot)
+    target_count = _resolve(profile.warp_prism_target, bot)
+    if target_count == 0:
+        return
+
+    total_prisms = (bot.units(UnitTypeId.WARPPRISM).amount +
                     bot.units(UnitTypeId.WARPPRISMPHASING).amount +
                     cy_unit_pending(bot, UnitTypeId.WARPPRISM))
-    return (bot.structures(UnitTypeId.ROBOTICSFACILITY).ready
-            and bot.structures(UnitTypeId.TEMPLARARCHIVE).ready
-            and bot.structures(UnitTypeId.ROBOTICSBAY).ready
-            and bot.supply_used >= 60
-            and total_prisms == 0)
+    if total_prisms >= target_count:
+        return
+    if not bot.can_afford(UnitTypeId.WARPPRISM):
+        return
+
+    robotics_facilities = bot.structures(UnitTypeId.ROBOTICSFACILITY).ready.idle
+    for facility in robotics_facilities:
+        facility.train(UnitTypeId.WARPPRISM)
+        return
 
 
 def require_shield_battery(bot) -> bool:
@@ -1275,12 +1286,6 @@ async def handle_macro(
             )
         )
     
-    if require_warp_prism(bot):
-        for facility in bot.structures(UnitTypeId.ROBOTICSFACILITY).ready.idle:
-            if bot.can_afford(UnitTypeId.WARPPRISM):
-                facility.train(UnitTypeId.WARPPRISM)
-                break
-    
     # Scale gateways to desired count (from active BuildProfile)
     # Allow in reduced+ economy so production capacity ramps before the moderate transition,
     # preventing a burst of 2+ gateways when economy recovers
@@ -1364,3 +1369,4 @@ async def handle_macro(
     
     bot.register_behavior(macro_plan)
     _train_observers(bot)
+    _train_warp_prism(bot)
