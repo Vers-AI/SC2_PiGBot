@@ -172,7 +172,7 @@ class PiG_Bot(AresBot):
 
         # Detection cannon state (per-base Pylon+Cannon behind mineral lines)
         self._detection_cannon_state: dict[int, str] = {}  # nexus tag → state
-        self._detection_cannon_triggered: bool = False  # Sticky: True once a cloaked threat is ever seen
+        self._detection_cannon_triggered: bool = False  # Sticky: True once a harass threat (Banshee/DT/Oracle/Widow Mine/Dark Shrine) is ever seen
 
         # Belief layer (Phase 1: Composition Belief, Phase 2: Strategy Belief, Phase 4: Opponent Belief)
         enable_strategy = self.config.get("Belief", {}).get("enable_strategy", True)

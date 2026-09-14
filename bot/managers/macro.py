@@ -1322,10 +1322,11 @@ def _train_observers(bot) -> None:
 
 def build_detection_cannons(bot) -> None:
     """Build Pylon + Photon Cannon behind mineral lines at each owned base when
-    detection is needed (cloaked/burrowed threats). Uses a per-base state machine
-    to track progress: needs_pylon → pylon_pending → needs_cannon → cannon_pending → complete.
+    harass threats are seen (Banshee/DT/Oracle/Widow Mine). Uses a per-base
+    state machine to track progress: needs_pylon → pylon_pending → needs_cannon
+    → cannon_pending → complete.
 
-    Purpose: Provide detection coverage for builds without natural Robo/Observer access.
+    Purpose: Provide anti-harass detection coverage for all builds.
     Key Decisions: Per-base state machine prevents duplicate orders; proximity-based worker
         selection naturally picks probes from the target base. All bases build in parallel
         — no sequential blocking between bases. Mineral clearance ensures structures don't
@@ -1711,14 +1712,14 @@ async def handle_macro(
         if predicate(bot) and bot.can_afford(structure_type):
             bot.register_behavior(BuildStructure(production_location, structure_type))
     
-    # Detection cannons behind mineral lines (plug-and-play: only active if profile enables it)
-    # Sticky trigger: once a cloaked threat is seen, the system stays active for ALL bases
-    # (including new expansions) until every base has a completed cannon. This prevents
-    # the harass unit from simply flying to an unprotected base.
-    detection_cannon_flag = _resolve(profile.detection_cannons, bot)
-    if detection_cannon_flag and _needs_detection_cannons(bot):
+    # Detection cannons behind mineral lines (all profiles)
+    # Sticky trigger: once a harass threat (Banshee/DT/Oracle/Widow Mine/Dark Shrine)
+    # is seen, the system stays active for ALL bases (including new expansions)
+    # until every base has a completed cannon. This prevents the harass unit from
+    # simply flying to an unprotected base.
+    if _needs_detection_cannons(bot):
         bot._detection_cannon_triggered = True
-    if detection_cannon_flag and bot._detection_cannon_triggered:
+    if bot._detection_cannon_triggered:
         build_detection_cannons(bot)
     
     macro_plan: MacroPlan = MacroPlan()
