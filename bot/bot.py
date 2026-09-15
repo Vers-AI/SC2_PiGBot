@@ -193,7 +193,9 @@ class PiG_Bot(AresBot):
 
         # Load debug flag from config
         self.debug = self.config.get("BotDebug", False)
-        
+
+        self._patch_bunker_weapon_data()
+
         # Debug on start
         self.map_data: MapData  = self.mediator.get_map_data_object
         
@@ -277,6 +279,27 @@ class PiG_Bot(AresBot):
 
         # Greet opponent with prior info (or just GLHF if unknown)
         await self._send_opponent_greeting()
+
+    def _patch_bunker_weapon_data(self) -> None:
+        """Give enemy bunkers a marine-quad weapon so combat sims see their DPS.
+
+        The API reports no DPS/range/passengers for enemy bunkers (passengers are
+        only visible for own units — python-sc2 unit.py TODO), so the combat
+        simulator would treat them as weaponless 400 HP shells. We copy the
+        Marine weapon proto into the Bunker's type data, scaled to a full
+        garrison, and treat every enemy bunker as occupied.
+        """
+        from bot.constants import BUNKER_SIM_GARRISON_COUNT, BUNKER_SIM_RANGE
+
+        bunker_data = self.game_data.units[UnitTypeId.BUNKER.value]
+        if bunker_data._proto.weapons:
+            return  # already patched (e.g. on_start re-entry) — don't stack garrisons
+
+        marine_weapon = self.game_data.units[UnitTypeId.MARINE.value]._proto.weapons[0]
+        weapon = bunker_data._proto.weapons.add()
+        weapon.CopyFrom(marine_weapon)
+        weapon.attacks = marine_weapon.attacks * BUNKER_SIM_GARRISON_COUNT
+        weapon.range = BUNKER_SIM_RANGE
 
     async def _send_opponent_greeting(self) -> None:
         """Send a greeting at game start with opponent prior info if available."""

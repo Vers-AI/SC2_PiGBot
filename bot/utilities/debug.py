@@ -13,8 +13,8 @@ from sc2.units import Units
 from sc2.ids.unit_typeid import UnitTypeId
 from ares.consts import UnitRole
 
-from bot.intel import get_enemy_intel_quality
-from bot.constants import FRESH_INTEL_THRESHOLD, STALE_INTEL_THRESHOLD, MEMORY_EXPIRY_TIME, STATIC_DEFENSE_TYPES
+from bot.intel import get_enemy_intel_quality, get_sim_static_defense
+from bot.constants import FRESH_INTEL_THRESHOLD, STALE_INTEL_THRESHOLD, MEMORY_EXPIRY_TIME
 from cython_extensions import cy_find_units_center_mass, cy_distance_to
 
 # Worker types to filter from combat sim
@@ -107,8 +107,10 @@ def render_combat_state_overlay(bot, main_army: Units, enemy_threat_level: int, 
         combat_enemies = [
             u for u in cached_enemy
             if u.type_id not in WORKER_TYPES and u.age < MEMORY_EXPIRY_TIME
-            and (not u.is_structure or u.type_id in STATIC_DEFENSE_TYPES)
         ]
+        # Match the real gate: static D from enemy_structures (the cache never
+        # holds structures — the `not u.is_structure` filter below was a no-op)
+        combat_enemies += get_sim_static_defense(bot)
         fight_result = bot.mediator.can_win_fight(
             own_units=main_army, enemy_units=combat_enemies, workers_do_no_damage=True,
         )
@@ -275,8 +277,10 @@ def _render_combat_sim_overlay(bot, main_army: Units) -> None:
     combat_enemies = [
         u for u in cached_enemy
         if u.type_id not in WORKER_TYPES and u.age < MEMORY_EXPIRY_TIME
-        and (not u.is_structure or u.type_id in STATIC_DEFENSE_TYPES)
     ]
+    # Match the real gate: static D from enemy_structures (cache never holds
+    # structures — the old `not u.is_structure` filter was a no-op)
+    combat_enemies += get_sim_static_defense(bot)
     
     # Scout status (any unit with SCOUTING role)
     scout_tags = bot.mediator.get_unit_role_dict.get(UnitRole.SCOUTING, set())

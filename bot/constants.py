@@ -85,6 +85,19 @@ STATIC_DEFENSE_TYPES: set[UnitTypeId] = {
 """Enemy static defenses to include in tactical combat sims. Excludes
 ShieldBattery (no weapon — ARES sim warning: only include units that can attack)."""
 
+BUNKER_SIM_GARRISON_COUNT = 4
+"""Assume bunkers always have a full marine garrison. The API exposes no
+DPS/range/passengers for enemy bunkers (passengers only visible for own
+units — see python-sc2 unit.py TODO), so bot.py patches the Bunker's weapon
+data at on_start with this many marines' worth of damage."""
+
+BUNKER_SIM_RANGE = 6.0
+"""Bunker attack range: marine weapon range (5) + 1 bunker bonus."""
+
+SIM_STATIC_DEFENSE_MAX = 6
+"""Cap on static defense units appended to any single combat sim call —
+bounds sim cost against heavily turtled opponents (PF/turret walls)."""
+
 # ===== COMBAT PARAMETERS =====
 MELEE_RANGE_THRESHOLD = 3.0
 """Range threshold to classify units as melee vs ranged"""

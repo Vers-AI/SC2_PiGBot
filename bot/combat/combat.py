@@ -109,7 +109,7 @@ from bot.utilities.debug import (
     render_focus_debug,
     render_micro_state_debug,
 )
-from bot.intel import get_enemy_intel_quality
+from bot.intel import get_enemy_intel_quality, get_sim_static_defense
 from bot.managers.structure_manager import use_mass_recall
 
 from cython_extensions import (
@@ -711,6 +711,12 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                 # Filter enemy units to focus on actual combat units for more conservative simulation
                 combat_enemies = all_close.filter(
                     lambda u: u.type_id not in WORKER_TYPES and not u.is_structure
+                )
+                # Static D within the squad's detection zone joins the sim —
+                # all_close drops structures, but garrison/cannon fire is real
+                combat_enemies.extend(
+                    s for s in get_sim_static_defense(bot)
+                    if cy_distance_to_squared(s.position, squad_position) < UNIT_ENEMY_DETECTION_RANGE ** 2
                 )
                 
                 squad_fight_result = bot.mediator.can_win_fight(
@@ -1852,6 +1858,9 @@ def handle_attack_toggles(
                         u for u in bot.mediator.get_cached_enemy_army
                         if u.type_id not in WORKER_TYPES and not u.is_structure
                     ]
+                # Static D fights too — a finished bunker-rush bunker is a real
+                # threat, and garrison fire decides this local fight
+                combat_enemy_units += get_sim_static_defense(bot)
                 fight_result = bot.mediator.can_win_fight(
                     own_units=main_army, enemy_units=combat_enemy_units,
                     workers_do_no_damage=True,
@@ -1886,6 +1895,9 @@ def handle_attack_toggles(
                     u for u in bot.mediator.get_cached_enemy_army
                     if u.type_id not in WORKER_TYPES and not u.is_structure
                 ]
+            # Static D joins the retreat re-evaluation — fortified positions
+            # should push us out even if the mobile army died
+            combat_enemy_units += get_sim_static_defense(bot)
             fight_result = bot.mediator.can_win_fight(
                 own_units=main_army,
                 enemy_units=combat_enemy_units,
@@ -1950,12 +1962,15 @@ def handle_attack_toggles(
                 u for u in bot.mediator.get_cached_enemy_army
                 if u.type_id not in WORKER_TYPES and not u.is_structure
             ]
+        # Static D joins the attack-initiate gate — stops walking armies into
+        # fortified naturals (bunkers/cannons/spines count even if the enemy
+        # mobile army is elsewhere)
+        combat_enemy_units += get_sim_static_defense(bot)
         fight_result = bot.mediator.can_win_fight(
             own_units=main_army,
             enemy_units=combat_enemy_units,
             workers_do_no_damage=True,
         )
-        
         # Determine required sim result based on conditions:
         # - Cheese defense or siege tanks present: VICTORY_MARGINAL_OR_BETTER (safety margin)
         # - Normal mode: TIE_OR_BETTER (attack when sim says even or better)

@@ -139,3 +139,31 @@ def update_enemy_intel_tracking(bot: "PiG_Bot") -> None:
     else:
         bot._intel_urgency = max(0.0, bot._intel_urgency - URGENCY_DECAY_RATE)
         bot._worker_scout_sent_this_stale_period = False
+
+
+def get_sim_static_defense(bot: "PiG_Bot", max_count: int | None = None) -> list:
+    """Ready enemy static defenses (bunkers, cannons, spines, turrets, PFs)
+    for tactical combat sims, capped to bound sim cost vs turtled opponents.
+
+    Source is bot.enemy_structures (live + snapshot) — the cached enemy army
+    never contains structures (ARES routes them to a separate branch), so the
+    `not u.is_structure` filters on cached lists are no-ops for static D.
+
+    is_ready excludes under-construction bunkers (no DPS yet — and a
+    bunker-rush bunker in progress is exactly what we want attackable).
+    Snapshots are kept: consistent with existing ghost-unit tolerance in the
+    main-army sims, and a scouted bunker rarely changes fast.
+
+    Limitations: empty/salvaged bunkers are treated as full-garrison
+    (by design — assume the worst). Dead-but-unscouted snapshot bunkers
+    suppress attacks until re-scouted.
+    """
+    from bot.constants import SIM_STATIC_DEFENSE_MAX, STATIC_DEFENSE_TYPES
+
+    if max_count is None:
+        max_count = SIM_STATIC_DEFENSE_MAX
+    defense: list = [
+        s for s in bot.enemy_structures
+        if s.type_id in STATIC_DEFENSE_TYPES and s.is_ready
+    ]
+    return defense[:max_count]
