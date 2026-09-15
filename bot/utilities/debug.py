@@ -2152,3 +2152,34 @@ def render_nexus_ability_debug(bot) -> None:
             color=color,
             size=12,
         )
+
+
+def render_repair_debug(bot) -> None:
+    """Render labels over enemy Bunkers/PFs confirmed as being repaired.
+
+    Shows "REPAIRING +N" over each flagged structure (N = tagged SCV/MULE
+    repairers nearby). Only renders when bot.debug is True.
+    """
+    if not bot.debug:
+        return
+
+    repairing = getattr(bot, "_repairing_structures", {})
+    repairer_tags = getattr(bot, "_repairer_tags", set())
+    if not repairing:
+        return
+
+    for info in repairing.values():
+        pos = info["position"]
+        age = bot.time - info["time"]
+        # Count live repairers (workers die/leave between detection frames)
+        n_repairers = sum(
+            1 for u in bot.enemy_units
+            if u.tag in repairer_tags and cy_distance_to(u.position, pos) <= 4.0
+        )
+        z = bot.get_terrain_z_height(pos)
+        bot.client.debug_text_world(
+            f"REPAIRING +{n_repairers} ({age:.0f}s)",
+            Point3((pos.x, pos.y, z + 3.0)),
+            color=(255, 140, 0),  # Orange — repair threat
+            size=12,
+        )

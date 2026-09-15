@@ -15,6 +15,8 @@ from sc2.units import Units
 
 from ares.dicts.unit_data import UNIT_DATA
 
+from bot.constants import REPAIRER_TARGET_BONUS
+
 from cython_extensions import (
     cy_distance_to,
     cy_in_attack_range,
@@ -40,6 +42,20 @@ THREAT_WEIGHT = 5.0
 # ===== UPGRADE CACHE =====
 # Updated once per frame via update_upgrades(). Avoids passing bot into score_target.
 _cached_upgrades: set = set()
+
+# ===== REPAIRER TAG CACHE =====
+# Updated once per frame via update_repairer_tags(). Same pattern as
+# _cached_upgrades — keeps score_target() bot-free.
+_cached_repairer_tags: set = set()
+
+
+def update_repairer_tags(tags: set) -> None:
+    """Refresh confirmed repairer tags (from intel update_repair_detection).
+
+    Call once per frame from combat.py before any scoring happens.
+    """
+    global _cached_repairer_tags
+    _cached_repairer_tags = tags
 
 
 # ===== UNIT TYPE VALUE (hybrid: UNIT_DATA army_value + tactical bonus) =====
@@ -218,6 +234,11 @@ def score_target(my_unit: Unit, enemy: Unit) -> float:
     data = UNIT_DATA.get(enemy.type_id)
     base_value = (data["army_value"] * TYPE_VALUE_SCALE) if data else DEFAULT_TYPE_VALUE
     score += base_value + TACTICAL_BONUS.get(enemy.type_id, 0.0)
+
+    # Repairer: confirmed SCV/MULE repairing a Bunker/PF — kill the heal
+    # instead of out-damaging it (see intel.update_repair_detection)
+    if enemy.tag in _cached_repairer_tags:
+        score += REPAIRER_TARGET_BONUS
 
     # Layer 2: Health — lower HP = higher priority (focus fire)
     if enemy.health_max > 0:

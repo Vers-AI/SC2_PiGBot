@@ -39,7 +39,7 @@ from bot.combat import (
     gatekeeper_control,
     manage_defensive_unit_roles
 )
-from bot.intel import update_enemy_intel_tracking
+from bot.intel import update_enemy_intel_tracking, update_repair_detection
 from bot.utilities.choke_grid import create_choke_grid, create_narrow_choke_points, refine_all_chokes
 from cython_extensions import cy_distance_to
 from bot.utilities.debug import render_narrow_choke_points, render_refined_choke_points, render_nexus_ability_debug, render_expansion_debug
@@ -427,6 +427,9 @@ class PiG_Bot(AresBot):
             self.reaction_manager.execute(self)
         else:
             self.reaction_manager.execute(self)
+
+            # Detect enemy repair of Bunkers/PFs every frame (cheap, any race)
+            update_repair_detection(self)
 
             # Macro calls (only run if build order is complete)
             await handle_macro(

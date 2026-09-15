@@ -98,6 +98,29 @@ SIM_STATIC_DEFENSE_MAX = 6
 """Cap on static defense units appended to any single combat sim call —
 bounds sim cost against heavily turtled opponents (PF/turret walls)."""
 
+REPAIRABLE_STATIC_D_TYPES: set[UnitTypeId] = {
+    UnitTypeId.BUNKER,
+    UnitTypeId.PLANETARYFORTRESS,
+}
+"""Terran structures whose repair matters tactically (garrison/DPS keeps
+fighting while SCVs out-heal our damage). Terran only — no regen otherwise,
+so HP increase on these = unambiguous repair signal."""
+
+REPAIR_DETECTOR_TTL = 5.0
+"""Seconds a repair flag stays trusted without re-confirmation (vision gaps,
+snapshot frames). Terran repair heals ~4.5 HP/s per SCV, so a couple of
+seconds of blindness doesn't invalidate the flag."""
+
+REPAIRER_PROXIMITY = 3.0
+"""Tiles an enemy SCV/MULE must be from a confirmed repairing structure to
+count as a repairer (repair range is ~1.5 tiles; buffer for clump spread)."""
+
+REPAIRER_TARGET_BONUS = 15.0
+"""Score bonus for confirmed repairer SCVs in target_scoring. SCV base is
+~0.55, so this lifts a repairer to ~15.5 — above Marines/Marauders in range
+(2-8) but below high-priority casters (HT 25+). Killing the repairer is
+cheaper than out-damaging the heal."""
+
 # ===== COMBAT PARAMETERS =====
 MELEE_RANGE_THRESHOLD = 3.0
 """Range threshold to classify units as melee vs ranged"""
