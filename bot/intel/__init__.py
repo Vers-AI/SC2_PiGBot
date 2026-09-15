@@ -20,6 +20,8 @@ from bot.intel.strategy_detect import (
 from bot.intel.intel_quality import (
     get_enemy_intel_quality,
     update_enemy_intel_tracking,
+    get_sim_static_defense,
+    update_repair_detection,
 )
 from bot.intel.observed_game import classify_observed_game
 
@@ -32,5 +34,7 @@ __all__ = [
     "detect_worker_rush",
     "get_enemy_intel_quality",
     "update_enemy_intel_tracking",
+    "get_sim_static_defense",
+    "update_repair_detection",
     "classify_observed_game",
 ]

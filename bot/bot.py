@@ -39,7 +39,7 @@ from bot.combat import (
     gatekeeper_control,
     manage_defensive_unit_roles
 )
-from bot.intel import update_enemy_intel_tracking
+from bot.intel import update_enemy_intel_tracking, update_repair_detection
 from bot.utilities.choke_grid import create_choke_grid, create_narrow_choke_points, refine_all_chokes
 from cython_extensions import cy_distance_to
 from bot.utilities.debug import render_narrow_choke_points, render_refined_choke_points, render_nexus_ability_debug, render_expansion_debug
@@ -172,7 +172,7 @@ class PiG_Bot(AresBot):
 
         # Detection cannon state (per-base Pylon+Cannon behind mineral lines)
         self._detection_cannon_state: dict[int, str] = {}  # nexus tag → state
-        self._detection_cannon_triggered: bool = False  # Sticky: True once a cloaked threat is ever seen
+        self._detection_cannon_triggered: bool = False  # Sticky: True once a harass threat (Banshee/DT/Oracle/Widow Mine/Dark Shrine) is ever seen
 
         # Belief layer (Phase 1: Composition Belief, Phase 2: Strategy Belief, Phase 4: Opponent Belief)
         enable_strategy = self.config.get("Belief", {}).get("enable_strategy", True)
@@ -193,7 +193,9 @@ class PiG_Bot(AresBot):
 
         # Load debug flag from config
         self.debug = self.config.get("BotDebug", False)
-        
+
+        self._patch_bunker_weapon_data()
+
         # Debug on start
         self.map_data: MapData  = self.mediator.get_map_data_object
         
@@ -277,6 +279,27 @@ class PiG_Bot(AresBot):
 
         # Greet opponent with prior info (or just GLHF if unknown)
         await self._send_opponent_greeting()
+
+    def _patch_bunker_weapon_data(self) -> None:
+        """Give enemy bunkers a marine-quad weapon so combat sims see their DPS.
+
+        The API reports no DPS/range/passengers for enemy bunkers (passengers are
+        only visible for own units — python-sc2 unit.py TODO), so the combat
+        simulator would treat them as weaponless 400 HP shells. We copy the
+        Marine weapon proto into the Bunker's type data, scaled to a full
+        garrison, and treat every enemy bunker as occupied.
+        """
+        from bot.constants import BUNKER_SIM_GARRISON_COUNT, BUNKER_SIM_RANGE
+
+        bunker_data = self.game_data.units[UnitTypeId.BUNKER.value]
+        if bunker_data._proto.weapons:
+            return  # already patched (e.g. on_start re-entry) — don't stack garrisons
+
+        marine_weapon = self.game_data.units[UnitTypeId.MARINE.value]._proto.weapons[0]
+        weapon = bunker_data._proto.weapons.add()
+        weapon.CopyFrom(marine_weapon)
+        weapon.attacks = marine_weapon.attacks * BUNKER_SIM_GARRISON_COUNT
+        weapon.range = BUNKER_SIM_RANGE
 
     async def _send_opponent_greeting(self) -> None:
         """Send a greeting at game start with opponent prior info if available."""
@@ -404,6 +427,9 @@ class PiG_Bot(AresBot):
             self.reaction_manager.execute(self)
         else:
             self.reaction_manager.execute(self)
+
+            # Detect enemy repair of Bunkers/PFs every frame (cheap, any race)
+            update_repair_detection(self)
 
             # Macro calls (only run if build order is complete)
             await handle_macro(

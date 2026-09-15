@@ -85,6 +85,42 @@ STATIC_DEFENSE_TYPES: set[UnitTypeId] = {
 """Enemy static defenses to include in tactical combat sims. Excludes
 ShieldBattery (no weapon — ARES sim warning: only include units that can attack)."""
 
+BUNKER_SIM_GARRISON_COUNT = 4
+"""Assume bunkers always have a full marine garrison. The API exposes no
+DPS/range/passengers for enemy bunkers (passengers only visible for own
+units — see python-sc2 unit.py TODO), so bot.py patches the Bunker's weapon
+data at on_start with this many marines' worth of damage."""
+
+BUNKER_SIM_RANGE = 6.0
+"""Bunker attack range: marine weapon range (5) + 1 bunker bonus."""
+
+SIM_STATIC_DEFENSE_MAX = 6
+"""Cap on static defense units appended to any single combat sim call —
+bounds sim cost against heavily turtled opponents (PF/turret walls)."""
+
+REPAIRABLE_STATIC_D_TYPES: set[UnitTypeId] = {
+    UnitTypeId.BUNKER,
+    UnitTypeId.PLANETARYFORTRESS,
+}
+"""Terran structures whose repair matters tactically (garrison/DPS keeps
+fighting while SCVs out-heal our damage). Terran only — no regen otherwise,
+so HP increase on these = unambiguous repair signal."""
+
+REPAIR_DETECTOR_TTL = 5.0
+"""Seconds a repair flag stays trusted without re-confirmation (vision gaps,
+snapshot frames). Terran repair heals ~4.5 HP/s per SCV, so a couple of
+seconds of blindness doesn't invalidate the flag."""
+
+REPAIRER_PROXIMITY = 3.0
+"""Tiles an enemy SCV/MULE must be from a confirmed repairing structure to
+count as a repairer (repair range is ~1.5 tiles; buffer for clump spread)."""
+
+REPAIRER_TARGET_BONUS = 15.0
+"""Score bonus for confirmed repairer SCVs in target_scoring. SCV base is
+~0.55, so this lifts a repairer to ~15.5 — above Marines/Marauders in range
+(2-8) but below high-priority casters (HT 25+). Killing the repairer is
+cheaper than out-damaging the heal."""
+
 # ===== COMBAT PARAMETERS =====
 MELEE_RANGE_THRESHOLD = 3.0
 """Range threshold to classify units as melee vs ranged"""
@@ -1167,10 +1203,6 @@ class BuildProfile:
     chrono_priority: list[UnitTypeId]
     conditional_structures: list[tuple[UnitTypeId, Callable]]
     army_composition_2: dict[UnitTypeId, dict] = field(default_factory=dict)  # Post-Archon composition (used when archon % >= threshold)
-    detection_cannons: Union[bool, Callable] = False
-    """Whether to build Pylon+PhotonCannon behind mineral lines at each base when
-detection is needed. Set True for builds without natural detection (e.g. 2021
-Stalker build). Uses _needs_detection_cannons predicate when callable."""
     economy_switch_threshold: Union[str, None] = None
     """Economy state that triggers a one-way switch from army_composition_0 to
 army_composition_1. Valid values: 'moderate', 'full', or None (no switch).
@@ -1218,13 +1250,16 @@ PVT_STANDARD_2023_PROFILE = BuildProfile(
     conditional_structures=[],  # No reactive structures needed — Robo is in core path
 )
 
-# --- Detection predicate for 2021 Stalker build ---
-# The 2021 build has no Robo in its core path, so it can't build Observers.
-# Two separate predicates:
-#   _needs_robo_for_detection: triggers Robo construction (stops once Robo exists)
-#   _needs_observer: triggers Observer training (stays True as long as detection is needed)
+# --- Detection predicates ---
+# Two separate concerns:
+#   Robo/Observer (2021 Stalker build): _needs_robo_for_detection triggers Robo
+#     construction, _needs_observer triggers Observer training. Use the broad
+#     _CLOAKED_THREAT_* lists — army detection (Lurkers, Ghosts, etc.) needs these.
+#   Detection cannons (all builds): _needs_detection_cannons uses the narrow
+#     _HARASS_THREAT_* lists — only harass units buy cannons, so a burrowed
+#     Zergling doesn't spend 250+ minerals per base on Pylon+Cannon.
 _CLOAKED_THREAT_UNITS = {
-    UnitTypeId.BANSHEE, UnitTypeId.WRAITH, UnitTypeId.DARKTEMPLAR,
+    UnitTypeId.BANSHEE, UnitTypeId.DARKTEMPLAR,
     UnitTypeId.LURKERMP, UnitTypeId.LURKERMPBURROWED,
     UnitTypeId.WIDOWMINE, UnitTypeId.WIDOWMINEBURROWED,
 }
@@ -1232,6 +1267,16 @@ _CLOAKED_THREAT_STRUCTURES = {
     UnitTypeId.ARMORY, UnitTypeId.STARPORTTECHLAB,
     UnitTypeId.FACTORYTECHLAB,
     UnitTypeId.DARKSHRINE, UnitTypeId.LURKERDENMP,
+}
+
+# Harass units that justify per-base defensive cannons. Army detection
+# (burrowed Lurkers, Ghosts, etc.) stays with the Robo/Observer predicates.
+_HARASS_THREAT_UNITS = {
+    UnitTypeId.BANSHEE, UnitTypeId.DARKTEMPLAR, UnitTypeId.ORACLE,
+    UnitTypeId.WIDOWMINE, UnitTypeId.WIDOWMINEBURROWED,  # both states — mines usually spotted burrowed
+}
+_HARASS_THREAT_STRUCTURES = {
+    UnitTypeId.DARKSHRINE,  # early warning: cannons land before first DT swing
 }
 
 
@@ -1277,18 +1322,19 @@ def _needs_observer(bot) -> bool:
 
 
 def _needs_detection_cannons(bot) -> bool:
-    """Return True if cloaked/burrowed threats are detected.
+    """Return True if harass threats (Banshee/DT/Oracle/Widow Mine, or Dark Shrine)
+    are detected. Type-list check only — generic cloaked/burrowed sightings do NOT
+    trigger (a burrowed Zergling must not buy cannons). Army detection (Lurkers,
+    Ghosts, etc.) stays with the Robo/Observer predicates via _CLOAKED_THREAT_UNITS.
     This is the trigger condition — once True, the detection cannon system activates
     for ALL bases simultaneously and continues until every base is complete, even
     if the threat moves out of vision or dies. New expansions also get protection.
     """
     for unit in bot.enemy_units:
-        if unit.type_id in _CLOAKED_THREAT_UNITS:
-            return True
-        if unit.is_cloaked or unit.is_burrowed:
+        if unit.type_id in _HARASS_THREAT_UNITS:
             return True
     for structure in bot.enemy_structures:
-        if structure.type_id in _CLOAKED_THREAT_STRUCTURES:
+        if structure.type_id in _HARASS_THREAT_STRUCTURES:
             return True
     return False
 
@@ -1348,7 +1394,6 @@ PVT_STALKER_2021_PROFILE = BuildProfile(
         UnitTypeId.NEXUS,
     ],
     conditional_structures=[(UnitTypeId.ROBOTICSFACILITY, _needs_robo_for_detection)],  # Reactive Robo for detection
-    detection_cannons=True,  # Build Pylon+Cannon behind mineral lines when detection is needed
     economy_switch_threshold="moderate",  # One-way switch to HT/Sentry composition at moderate economy
     archon_switch_gas_requirement=6,  # Need 6 gas geysers before Archon switch (sustains HT production)
 )

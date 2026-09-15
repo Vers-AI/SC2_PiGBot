@@ -139,3 +139,99 @@ def update_enemy_intel_tracking(bot: "PiG_Bot") -> None:
     else:
         bot._intel_urgency = max(0.0, bot._intel_urgency - URGENCY_DECAY_RATE)
         bot._worker_scout_sent_this_stale_period = False
+
+
+def get_sim_static_defense(bot: "PiG_Bot", max_count: int | None = None) -> list:
+    """Ready enemy static defenses (bunkers, cannons, spines, turrets, PFs)
+    for tactical combat sims, capped to bound sim cost vs turtled opponents.
+
+    Source is bot.enemy_structures (live + snapshot) — the cached enemy army
+    never contains structures (ARES routes them to a separate branch), so the
+    `not u.is_structure` filters on cached lists are no-ops for static D.
+
+    is_ready excludes under-construction bunkers (no DPS yet — and a
+    bunker-rush bunker in progress is exactly what we want attackable).
+    Snapshots are kept: consistent with existing ghost-unit tolerance in the
+    main-army sims, and a scouted bunker rarely changes fast.
+
+    Limitations: empty/salvaged bunkers are treated as full-garrison
+    (by design — assume the worst). Dead-but-unscouted snapshot bunkers
+    suppress attacks until re-scouted.
+    """
+    from bot.constants import SIM_STATIC_DEFENSE_MAX, STATIC_DEFENSE_TYPES
+
+    if max_count is None:
+        max_count = SIM_STATIC_DEFENSE_MAX
+    defense: list = [
+        s for s in bot.enemy_structures
+        if s.type_id in STATIC_DEFENSE_TYPES and s.is_ready
+    ]
+    return defense[:max_count]
+
+
+def update_repair_detection(bot: "PiG_Bot") -> None:
+    """Detect enemy SCV/MULE repair of Bunkers and Planetary Fortresses.
+
+    The API gives no repair flag for enemies (orders are hidden, no repair
+    buff exists), but Terran structures have zero regen — so HP *increase*
+    on a damaged enemy Bunker/PF is unambiguous repair. We track HP per
+    visible structure and flag repair on any observed increase.
+
+    Only HP-tick confirms repair: adjacent workers near a merely-damaged
+    structure don't count (they could be mining at their own base). Once
+    confirmed, nearby SCVs/MULEs are tagged as repairers so targeting
+    (disruptor filter + score bonus) can prioritize them.
+
+    Sets (created lazily, safe vs any race):
+        - bot._repairing_structures: dict[tag -> {"time", "position"}]
+        - bot._repairer_tags: set[int]  (SCV/MULE tags, capped 10)
+
+    Call every frame from bot.py. Perf: O(visible Bunker/PF) with an
+    O(workers x repairing) pass that is zero for non-Terran games.
+    """
+    from sc2.ids.unit_typeid import UnitTypeId
+
+    from bot.constants import (
+        REPAIRABLE_STATIC_D_TYPES,
+        REPAIR_DETECTOR_TTL,
+        REPAIRER_PROXIMITY,
+    )
+
+    if not hasattr(bot, "_repair_hp_history"):
+        bot._repair_hp_history: dict[int, float] = {}
+        bot._repairing_structures: dict[int, dict] = {}
+        bot._repairer_tags: set[int] = set()
+
+    history: dict = bot._repair_hp_history
+    repairing: dict = bot._repairing_structures
+    game_time: float = bot.time
+
+    # 1. HP-tick detection on visible repairable structures
+    for s in bot.enemy_structures:
+        if s.type_id not in REPAIRABLE_STATIC_D_TYPES or not s.is_visible:
+            continue
+        tag = s.tag
+        prev = history.get(tag)
+        if prev is not None and s.health > prev:
+            # Terran structures never regen — HP gain means repair
+            repairing[tag] = {"time": game_time, "position": s.position}
+        history[tag] = s.health
+
+    # 2. Expire stale repair flags
+    expired = [t for t, info in repairing.items()
+               if game_time - info["time"] > REPAIR_DETECTOR_TTL]
+    for t in expired:
+        del repairing[t]
+        history.pop(t, None)
+
+    # 3. Tag repairers: enemy workers near a confirmed repairing structure
+    new_tags: set[int] = set()
+    if repairing:
+        for w in bot.enemy_units:
+            if w.type_id not in (UnitTypeId.SCV, UnitTypeId.MULE):
+                continue
+            for info in repairing.values():
+                if w.distance_to(info["position"]) <= REPAIRER_PROXIMITY:
+                    new_tags.add(w.tag)
+                    break
+    bot._repairer_tags = new_tags

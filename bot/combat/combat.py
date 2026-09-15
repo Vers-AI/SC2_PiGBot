@@ -80,7 +80,7 @@ from bot.combat.unit_micro import (
     micro_air_unit,
 )
 from bot.combat.formation import execute_fan_out, clear_formation_state
-from bot.combat.target_scoring import select_target, update_upgrades
+from bot.combat.target_scoring import select_target, update_upgrades, update_repairer_tags
 from bot.combat.force_field import compute_ff_split, compute_ff_main_ramp_block, compute_ff_choke_block
 from bot.utilities.choke_grid import get_or_refine_choke, detect_dynamic_choke
 from bot.combat.group_snipe import try_commit_snipe, execute_snipe_a, execute_snipe_b, execute_focus
@@ -108,8 +108,9 @@ from bot.utilities.debug import (
     render_chase_debug,
     render_focus_debug,
     render_micro_state_debug,
+    render_repair_debug,
 )
-from bot.intel import get_enemy_intel_quality
+from bot.intel import get_enemy_intel_quality, get_sim_static_defense
 from bot.managers.structure_manager import use_mass_recall
 
 from cython_extensions import (
@@ -622,6 +623,8 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
     """
     # Cache upgrades once per frame for target scoring (Charge check, etc.)
     update_upgrades(bot.state.upgrades)
+    # Refresh confirmed repairer tags for target scoring (Bunker/PF repair)
+    update_repairer_tags(getattr(bot, "_repairer_tags", set()))
     
     # HT archon merge: once per frame, merge low-energy HT pairs
     merge_high_templars(bot)
@@ -711,6 +714,12 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
                 # Filter enemy units to focus on actual combat units for more conservative simulation
                 combat_enemies = all_close.filter(
                     lambda u: u.type_id not in WORKER_TYPES and not u.is_structure
+                )
+                # Static D within the squad's detection zone joins the sim —
+                # all_close drops structures, but garrison/cannon fire is real
+                combat_enemies.extend(
+                    s for s in get_sim_static_defense(bot)
+                    if cy_distance_to_squared(s.position, squad_position) < UNIT_ENEMY_DETECTION_RANGE ** 2
                 )
                 
                 squad_fight_result = bot.mediator.can_win_fight(
@@ -1055,7 +1064,13 @@ def control_main_army(bot, main_army: Units, target: Point2, squads: list[UnitSq
 
                 if disruptors:
                     # Filter enemies for disruptors once: exclude workers and broodlings
-                    disruptor_targets = all_close.filter(lambda u: u.type_id not in DISRUPTOR_IGNORE_TYPES)
+                    # Exception: confirmed repairer SCVs (repairing a Bunker/PF) are
+                    # valid nova targets — killing the heal beats out-damaging it
+                    repairer_tags = getattr(bot, "_repairer_tags", set())
+                    disruptor_targets = all_close.filter(
+                        lambda u: u.type_id not in DISRUPTOR_IGNORE_TYPES
+                        or u.tag in repairer_tags
+                    )
                     
                     nova_manager = bot.nova_manager if hasattr(bot, 'nova_manager') else None
                     
@@ -1816,6 +1831,7 @@ def handle_attack_toggles(
     render_nova_labels(bot, getattr(bot, 'nova_manager', None))
     render_base_defender_debug(bot)
     render_observer_debug(bot)
+    render_repair_debug(bot)
 
     # Siege tanks: combat sim underestimates splash/positioning, so we elevate the
     # required sim threshold to VICTORY_MARGINAL_OR_BETTER instead of bypassing the
@@ -1852,6 +1868,9 @@ def handle_attack_toggles(
                         u for u in bot.mediator.get_cached_enemy_army
                         if u.type_id not in WORKER_TYPES and not u.is_structure
                     ]
+                # Static D fights too — a finished bunker-rush bunker is a real
+                # threat, and garrison fire decides this local fight
+                combat_enemy_units += get_sim_static_defense(bot)
                 fight_result = bot.mediator.can_win_fight(
                     own_units=main_army, enemy_units=combat_enemy_units,
                     workers_do_no_damage=True,
@@ -1886,6 +1905,9 @@ def handle_attack_toggles(
                     u for u in bot.mediator.get_cached_enemy_army
                     if u.type_id not in WORKER_TYPES and not u.is_structure
                 ]
+            # Static D joins the retreat re-evaluation — fortified positions
+            # should push us out even if the mobile army died
+            combat_enemy_units += get_sim_static_defense(bot)
             fight_result = bot.mediator.can_win_fight(
                 own_units=main_army,
                 enemy_units=combat_enemy_units,
@@ -1950,12 +1972,15 @@ def handle_attack_toggles(
                 u for u in bot.mediator.get_cached_enemy_army
                 if u.type_id not in WORKER_TYPES and not u.is_structure
             ]
+        # Static D joins the attack-initiate gate — stops walking armies into
+        # fortified naturals (bunkers/cannons/spines count even if the enemy
+        # mobile army is elsewhere)
+        combat_enemy_units += get_sim_static_defense(bot)
         fight_result = bot.mediator.can_win_fight(
             own_units=main_army,
             enemy_units=combat_enemy_units,
             workers_do_no_damage=True,
         )
-        
         # Determine required sim result based on conditions:
         # - Cheese defense or siege tanks present: VICTORY_MARGINAL_OR_BETTER (safety margin)
         # - Normal mode: TIE_OR_BETTER (attack when sim says even or better)
