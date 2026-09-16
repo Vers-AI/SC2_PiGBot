@@ -1,3 +1,8 @@
+"""
+Purpose: Upload bot.zip to AI Arena via its REST API.
+Key Decisions: Wiki bio comes from bot_description.md; the field is omitted from the PATCH when that file is missing, so the site bio is never clobbered.
+Limitations: Requires UPLOAD_API_TOKEN / UPLOAD_BOT_ID env vars and bot.zip in the repo root.
+"""
 from os import path, environ
 from typing import Union
 
@@ -12,7 +17,7 @@ AUTO_UPLOAD_TO_AIARENA: str = "AutoUploadToAiarena"
 BOT_ZIP_PUBLICLY_DOWNLOADABLE: str = "BotZipPubliclyDownloadable"
 BOT_DATA_PUBLICLY_DOWNLOADABLE: str = "BotDataPubliclyDownloadable"
 BOT_DATA_ENABLED: str = "BotDataEnabled"
-MY_BOT_NAME: str = "MyBotName"
+DESCRIPTION_FILE: str = "bot_description.md"
 ZIPFILE_NAME: str = "bot.zip"
 
 TOKEN: str = environ.get(API_TOKEN_ENV)
@@ -20,20 +25,18 @@ BOT_ID: str = environ.get(BOT_ID_ENV)
 URL: str = f"https://aiarena.net/api/bots/{BOT_ID}/"
 
 
-def get_bot_description() -> str:
+def get_bot_description() -> Union[str, None]:
     """
-    Generate bot description
-    REPLACE WITH OWN LOGIC HERE
-    By default, attempts to get bot name from config
-    and generate a basic description.
+    Read the bot bio from bot_description.md.
+    Returns None when the file is missing so the AI Arena wiki
+    is left untouched rather than overwritten with stale content.
     """
-    bot_name: str = "MyBot"
-    if name := retrieve_value_from_config(MY_BOT_NAME):
-        bot_name = name
+    description_path: str = path.join(path.abspath("."), DESCRIPTION_FILE)
+    if not path.isfile(description_path):
+        return None
+    with open(description_path, encoding="utf-8") as description_file:
+        return description_file.read()
 
-    return (
-        f"# {bot_name}\n\n" "A Protoss Bot Designed to play optimally using human like builds.This bot uses the Ares Framework\n\n"
-    )
 
 def retrieve_value_from_config(string: str) -> Union[str, bool, None]:
     __user_config_location__: str = path.abspath(".")
@@ -82,8 +85,11 @@ if __name__ == "__main__":
                 "bot_zip_publicly_downloadable": bot_zip_public,
                 "bot_data_publicly_downloadable": bot_data_public,
                 "bot_data_enabled": bot_data_enabled,
-                "wiki_article_content": get_bot_description(),
             }
+            # Only send the wiki field when a local description exists;
+            # omitting it leaves the bio on AI Arena unchanged.
+            if (description := get_bot_description()) is not None:
+                request_data["wiki_article_content"] = description
             request_files = {
                 "bot_zip": bot_zip,
             }
