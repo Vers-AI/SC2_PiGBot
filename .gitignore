@@ -149,3 +149,8 @@ data/opponent_profiles.json
 
 #logs
 logs/
+
+# Vendored engine deps (recreate with scripts/vendor_lab_deps.sh — pinned via poetry.lock)
+sc2/
+map_analyzer/
+cython_extensions/
