@@ -698,6 +698,19 @@ class StrategyBelief:
         else:
             ling_timing = "late"
 
+        # attack_timing: when did WE first come under attack?
+        # Recorded by threat_detection() (bin thresholds mirror the
+        # OBSERVED_* commitment constants)
+        attack_time = getattr(bot, "_first_under_attack_time", None)
+        if attack_time is None:
+            attack_timing = "none"
+        elif attack_time < 240:
+            attack_timing = "early"
+        elif attack_time < 600:
+            attack_timing = "mid"
+        else:
+            attack_timing = "late"
+
         return {
             # Schema v1 (7 vars)
             "enemy_race": enemy_race,
@@ -717,9 +730,10 @@ class StrategyBelief:
             "pool_timing": pool_timing,
             "gw_timing": gw_timing,
             "nat_timing": nat_timing,
-            # Schema v3 — disambiguation (2 vars)
+            # Schema v3 — disambiguation (3 vars)
             "gas_timing": gas_timing,
             "ling_timing": ling_timing,
+            "attack_timing": attack_timing,
         }
 
     def _evaluate_rules(

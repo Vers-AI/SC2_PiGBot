@@ -861,7 +861,7 @@ def emit_match_record(bot, game_result, game_time: float,
     # POV — facts only, never the model's prediction). Comparable vs replay labels
     # on the API side; also feeds opponent profile updates at game end.
     from bot.intel import classify_observed_game
-    observed = classify_observed_game(bot)
+    observed = classify_observed_game(bot, game_result=game_result)
     if observed is not None:
         observed_category, observed_source = observed
         match_fields["observed_category"] = observed_category.value

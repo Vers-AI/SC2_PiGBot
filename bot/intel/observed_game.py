@@ -19,25 +19,26 @@ Limitations: Fog-of-war only — can't see enemy worker counts (the server's eco
 """
 
 from bot.constants import (
+    OBSERVED_COMMITTED_GAME_TIME,
     OBSERVED_EARLY_ATTACK_TIME,
     OBSERVED_EARLY_NAT_TIME,
     OBSERVED_LONG_GAME_TIME,
     OBSERVED_NAT_SCOUT_FRESH_TIME,
-    OBSERVED_TIMING_ATTACK_MAX,
     StrategyCategory,
 )
 
 
-def classify_observed_game(bot) -> tuple[StrategyCategory, str] | None:
+def classify_observed_game(bot, game_result=None) -> tuple[StrategyCategory, str] | None:
     """Classify the game from observed facts. Returns (category, source) or None.
 
     Call once at game end. Reads only observations (mediator booleans, guard-rule
-    labels, frame-tracked timings) — never the model's prediction. None means
-    ambiguous: the profile must not be updated for this game.
+    labels, frame-tracked timings, game outcome) — never the model's prediction.
+    None means ambiguous: the profile must not be updated for this game.
     """
     first_attack = getattr(bot, "_first_under_attack_time", None)
     nat_start = getattr(bot, "_enemy_nat_started_at", None)
     game_time = bot.time  # at game end this is the final game time
+    is_win = game_result is not None and str(game_result).endswith("Victory")
 
     # ── Rule 1: CHEESE via proximity detectors (highest confidence — structures
     # near OUR base are visible to us by definition) ──
@@ -67,9 +68,19 @@ def classify_observed_game(bot) -> tuple[StrategyCategory, str] | None:
     if getattr(bot, "_cannon_rush_response", False) or getattr(bot, "_cannon_rush_active", False):
         return StrategyCategory.CHEESE, "observed:cannons"
 
-    # ── Rules 2-4: commitment evidence from the attack/expansion timeline ──
+    # ── Commitment rules: outcome-conditioned (agreement-validated 2026-09-10,
+    # n=483 comparison via analyze_observed_agreement.py). The server's
+    # commitment semantics are OUTCOME-based ("no transition if it fails"):
+    # an early attack we REPELLED that transitions into a long macro game is
+    # pressure within macro, not committed aggression. The bot can't see their
+    # economy, but it can observe the outcome: game ended fast + loss = their
+    # commitment consumed them (62-68% agreement, vs 8-23% unconditioned).
+    # Survived/repelled attacks write nothing — silence beats a wrong label. ──
     if first_attack is not None and first_attack < OBSERVED_EARLY_ATTACK_TIME:
-        # Early committed aggression. Split cheese vs all_in on the server's
+        # Outcome gate: committed aggression shows a fast loss
+        if game_time >= OBSERVED_COMMITTED_GAME_TIME or is_win:
+            return None  # Attack repelled / game went on — pressure within macro
+        # Early attack, fast loss: split cheese vs all_in on the server's
         # unexpanded-commitment line: a FRESH scout showing no nat = observed
         # unexpanded commitment (cheese); no scouting = all_in fallback.
         last_scout = getattr(bot, "_last_nat_scout_time", None)
@@ -80,11 +91,11 @@ def classify_observed_game(bot) -> tuple[StrategyCategory, str] | None:
             return StrategyCategory.CHEESE, "observed:unexpanded_early_attack"
         return StrategyCategory.ALL_IN, "observed:early_attack"
 
-    if (first_attack is not None
-            and OBSERVED_EARLY_ATTACK_TIME <= first_attack <= OBSERVED_TIMING_ATTACK_MAX
-            and nat_start is not None):
-        # Expanded (bounded commitment), then attacked mid-game (bounded window)
-        return StrategyCategory.TIMING_ATTACK, "observed:nat_then_midgame_attack"
+    # NOTE: the old nat_then_midgame_attack timing rule was REMOVED — 0%
+    # agreement with replay labels in every conditioning variant (n=122):
+    # a nat + mid-game attack describes nearly every ordinary macro game.
+    # The server's timing label needs tech-aggression evidence we cannot
+    # observe this way. Timing opponents simply write nothing for now.
 
     if (game_time >= OBSERVED_LONG_GAME_TIME
             and nat_start is not None and nat_start < OBSERVED_EARLY_NAT_TIME

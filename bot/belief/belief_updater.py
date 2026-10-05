@@ -154,7 +154,8 @@ class BeliefUpdater:
         if self._map_prior is not None:
             self._map_prior.load()
 
-    def save_opponent(self, bot, opponent_id: str | None, enemy_race: str) -> None:
+    def save_opponent(self, bot, opponent_id: str | None, enemy_race: str,
+                      game_result=None) -> None:
         """Update and save opponent profiles from OBSERVED facts. Call once at game end.
 
         Classifies the game via classify_observed_game() (evidence-anchored —
@@ -163,7 +164,7 @@ class BeliefUpdater:
         """
         if self._opponent is not None and opponent_id is not None:
             from bot.intel import classify_observed_game
-            observed = classify_observed_game(bot)
+            observed = classify_observed_game(bot, game_result=game_result)
             if observed is not None:
                 category, _source = observed
                 self._opponent.update(opponent_id, enemy_race, category)
