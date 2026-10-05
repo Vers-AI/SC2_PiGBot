@@ -321,6 +321,10 @@ def _track_zerg(bot: "PiG_Bot") -> None:
 
         # Detect Metabolic Boost via position deltas
         # Base speed=4.13, base+creep=5.37, speed=6.58
+        # NOTE: the history entry must only be refreshed once the measurement
+        # window (dt >= 0.3s) is consumed. Updating it every frame (~0.18s)
+        # made dt always < 0.3 — the speed check never fired (all-zero
+        # ling_has_speed across the entire corpus was this bug).
         if not bot._ling_has_speed:
             now = bot.time
             for ling in enemy_lings:
@@ -340,7 +344,11 @@ def _track_zerg(bot: "PiG_Bot") -> None:
                                 print(f"{bot.time_formatted}: Speed detected! "
                                       f"Ling {tag} speed={observed_speed:.2f}")
                             break
-                bot._ling_pos_history[tag] = (pos, now)
+                        # Window consumed — start a new one from the current position
+                        bot._ling_pos_history[tag] = (pos, now)
+                else:
+                    # First sighting — seed the history, measure from here
+                    bot._ling_pos_history[tag] = (pos, now)
             if len(bot._ling_pos_history) > 50:
                 bot._ling_pos_history = {
                     t: v for t, v in bot._ling_pos_history.items()

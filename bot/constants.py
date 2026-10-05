@@ -635,6 +635,13 @@ OBSERVED_NAT_SCOUT_FRESH_TIME = 90.0
 this recent (seconds before the attack) for 'they never expanded' to be
 observed fact rather than stale intel."""
 
+OBSERVED_COMMITTED_GAME_TIME = 420.0
+"""Outcome gate for the early-attack rules: an early attack only counts as
+committed aggression if the game ended before this (7:00) in a loss.
+Longer games / repelled attacks mean they had a transition plan — the server's
+commitment semantics call that macro pressure (agreement-validated: 41-45%
+exact / 62-68% aggression agreement vs 8-23% unconditioned, n=483)."""
+
 # ===== STRATEGY-AWARE COMPOSITION NUDGING =====
 STRATEGY_NUDGE_MAX = 0.10
 """Maximum proportion shift from strategy nudge (same cap as PRODUCTION_MAX_NUDGE)."""

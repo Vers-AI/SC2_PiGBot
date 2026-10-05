@@ -741,6 +741,7 @@ class PiG_Bot(AresBot):
             bot=self,
             opponent_id=getattr(self, 'opponent_id', None),
             enemy_race=self.enemy_race.name,
+            game_result=game_result,
         )
         
         # Reset telemetry state between games

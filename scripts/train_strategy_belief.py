@@ -515,10 +515,17 @@ def _extract_timing_from_events(events: list[dict]) -> dict:
                 if norm not in unit_first_seen and event_time > 0:
                     unit_first_seen[norm] = event_time
 
-        # Boolean flags
+        # Boolean flags — under_attack arrives as a log_transition record:
+        # {reason: 'under_attack', under_attack: True/False, ts: '270.0'}.
+        # ts is a STRING in these events (older events used floats — handle both).
         if event.get("under_attack"):
             under_attack_count += 1
             event_time = event.get("ts")
+            if isinstance(event_time, str):
+                try:
+                    event_time = float(event_time)
+                except ValueError:
+                    event_time = 0.0
             if not isinstance(event_time, (int, float)):
                 event_time = 0.0
             if first_under_attack_time is None and event_time > 0:
@@ -897,6 +904,14 @@ def discretize_features(df: pd.DataFrame) -> pd.DataFrame:
         lambda t: "none" if t < 0 else ("early" if t < 120 else ("mid" if t < 160 else "late"))
     )
 
+    # attack_timing: when did WE first come under attack? Derived from telemetry
+    # under_attack transitions (first_under_attack_time — fixed 2026-09-09: string
+    # ts parsing). Bins mirror the OBSERVED_* commitment thresholds:
+    # early <240s (cheese/all-in aggression), mid 240-600 (timing window), late.
+    df["attack_timing"] = df["first_under_attack_time"].fillna(-1).apply(
+        lambda t: "none" if t < 0 else ("early" if t < 240 else ("mid" if t < 600 else "late"))
+    )
+
     return df
 
 
@@ -907,9 +922,9 @@ SKLEARN_EVIDENCE_COLS = [
     "bases_bin", "factory_bin",
     "rax_near_base", "gw_near_base", "cannon_near_base", "bunker_near_base",
     "rax_timing", "pool_timing", "gw_timing", "nat_timing",
-    # Schema v3 disambiguation: gas/ling timing (see discretize_features
-    # for bin rationale; queen_timing + nat_present evaluated and dropped)
-    "gas_timing", "ling_timing",
+    # Schema v3 disambiguation: gas/ling timing + attack timing (see
+    # discretize_features for bin rationale)
+    "gas_timing", "ling_timing", "attack_timing",
 ]
 
 

@@ -1424,7 +1424,32 @@ The auto-TRUE guards are the deterministic fallback when the sklearn model is mi
 
 **Verification:** all 4 epoch scenarios pass (poison discard, save-stamp, same-epoch persist, next-epoch discard); `classify_observed_game` passes 7/7 scenarios (both Sep 8/9 test games replayed correctly); artifact retrained with epoch 1788968030; previous-model self-correction accuracy on clean corpus: 77.4%.
 
-**API-side pending (user's list):** join `observed_category` + `observed_category_source` into `match-level-full`.
+**API-side pending (user's list):** join `observed_category` + `observed_category_source` into `match-level-full`. ~~DONE (2026-09-10)~~ — 480 games with observed labels flowing.
+
+#### Post-Deploy Findings (2026-09-10)
+
+**observed_category now on the API (480 games):** distribution all_in 182 / cheese 143 / timing 122 / macro 33. The strict rules validate strongly; the early-attack rules disagree with replay truth — full analysis via `scripts/analyze_observed_agreement.py` (new; read-only comparison consumer — observed_category must never enter training features: it's ground truth, feature use = label leakage).
+
+**Agreement rates (rubric vs replay, n=480):**
+
+| Rule | Agreement | Diagnosis |
+|---|---|---|
+| `ares:cannon_rush` | **100%** (5/5) | Observational ARES booleans are gold |
+| `observed:long_game_early_nat` (macro) | **85%** (28/33) | Strict positive evidence works |
+| `observed:unexpanded_early_attack` (cheese) | 22% (30/138) | Misses → macro 93: game lengths 594s median on misses — "they attacked early, we survived, they droned up" is macro by the server's commitment semantics |
+| `observed:early_attack` (all_in) | **8%** (15/182) | Misses → macro 137: median 662s, 105 WINS — the bot *repelled* the early attack and the game went long. Replay says macro |
+| `observed:nat_then_midgame_attack` (timing) | **2%** (2/122) | Misses → macro 103: same pattern — survived attack, long game |
+
+**Root cause of rule disagreement:** the bot-side rubric classified at the moment of the attack, but the server's commitment semantics are outcome-based — an early attack that gets repelled and transitions to a long macro game is NOT committed aggression.
+
+**Outcome conditioning applied (2026-09-10, build session):** simulated on live data before implementing — `early_attack` conditioned on `game <420s AND loss`: 41% exact / **62% aggression agreement** (was 8%/17%); `unexpanded_early_attack` same conditioning: 45% / **68%** (was 23%/34%). Thresholds picked empirically from the agree/miss length distributions (commits at 295s median, misses at 662s). Changes:
+- Early-attack rules now require **fast loss** (`game_time < OBSERVED_COMMITTED_GAME_TIME=420` AND not a win) — repelled/survived attacks write nothing (pressure within macro, matching the server's "no transition if it fails" semantics)
+- **Timing rule REMOVED** — 0% agreement in every conditioning variant (n=122): nat + mid-window attack describes nearly every ordinary macro game. Timing opponents write nothing until a tech-observable signal exists
+- `classify_observed_game(bot, game_result)` now takes the result explicitly (passed from `on_end` → `save_opponent`/`emit_match_record`; no stashed attributes)
+- Strict rules unchanged: ARES/proximity 100%, macro rule 85% — already aligned
+- Verified: guard labels still outrank the outcome gate (12_pool in a 700s game still records cheese — guards are observations of *what they did*, not outcome-dependent)
+
+**ling_has_speed fixed (2026-09-10):** the speed detector was dead code — `_ling_pos_history[tag]` was overwritten EVERY frame (~0.18s), so the `dt >= 0.3` measurement window never opened; `ling_has_speed` was 0 across the entire corpus (640/640 games). Fix: only refresh the history entry once the measurement window is consumed. Speedlings will now actually register.
 
 #### Implementation Status
 

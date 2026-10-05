@@ -7,16 +7,16 @@
     "macro"
   ],
   "counts": {
-    "cheese": 332,
-    "all_in": 335,
-    "timing_attack": 140,
-    "macro": 1190
+    "cheese": 316,
+    "all_in": 241,
+    "timing_attack": 114,
+    "macro": 1325
   },
   "probs": {
-    "cheese": 0.1662,
-    "all_in": 0.1678,
-    "timing_attack": 0.0701,
-    "macro": 0.5959
+    "cheese": 0.1583,
+    "all_in": 0.1207,
+    "timing_attack": 0.0571,
+    "macro": 0.6638
   },
-  "n_samples": 1997
+  "n_samples": 1996
 }
