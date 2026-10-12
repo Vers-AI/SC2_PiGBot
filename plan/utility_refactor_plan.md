@@ -97,8 +97,8 @@ value per count is non-constant," not "has a fixed number":**
 | Sentry | Fixed saturation (FF choke-hold, GS uptime) — independent of enemy count | 4 comps, up to 0.32 | Excluded from nudge (77dc34e) |
 | High Templar | Saturation ∝ enemy clump size; Archon-merge floor on marginal cost; Feedback term vs casters | 4 comps, up to 0.4 | Keep in flat nudge until curve exists |
 | Disruptor | Saturation ∝ clump size × micro capacity (controllable novas, cooldown-limited) | 5 comps, up to 0.3 | Keep in flat nudge until curve exists |
-| Oracle | Harass-domain curve (worker-kill value × enemy econ state); saturates ~1-2 | Not built; no attacker rows | Design curve when first build adds it |
-| Mothership | Binary N∈{0,1} (unique unit): cloaking/recall value vs cost | Not built; no rows | Binary build decision when first build adds it |
+| Oracle | Harass-domain curve (see count-utility curves below) | Not built; no attacker rows | Curve below; activate when first build adds it |
+| Mothership | Binary N∈{0,1} (unique unit) — Cloaking Field + Mass Recall + Time Warp (see below) | Not built; no rows | Binary decision below; activate when first build adds it |
 
 Why HT/Disruptor stay in the flat nudge while Sentry was excluded: their saturation
 scales WITH enemy clump size, so the per-enemy table sum is a crude but
@@ -107,6 +107,55 @@ is enemy-count-independent, so flat scaling pushed it in a wrong direction. HT a
 has a built-in overproduction valve — spent HTs merge into Archons, giving marginal
 HTs residual value that marginal Sentries lack. Phase 1 replaces both flat
 treatments with their curves.
+
+**Foundational count-utility curves (Oracle + Mothership, designed 2026-10-12 so
+the machinery covers the full Protoss caster roster from day one):**
+
+Oracle — value lives in the *economy* domain, not army-vs-army. Three terms, each
+grounded in LotV ability data (LP: Pulsar 25 + 2/s, two-shots workers; Stasis Ward
+21s; Revelation reveals detected units for 60s):
+
+```
+u_oracle(N) = w_pk  × worker_kill_value × enemy_econ_openness      # Pulsar Beam
+            + w_rev × intel_value × intel_staleness                  # Revelation
+            + w_sw  × trap_value × enemy_ground_clump               # Stasis Ward
+            − N × oracle_cost_in_stalkers
+worker_kill_value = min(1, enemy_worker_count / WORKER_KILL_CAP) × worker_value
+enemy_econ_openness   = 1 − enemy_static_defense_coverage(base)    # cannons/turrets/spores seen
+intel_staleness       = normalized age of composition intel (0-1)
+```
+
+Saturates at N≈1-2: the 2nd Oracle only helps if bases are split far apart
+(surprise windows at multiple expansions); the 3rd adds ~nothing. All inputs
+observable: worker counts from scouting/intel, static-D coverage from
+recon, intel age from the intel system (Phase 4 coordinator).
+
+Mothership — unique unit, so N∈{0,1}; the "count" question collapses to a
+binary build decision evaluated each macro cycle. Grounded in LotV ability data
+(LP: Cloaking Field passive radius 5; Mass Recall; Time Warp 35% slow):
+
+```
+u_ms(1) = w_cloak × cloak_value(army_value_covered, enemy_detection_present)
+        + w_recall × recall_value(home_distance × threat_on_army)
+        + w_tw × time_warp_value(enemy_speed_delta)               # slow = catch/kite
+        − mothership_cost_in_army_share
+u_ms(0) = 0 → build iff u_ms(1) > 0, re-evaluated per cycle
+```
+
+`enemy_detection_present` is the key gate: Cloaking Field's value drops sharply
+vs observers/scan/raven (LP: detection counters cloaked armies), so the cloak
+term reads the intel system's enemy-detector belief. Time Warp value scales with
+our army's speed disadvantage vs the enemy (catching lings, kiting bio).
+
+Design notes for both:
+- Same machinery as Sentry: derived curve shape, observable inputs, constants
+  from game data, weights fitted from telemetry (principle #5).
+- Neither is built today; when a build adds them, register in SITUATIONAL_ROWS'
+  successor (the count-curve registry) and wire into Phase 1's
+  `marginal_utility()` — no new architecture needed.
+- The Mothership binary case is the degenerate curve proving the machinery
+  covers N∈{0,1} units; Oracle's multi-domain terms prove it covers non-combat
+  utility domains (economy, intel).
 
 - Candidates: the current profile compositions + counter-driven variants + a "hold/defend" candidate. The winner builds.
 - The counter table becomes the core term of the score (no longer a post-decision nudge).
