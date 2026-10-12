@@ -89,6 +89,25 @@ u_sentry(N) = w_ff × ff_choke_hold(N) × choke_threat            # caps at 1.0
 - Combat targeting keeps flat rows for registry types (a Sentry still prefers
   shooting what's in front of it) — the registry only governs production utility.
 
+**Registry classification (research 2026-10-12) — entry criterion is "marginal
+value per count is non-constant," not "has a fixed number":**
+
+| Type | Curve shape | Live today | Nudge action now |
+|---|---|---|---|
+| Sentry | Fixed saturation (FF choke-hold, GS uptime) — independent of enemy count | 4 comps, up to 0.32 | Excluded from nudge (77dc34e) |
+| High Templar | Saturation ∝ enemy clump size; Archon-merge floor on marginal cost; Feedback term vs casters | 4 comps, up to 0.4 | Keep in flat nudge until curve exists |
+| Disruptor | Saturation ∝ clump size × micro capacity (controllable novas, cooldown-limited) | 5 comps, up to 0.3 | Keep in flat nudge until curve exists |
+| Oracle | Harass-domain curve (worker-kill value × enemy econ state); saturates ~1-2 | Not built; no attacker rows | Design curve when first build adds it |
+| Mothership | Binary N∈{0,1} (unique unit): cloaking/recall value vs cost | Not built; no rows | Binary build decision when first build adds it |
+
+Why HT/Disruptor stay in the flat nudge while Sentry was excluded: their saturation
+scales WITH enemy clump size, so the per-enemy table sum is a crude but
+directionally-correct linearization (build AoE vs clumped bio). Sentry saturation
+is enemy-count-independent, so flat scaling pushed it in a wrong direction. HT also
+has a built-in overproduction valve — spent HTs merge into Archons, giving marginal
+HTs residual value that marginal Sentries lack. Phase 1 replaces both flat
+treatments with their curves.
+
 - Candidates: the current profile compositions + counter-driven variants + a "hold/defend" candidate. The winner builds.
 - The counter table becomes the core term of the score (no longer a post-decision nudge).
 - Sticky switches die; composition flexes continuously with belief updates.
