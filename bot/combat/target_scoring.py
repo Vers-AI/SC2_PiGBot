@@ -2,7 +2,9 @@
 
 Purpose: Replace simple "attack closest/lowest HP" with multi-factor scoring
 Key Decisions: Layered scoring (distance + health + type value + range + counter matchup + threat),
-    uses Cython extensions for all heavy math, returns best target per unit
+    uses Cython extensions for all heavy math, returns best target per unit;
+    COUNTER_TABLE covers the full Protoss combat arsenal (Oracle/Mothership excluded by design),
+    pairs + scores sourced from plan/counter_table_research_liquipedia.md (Liquipedia LotV pages)
 Limitations: O(n*m) where n=own units, m=enemies in radius; mitigated by pre-filtering with cy_closer_than
 """
 
@@ -198,6 +200,60 @@ COUNTER_TABLE: dict[tuple[UnitTypeId, UnitTypeId], float] = {
     (UnitTypeId.HIGHTEMPLAR, UnitTypeId.MUTALISK):     4.0,  # LP: "Mutas escape storms fairly easily...Archons fare better"
     (UnitTypeId.HIGHTEMPLAR, UnitTypeId.GHOST):       10.0,  # LP: "Feedback...counteracted by using Feedback on Ghost"
     (UnitTypeId.HIGHTEMPLAR, UnitTypeId.VIPER):       10.0,  # LP: "Feedback is only really useful versus Vipers"
+
+    # Adepts: strong vs light, no anti-air (LP: "strong against early Zealots and other light units")
+    (UnitTypeId.ADEPT, UnitTypeId.MARINE):    6.0,  # Light, early numbers
+    (UnitTypeId.ADEPT, UnitTypeId.ZERGLING):  6.0,  # LP: strong vs light/Zealots
+    (UnitTypeId.ADEPT, UnitTypeId.ROACH):    -6.0,  # Armored, out-tanks (LP: PvZ "Roaches out-tank")
+    (UnitTypeId.ADEPT, UnitTypeId.MUTALISK): -6.0,  # LP: "Adepts have no anti-air attack"
+
+    # Sentries: support caster, no direct attack in LotV — small scores, it enables rather than kills
+    (UnitTypeId.SENTRY, UnitTypeId.MARINE):   3.0,  # GS reduces marine damage; support role
+    (UnitTypeId.SENTRY, UnitTypeId.ZERGLING): 3.0,
+    (UnitTypeId.SENTRY, UnitTypeId.ZEALOT):   4.0,  # LP: FF defense vs Zealots
+
+    # Dark Templar: cloaked melee burst (LP: "even a small number of DT can decimate a large number of workers very quickly")
+    (UnitTypeId.DARKTEMPLAR, UnitTypeId.MARINE): 5.0,  # 45-dmg melee shreds light if no detection
+    # NOTE: detection-dependent; worker-line value not modeled in this table (workers excluded)
+
+    # Phoenix: air superiority + Graviton Beam vs light/casters (LP: "effective at disabling caster units or destroying them outright. Most casters have light armor")
+    (UnitTypeId.PHOENIX, UnitTypeId.MUTALISK):       8.0,  # Classic Muta counter
+    (UnitTypeId.PHOENIX, UnitTypeId.BANSHEE):        6.0,  # Light air, melts
+    (UnitTypeId.PHOENIX, UnitTypeId.MEDIVAC):        6.0,  # Lifts/heal-kill
+    (UnitTypeId.PHOENIX, UnitTypeId.VIPER):          6.0,  # Air, disables
+    (UnitTypeId.PHOENIX, UnitTypeId.ORACLE):         5.0,  # Mirror: out-fights caster
+    (UnitTypeId.PHOENIX, UnitTypeId.VIKINGFIGHTER): -8.0,  # Armored air, out-ranges 9>5, LP-tier hard counter
+
+    # Void Rays: anti-armored ramp damage (LP: "a few Void Rays can focus down the armored units very fast")
+    (UnitTypeId.VOIDRAY, UnitTypeId.SIEGETANK):      4.0,
+    (UnitTypeId.VOIDRAY, UnitTypeId.THOR):           5.0,  # LP: focus down armored
+    (UnitTypeId.VOIDRAY, UnitTypeId.BATTLECRUISER):  8.0,  # Ramp on massive
+    (UnitTypeId.VOIDRAY, UnitTypeId.TEMPEST):        8.0,  # LP: "extremely strong against Tempest (bonus damage against armored)"
+    (UnitTypeId.VOIDRAY, UnitTypeId.CARRIER):        6.0,  # LP: Carriers "easily countered by Stalkers + Sentries, Tempests, and Void Rays"
+    (UnitTypeId.VOIDRAY, UnitTypeId.MEDIVAC):        5.0,  # LP: drop deterrent — "a boosted Medivac... will barely get through"
+    (UnitTypeId.VOIDRAY, UnitTypeId.MARINE):        -6.0,  # Mass small arms
+    (UnitTypeId.VOIDRAY, UnitTypeId.STALKER):       -8.0,  # LP: "Stalkers can deal with Void Rays easily because of the ease of making large amounts"
+    (UnitTypeId.VOIDRAY, UnitTypeId.HYDRALISK):     -6.0,  # Mass ranged
+
+    # Tempests: super-long-range snipe platform (LP: "snipe enemy Colossi and forcing the enemy to retreat")
+    (UnitTypeId.TEMPEST, UnitTypeId.COLOSSUS):       8.0,  # LP: snipe role, super-long range
+    (UnitTypeId.TEMPEST, UnitTypeId.CARRIER):        7.0,  # Range war on big air
+    (UnitTypeId.TEMPEST, UnitTypeId.BATTLECRUISER):  8.0,  # Bonus vs massive
+    (UnitTypeId.TEMPEST, UnitTypeId.VOIDRAY):       -6.0,  # LP: "Void Rays are extremely strong against Tempest"
+    (UnitTypeId.TEMPEST, UnitTypeId.MUTALISK):      -4.0,  # Swarm bypasses range
+
+    # Carriers: interceptor swarm vs static defense (LP: "extremely powerful versus stationary defenses and AI controlled units")
+    (UnitTypeId.CARRIER, UnitTypeId.PHOTONCANNON):   6.0,  # Vs static D, range outside cannon
+    (UnitTypeId.CARRIER, UnitTypeId.SPORECRAWLER):   7.0,
+    (UnitTypeId.CARRIER, UnitTypeId.SPINECRAWLER):   7.0,
+    (UnitTypeId.CARRIER, UnitTypeId.VIKINGFIGHTER): -6.0,  # LP resource war: "killed in 2 volleys by Carriers... less than a third of the cost"
+    (UnitTypeId.CARRIER, UnitTypeId.CORRUPTOR):     -5.0,  # LP: Zerg: Corruptors (same family as Colossus-counter line)
+    (UnitTypeId.CARRIER, UnitTypeId.VOIDRAY):       -5.0,  # LP: PvP "easily countered by Stalkers + Sentries, Tempests, and Void Rays"
+
+    # NOTE: Oracle and Mothership EXCLUDED BY DESIGN — support/harass casters with no
+    # matchup advantage vs army units (LP: Oracle "flying harassment and support caster";
+    # Mothership "primary use is its powerful support abilities").
+    # See plan/counter_table_research_liquipedia.md before adding rows for either.
 }
 
 
