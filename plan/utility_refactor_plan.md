@@ -62,6 +62,33 @@ u(composition) = Σ counter_effectiveness(my_units vs believed_enemy_comp) × be
                − cost_term (minerals/gas/time to reach composition)
 ```
 
+**Support units are not table rows — they're count curves (GDC principle #4).**
+Units whose value is ability-driven (Sentry GS/FF today; later Raven/Medivac/
+Queen-class) saturate with count. Flat per-enemy table bonuses mis-scale them
+(the 5th Sentry scores like the 2nd). Their count-optimum emerges as a curve
+crossing, computed per situation — never a hardcoded constant:
+
+```
+u_sentry(N) = w_ff × ff_choke_hold(N) × choke_threat            # caps at 1.0
+            + w_gs × gs_uptime(N, T_fight) × army_size × enemy_ranged_frac
+            − N × sentry_cost                                   # linear in stalkers
+```
+
+- Saturation terms cap at 1.0: `ff_choke_hold = min(1, N × regen × FF_DURATION / FF_COST)`;
+  GS uptime similar over expected fight length `T_fight` (rolling average measured
+  from our own engagements).
+- The "right number" is where marginal value crosses marginal cost — situational by
+  construction (ling flood at a ramp → ~6-8; open-field skirmish → ~2-3).
+- Ability constants (FF_COST, GS_DURATION=11s, radius 4.5, energy regen) come from
+  game data, not typed literals. Weights `w_ff`/`w_gs` are **fitted from telemetry**
+  (principle #5): per-engagement logging of {sentry count, energy spent, GS uptime ×
+  units covered, FF casts, trade ratio}, correlated against outcomes.
+- `SITUATIONAL_ROWS` in target_scoring.py (commit 77dc34e) is the registry of these
+  count-curve types: nudging must not scale them flat; Phase 1's scorer calls
+  `marginal_utility(type, count, situation)` for registry types instead.
+- Combat targeting keeps flat rows for registry types (a Sentry still prefers
+  shooting what's in front of it) — the registry only governs production utility.
+
 - Candidates: the current profile compositions + counter-driven variants + a "hold/defend" candidate. The winner builds.
 - The counter table becomes the core term of the score (no longer a post-decision nudge).
 - Sticky switches die; composition flexes continuously with belief updates.
