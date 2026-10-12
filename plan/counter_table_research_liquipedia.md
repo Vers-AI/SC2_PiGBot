@@ -13,6 +13,15 @@ Citations reference the same "# LP:" format as the existing COUNTER_TABLE in bot
 - LP (Guardian Shield): "effective against any low damage, high rate of attack type units (such as Marines)"
 - Pairs: (SENTRY, MARINE) +3.0 [GS reduces marine damage; support role]; (SENTRY, ZERGLING) +3.0; (SENTRY, ZEALOT) +4.0 [LP: FF defense vs Zealots]
 - NOTE: support/utility unit; scores stay small (it enables, it doesn't kill)
+- SITUATIONAL (research 2026-10-12): Sentry value is a FIXED count, not a scaling counter.
+  LP Sentry page: "a critical mass of six sentries regenerate energy quickly enough to keep
+  a sufficiently small ramp or choke continually blocked with Force Fields" — FF utility
+  saturates at ~6; learning-sc2: "a minimum of eight Sentries is recommended against Zerg"
+  when moving out. Pro guidance = situational investment (~6-10), independent of enemy
+  army size. Base compositions already encode these ratios (e.g. Soul Train 0.32 proportion
+  from "10 Zealots, 6 Sentries, 3 Immortals"). Nudging must NOT stack per-enemy bonuses on
+  top → rows are in SITUATIONAL_ROWS; production nudging excludes them (macro.py
+  _compute_effectiveness), combat targeting keeps them.
 
 ## DARK TEMPLAR (Dark Shrine, Light, Psionic, Biological)
 - LP: "even a small number of DT can decimate a large number of workers very quickly" if undetected

@@ -29,7 +29,7 @@ from bot.utilities.performance_monitor import get_economy_state, get_resource_pr
 from bot.intel import get_enemy_intel_quality
 from bot.managers.reactions import assess_threat
 from bot.utilities.debug import render_detection_cannon_debug
-from bot.combat.target_scoring import COUNTER_TABLE
+from bot.combat.target_scoring import COUNTER_TABLE, SITUATIONAL_ROWS
 from bot.constants import (
     MEMORY_EXPIRY_TIME,
     STALE_INTEL_THRESHOLD,
@@ -336,7 +336,10 @@ def _compute_effectiveness(composition: dict, enemy_units: list) -> dict[UnitTyp
     """Score each own unit type's effectiveness against the enemy army.
     
     For each unit type in our composition, sums COUNTER_TABLE bonuses against
-    every observed enemy unit. Returns average bonus per enemy unit.
+    every observed enemy unit. Returns average bonus per enemy unit. Rows in
+    SITUATIONAL_ROWS are excluded — their value is fixed-count support/utility
+    (e.g. GS/FF saturates after ~6 Sentries), not per-enemy damage that scales
+    with army size.
     
     Args:
         composition: Army composition dict {UnitTypeId: {"proportion": ..., "priority": ...}}
@@ -354,6 +357,7 @@ def _compute_effectiveness(composition: dict, enemy_units: list) -> dict[UnitTyp
         total = sum(
             COUNTER_TABLE.get((own_type, e.type_id), 0.0)
             for e in enemy_units
+            if (own_type, e.type_id) not in SITUATIONAL_ROWS
         )
         scores[own_type] = total / n_enemies
     return scores
