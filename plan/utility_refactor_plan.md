@@ -1,6 +1,6 @@
 ---
 project: PiG_Bot
-version: 0.5
+version: 0.6
 author: Praxis
 goal: "Lay the bot-wide utility-AI foundation (reasoner library + intel context), then convert Macro, Reaction, and Scouting as first adopters. Phases 2-3 extend to combat, structures, expansion, micro."
 status: draft-for-review
@@ -66,25 +66,26 @@ Style, dependency discipline, and scope rules live in AGENTS.md — not repeated
 **Scope:** module rename, import updates (6 sites — including the function-local import in `utilities/debug.py` that only executes in debug sessions, so a miss survives smoke runs), docstring stating the table's elevated role. `render_target_scoring_debug` keeps its name (it names the overlay). Comments, docstrings, and README/AGENTS structure listings referencing the old path update too.
 **Preserve:** behavior — zero functional change.
 **Acceptance:**
-- [ ] old module path gone — `grep -rn "target_scoring" bot/` returns zero hits except the kept overlay function `render_target_scoring_debug` — and `scoring_table` imports resolve
-- [ ] unit tests pass unchanged
-- [ ] full roster smoke run matches master within noise
+- [ ] old module path gone — `grep -rn "target_scoring" bot/` returns zero hits except the kept overlay function `render_target_scoring_debug` — and `scoring_table` imports resolve (offline)
+- [ ] bot imports cleanly (`python -c "import bot"`); pytest collection matches master — no persisted unit suite exists yet, the suite starts with Task 2 (offline)
+- [ ] one local game with debug overlay enabled — exercises the function-local `debug.py` import that only executes in debug sessions (local game)
 
 ## Task 2 — Extend SCORING_TABLE to full Protoss arsenal
 
-**Current:** 95 pairs, Liquipedia-annotated; attacker coverage extended in the 2026-10-19 pass (Log). Remaining gaps: mirror targets as enemy entries — Dark Templar, Disruptor, Mothership (0 rows) — plus a completion audit against `plan/counter_table_research_liquipedia.md`.
+**Current:** 95 pairs, Liquipedia-annotated; attacker coverage extended in the 2026-10-19 pass (Log). Remaining gaps: mirror targets as enemy entries — Dark Templar, Disruptor (0 rows) — plus a completion audit against `plan/counter_table_research_liquipedia.md`. Mothership excluded by design (support ult, no meaningful counter rows — see the research doc).
 
 **Goal:** fill coverage gaps so any composition the bot builds or faces scores correctly. The scoring function can only compare compositions the table knows — blocking for the macro conversion (Task 4).
 
 **Gaps to cover:**
-- Missing enemy targets: Dark Templar, Disruptor, Mothership (mirror matchups)
+- Missing enemy targets: Dark Templar, Disruptor (mirror matchups)
 - Audit remaining attacker/target rows for completeness vs the Liquipedia research plan
 
 **Rules:** new pairs are Liquipedia-annotated, same format as existing entries.
 **Acceptance:**
-- [ ] every unit the bot can build has complete target rows (Observer exempt — no weapon)
-- [ ] table passes a persisted format-validation test: no duplicate pairs, all values on one scale
+- [ ] every unit the bot can build has complete target rows (Observer exempt — no weapon; Mothership excluded by design per the research doc) (offline)
+- [ ] table passes a persisted format-validation test: no duplicate pairs, all values on one scale, and every key resolves against the `UnitTypeId` enum — a typo'd key silently scores 0.0 via `.get(..., 0.0)` (unit)
 - [x] no existing pair values modified
+- [ ] full roster run matches master within the noise band — table additions legitimately change targeting; this is the roster smoke moved here from Task 1 (lab)
 
 ## Task 3 — Reasoner library + intel context
 
@@ -96,9 +97,10 @@ Style, dependency discipline, and scope rules live in AGENTS.md — not repeated
 - Curve parameters load from config.
 
 **Acceptance:**
-- [ ] curve shapes + canonical combination pinned by unit tests (sum of bases, product of multipliers, any veto ⇒ 0)
-- [ ] library imports nothing from manager code — dependency direction is managers → library
-- [ ] Tasks 4-6 consume it; no manager defines its own curve or scorer
+- [ ] curve shapes + canonical combination pinned by unit tests (sum of bases, product of multipliers, any veto ⇒ 0) (unit)
+- [ ] library imports nothing from manager code — dependency direction is managers → library (offline)
+- [ ] Tasks 4-6 consume it; no manager defines its own curve or scorer (offline)
+- [ ] `IntelContext` is the test seam: scenario and unit tests construct it directly, no game required — this is what makes Tier A gates legitimate for every later adopter (unit)
 
 ## Task 4 — Macro manager utility scoring
 
@@ -120,9 +122,9 @@ score(comp) = [ Σ counter_effectiveness(my_units vs believed_enemy_comp)
 - Magnitudes: seed from Liquipedia baselines, fit later from telemetry (Task 8); document seed provenance in comments.
 
 **Acceptance:**
-- [ ] unit tests pin curve shapes and candidate scoring before integration
-- [ ] econ switch removed, no one-way state remains
-- [ ] branch passes full roster regression vs master in Compare tab
+- [ ] unit tests pin curve shapes and candidate scoring before integration (unit)
+- [ ] econ switch removed, no one-way state remains (offline)
+- [ ] branch passes full roster regression vs master within the noise band, compared in the lab's Compare tab (lab)
 
 ## Task 5 — Reaction manager utility scoring
 
@@ -142,9 +144,9 @@ u(continue) = plan_value(economy, tech progress)
 - Commitment: `u(continue)` may carry a hysteresis bonus so near-ties don't thrash between respond and continue. Scored, never sticky.
 
 **Acceptance:**
-- [ ] `used_cheese_response` fires on the decision-layer tape (cannon rush: 0/3 baseline, p_cheese 0.983) — the PR gate. Worker-rush firing (perception-layer: model classified MACRO 0.795; fix is model-side retraining, outside this plan) is reported but not gated. Survival-rate deltas reported for both tapes.
-- [ ] `reactions` transition event emitted on every response activation and clear (category, level2 label, scores) — turns the binary end-state match field into a per-activation trace; timing/all-in responses become measurable, and "fired then cleared" is distinguishable from "never fired." New event, emission-on-change only; existing names and fields preserved (constraint 4).
-- [ ] the scoring competition is subtype-agnostic by construction — the same `u(respond) vs u(continue)` decides worker rush, cannon rush, proxy, ling rush; the only subtype-specific data is each handler's own candidate cost/effect inputs. Verified by: one scoring path, N scored candidates.
+- [ ] `used_cheese_response` fires on the decision-layer tape — the PR gate (scenario/lab). Villain: the constructed cannon-rush setup (lab DB `test_group_id=8`, matches 985–988, LeyLinesAIE_v3) — fully recorded and reproducible; Chance/ProxyCannoneer is optional hardening, not a gate. Evidence basis: baseline 0/3 = banked records + code-path elimination; the re-run supplies the measured version (per-game telemetry not retained — lab-DB-confirmed; the PR must state the evidence basis). Worker-rush firing (perception-layer: model classified MACRO 0.795; fix is model-side retraining, outside this plan) is reported but not gated. Survival-rate deltas reported for both tapes.
+- [ ] `reactions` transition event emitted on every response activation and clear (category, level2 label, scores) — turns the binary end-state match field into a per-activation trace; timing/all-in responses become measurable, and "fired then cleared" is distinguishable from "never fired" (unanswerable for the banked baseline for the same retention reason). New event, emission-on-change only; handler switches emit as clear-then-activate pairs. Existing names and fields preserved (constraint 4) (scenario/lab).
+- [ ] the scoring competition is subtype-agnostic by construction — the same `u(respond) vs u(continue)` decides worker rush, cannon rush, proxy, ling rush; the only subtype-specific data is each handler's own candidate cost/effect inputs. Verified by: one scoring path, N scored candidates (unit).
 
 ## Task 6 — Scouting manager utility scoring
 
@@ -160,9 +162,9 @@ u(scout) = info_gain(staleness × decision_impact) × P_survive − cost(worker-
 - Scout launches compete against mining/defending in the same score currency.
 
 **Acceptance:**
-- [ ] existing VOI destination ranking unchanged
-- [ ] launch/production decisions routed through the same scoring currency
-- [ ] unit tests pin the risk and info-gain terms
+- [ ] existing VOI destination ranking pinned by an offline equivalence test — same inputs → same ranked outputs as master (`enable_scout_voi: False`; an in-game "unchanged" gate is unobservable) (unit)
+- [ ] launch/production decisions routed through the same scoring currency (unit)
+- [ ] unit tests pin the risk and info-gain terms (unit)
 
 ## Task 7 — Intel coordination wiring
 
@@ -175,10 +177,10 @@ u(scout) = info_gain(staleness × decision_impact) × P_survive − cost(worker-
 - A rising p_cheese must raise defense utility, shift composition, and raise scout priority together — all three read the same number.
 
 **Acceptance:**
-- [ ] no manager reads a private/duplicate belief source
-- [ ] the four hard-coded `_intel_urgency > 0.5` gates (scout hunt, hallucination scout, expansion block, urgent observer) route through one shared staleness consideration — the urgent-observer gate lives in structure_manager and may follow in Phase 2
-- [ ] staleness gate tested (decay curve, not binary cutoff)
-- [ ] full regression vs master
+- [ ] no manager reads a private/duplicate belief source (offline)
+- [ ] the four hard-coded `_intel_urgency > 0.5` gates (scout hunt, hallucination scout, expansion block, urgent observer) route through one shared staleness consideration — the urgent-observer gate lives in structure_manager and may follow in Phase 2 (unit)
+- [ ] staleness gate tested (decay curve, not binary cutoff) (unit)
+- [ ] full regression vs master within the noise band (lab)
 
 ## Task 8 — Fitted magnitudes from telemetry
 
@@ -186,32 +188,40 @@ u(scout) = info_gain(staleness × decision_impact) × P_survive − cost(worker-
 
 **Method:** fit per-term weights against the 2,300+ game corpus (e.g., immortal-vs-roach outcomes vs win rate).
 **Acceptance:**
-- [ ] fitted weights documented with fit evidence
-- [ ] regression run shows ≥ no-worse across roster; improvements logged per matchup
+- [ ] fitted weights documented with fit evidence (offline)
+- [ ] regression run shows no-worse within the noise band across the roster; improvements logged per matchup; series length stated in the PR (lab)
 
 ## Adoption Roadmap (Phase 2-3 — not tasks in this plan)
 
 Phase 1 proves the foundation on three managers. The remaining decision surfaces adopt the same reasoner in ROI order:
 
-| # | System | Current mechanism | Phase |
-|---|--------|-------------------|-------|
-| 1 | Combat engagement — `handle_attack_toggles` engage/retreat | combat-sim gate + sticky duration timers | 2 |
-| 2 | Chronoboost + Energy Recharge — target selection | first-match priority lists | 2 |
-| 3 | Expansion — `_has_map_control` / `expansion_checker` | hard gates + threshold conjunctions | 2 |
-| 4 | Defender allocation — threat response sizing | graduated severity table | 2 |
-| 5 | Mass Recall — `try_mass_recall` gates | three AND-gates | 2 |
-| 6 | Macro leftovers — tech-invest, gateway/forge counts, detection cannons, shield battery | booleans/thresholds | 2 |
-| 7 | Per-unit micro — blink, storm, disruptor nova | thresholds | 3 |
+| # | System | Current mechanism | Phase | Gates |
+|---|--------|-------------------|-------|-------|
+| 1 | Combat engagement — `handle_attack_toggles` engage/retreat | combat-sim gate + sticky duration timers | 2 | unit + scenario |
+| 2 | Chronoboost + Energy Recharge — target selection | first-match priority lists | 2 | roster |
+| 3 | Expansion — `_has_map_control` / `expansion_checker` | hard gates + threshold conjunctions | 2 | roster |
+| 4 | Defender allocation — threat response sizing | graduated severity table | 2 | unit + scenario |
+| 5 | Mass Recall — `try_mass_recall` gates | three AND-gates | 2 | unit + scenario, no roster |
+| 6 | Macro leftovers — tech-invest, gateway/forge counts, detection cannons, shield battery | booleans/thresholds | 2 | roster |
+| 7 | Per-unit micro — blink, storm, disruptor nova | thresholds | 3 | unit + scenario |
 
-Phase 3 needs a per-tier re-score cadence budget — per-unit scoring is the perf-sensitive case; the global N-loop cadence does not apply there.
+Gate principle: constructible states → unit + scenario (Tier A constructs the score math; Tier B spawns the state and judges on transition events, never win rate); emergent behavior → roster. Phase 2 prerequisite: the scenario stub bot (~100 LOC, hosted in `tests/`, modeled on the existing test bots, debug-create-unit spawn at a fixed game loop) — test infrastructure in-tree, ours, subject to the same consent rules as any lab bot; no ProBots submissions.
 
-## Verification (the test lab as harness)
+## Verification (test channels + the lab as harness)
+
+Every acceptance criterion names its channel. Channels, cheapest first:
+
+- **Unit (offline):** pure-Python tests pinning scoring math. The persisted suite starts with Task 2's format-validation test; OpenCode writes tests first (constraint 2). `IntelContext` is the test seam — unit tests construct it directly, no game required.
+- **Local game:** one-off run.py game vs in-game AI; debug overlay on for import/render surface. Minutes.
+- **Scenario:** DebugSpawn-assisted local run for states that cannot be manifested by playing (recall, engagement edges, allocation). Phase 2 prerequisite: the scenario stub bot (~100 LOC, `tests/` host). Judged on transition events, never win rate.
+- **Lab:** series, banked tapes, roster, Compare tab, branch worktree mounting (runner `branch` param).
+
+**Noise band (one definition, reused by every "within noise"/"no-worse" gate):** no-worse = within ±1 game per 3-game series or better, series length stated in the PR. If 3-game series prove too noisy in practice, the fix is a stated longer series, not a vaguer criterion.
 
 - **Branch runs:** OpenCode works on the `development` branch; lab runs mount the branch worktree via the runner's `branch` param.
-- **Unit-level:** pure-Python tests pinning the utility curves before refactor touches them (OpenCode writes these first).
 - **Behavior-level:** the banked before-tapes re-run on the branch, each labeled with its failure layer:
+  - Cannon rush: the constructed Who CannonRush (lab DB `test_group_id=8`, matches 985–988, LeyLinesAIE_v3 — fully recorded and reproducible) — 3/3 wins, 0/3 responses, belief peak p_cheese 0.983 with zero action. **Decision-layer failure:** detection and confidence were right; routing failed to act. This is Task 5's PR gate tape — target: action taken (gate details in Task 5's acceptance). Chance/ProxyCannoneer = optional hardening, not a gate. Evidence basis: baseline = banked records + code-path elimination; the re-run supplies the measured version (986–988 per-game telemetry not retained — lab-DB-confirmed).
   - Worker rush: PiG_Bot vs Who (WorkerRush) — 3/3 losses, 0/3 responses, belief peak p_macro 0.795. **Perception-layer failure:** the model classified MACRO and guards are deliberately fallback-only (model-authoritative design — guards fire only when the model is missing), so scoring never received a p_cheese to act on. Utility scoring cannot flip this tape; the fix is model-side (worker-rush features/training in the sklearn pipeline), owned by the belief layer — not guard rewiring. Report the delta; do not gate the PR on it.
-  - Cannon rush: villain TBD (Chance/ProxyCannoneer proposed) — vs the constructed Who CannonRush, 3/3 wins, 0/3 responses, belief peak p_cheese 0.983 with zero action. **Decision-layer failure:** detection and confidence were right; routing failed to act. Task 5 owns this gate — target: action taken.
 - **Macro lane:** at least one non-cheese series from the roster (e.g., MicroMachine) checked for composition-scoring stability — the refactor is bot-wide, not defined by the rush demo.
 - **Regression:** full roster series (MicroMachine, Clicadinha, Who-random) master vs branch, compared in the lab's Compare tab.
 - **Telemetry gates:** `used_cheese_response` firing rate, response latency, win-rate deltas per matchup. No regression vs master without a documented reason.
@@ -227,3 +237,4 @@ The plan stays forward-looking; verification history and progress notes are reco
 - **2026-11-02 — v0.5 scope correction:** Goal reframed from "three managers" to bot-wide foundation with the managers as first adopters. New Task 3 (reasoner library + IntelContext) added ahead of the manager conversions; old Tasks 3-7 renumbered to 4-8 (task numbers in pre-0.5 log entries refer to the old numbering). Adoption Roadmap added for decision surfaces the original scope missed: combat engagement, chrono/recharge, expansion, defender allocation, recall gates, macro leftovers, per-unit micro. "Combat micro already utility-shaped" corrected — true only of `score_target()`; engagement, recall, and choke decisions remain threshold-based (Phase 2 material). Macro lane added to Verification so success is not defined by the rush tapes alone.
 - **2026-11-02 — Tape relabeling:** Baselines section folded into the Verification tape bullets (numbers live next to their gates). Rush tapes labeled by failure layer: worker rush = perception (model classified MACRO 0.795 under the deliberate model-authoritative design — guards are fallback-only by intent, so scoring never saw a p_cheese; fix is model-side retraining, not guard rewiring); cannon rush = decision (p_cheese 0.983, zero action — Task 5's own gate). Task 5's firing gate re-scoped to the decision-layer tape; the worker-rush delta is reported but not PR-gating.
 - **2026-11-02 — Task 5 acceptance generalized:** response scoring is subtype-agnostic by construction (same `u(respond) vs u(continue)` for all cheese subtypes; handlers as scored candidates) — now pinned by acceptance instead of intent. Added the `reactions` activation/clear transition event so firing is measurable per-activation across ALL_IN/TIMING too, and "fired then cleared" is distinguishable from "never fired" (the binary `used_cheese_response` match field stays as-is per constraint 4). Cannon-rush tape remains the PR gate instance, not the definition of success.
+- **2026-11-02 — v0.6 acceptance-to-channel review (Praxis-approved, lab-DB-verified):** All 8 decisions applied. (1) Task 1 acceptance re-channeled — import-clean + pytest-collection-parity + one debug-overlay local game; roster smoke dropped (a rename can't produce roster-visible signal). (2) Roster smoke moved to Task 2 + `UnitTypeId`-validity check added (typo'd keys silently score 0.0 via `.get`). (3) Task 5's gate pinned to the constructed cannon-rush villain (lab DB `test_group_id=8`, matches 985–988 — fully recorded; per-game telemetry not retained, so the re-run becomes the measured version). (4) Task 6 VOI acceptance → offline equivalence test (`enable_scout_voi: False` makes in-game unobservable). (5) Noise band adopted: ±1 game per 3-game series, series length in PR, reused across all "within noise" gates. (6) Test Channels block added to Verification — every acceptance now names its channel (offline/unit/local game/scenario/lab). (7) Scenario stub bot approved as named Phase 2 prerequisite (~100 LOC, `tests/` host, judged on transition events never win rate; in-tree infra, no ProBots). (8) Roadmap rows annotated with gate channels; principle: constructible states → unit+scenario, emergent behavior → roster. Plus Praxis's addition: Task 3's acceptance names `IntelContext` as the test seam — unit/scenario tests construct it directly, which is what makes Tier A legitimate. Mothership moved from Task 2 gap to "excluded by design" (documented in the research doc; Observer exempt — no weapon).
