@@ -80,7 +80,7 @@ from bot.combat.unit_micro import (
     micro_air_unit,
 )
 from bot.combat.formation import execute_fan_out, clear_formation_state
-from bot.combat.target_scoring import select_target, update_upgrades, update_repairer_tags
+from bot.combat.scoring_table import select_target, update_upgrades, update_repairer_tags
 from bot.combat.force_field import compute_ff_split, compute_ff_main_ramp_block, compute_ff_choke_block
 from bot.utilities.choke_grid import get_or_refine_choke, detect_dynamic_choke
 from bot.combat.group_snipe import try_commit_snipe, execute_snipe_a, execute_snipe_b, execute_focus

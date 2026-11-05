@@ -29,7 +29,7 @@ from bot.utilities.performance_monitor import get_economy_state, get_resource_pr
 from bot.intel import get_enemy_intel_quality
 from bot.managers.reactions import assess_threat
 from bot.utilities.debug import render_detection_cannon_debug
-from bot.combat.target_scoring import COUNTER_TABLE, SITUATIONAL_ROWS
+from bot.combat.scoring_table import SCORING_TABLE, SITUATIONAL_ROWS
 from bot.constants import (
     MEMORY_EXPIRY_TIME,
     STALE_INTEL_THRESHOLD,
@@ -274,20 +274,20 @@ PVP_2GATE_PROFILE.conditional_upgrades = [
 # 2021 profile: conditional upgrades are economy-gated (Weapons/Armor 2-3)
 
 # ===== PRODUCTION NUDGING =====
-# Uses COUNTER_TABLE to shift army proportions toward unit types that are
-# effective against the observed enemy composition. See COUNTER_TABLE docstring
-# in target_scoring.py for how to extend.
+# Uses SCORING_TABLE to shift army proportions toward unit types that are
+# effective against the observed enemy composition. See SCORING_TABLE docstring
+# in scoring_table.py for how to extend.
 #
 # HOW IT WORKS:
 #   1. Read cached enemy army (filtered: no workers, structures, expired ghosts)
-#   2. For each unit type in our composition, sum its COUNTER_TABLE bonuses
+#   2. For each unit type in our composition, sum its SCORING_TABLE bonuses
 #      against all observed enemy units → "effectiveness score"
 #   3. Normalize effectiveness scores to a [-MAX_NUDGE, +MAX_NUDGE] range
 #   4. Add nudges to base proportions, clamp to MIN_PROPORTION, re-normalize to 1.0
 #
 # HOW TO EXTEND:
-#   - Adding a new unit to an army composition dict? Add COUNTER_TABLE entries
-#     in target_scoring.py. The nudging picks them up automatically.
+#   - Adding a new unit to an army composition dict? Add SCORING_TABLE entries
+#     in scoring_table.py. The nudging picks them up automatically.
 #   - Adding a new army composition dict? Pass it through select_army_composition()
 #     and nudging applies to it like any other.
 
@@ -335,7 +335,7 @@ def _get_enemy_combat_units(bot) -> list:
 def _compute_effectiveness(composition: dict, enemy_units: list) -> dict[UnitTypeId, float]:
     """Score each own unit type's effectiveness against the enemy army.
     
-    For each unit type in our composition, sums COUNTER_TABLE bonuses against
+    For each unit type in our composition, sums SCORING_TABLE bonuses against
     every observed enemy unit. Returns average bonus per enemy unit. Rows in
     SITUATIONAL_ROWS are excluded — their value is fixed-count support/utility
     (e.g. GS/FF saturates after ~6 Sentries), not per-enemy damage that scales
@@ -355,7 +355,7 @@ def _compute_effectiveness(composition: dict, enemy_units: list) -> dict[UnitTyp
     scores: dict[UnitTypeId, float] = {}
     for own_type in composition:
         total = sum(
-            COUNTER_TABLE.get((own_type, e.type_id), 0.0)
+            SCORING_TABLE.get((own_type, e.type_id), 0.0)
             for e in enemy_units
             if (own_type, e.type_id) not in SITUATIONAL_ROWS
         )
@@ -367,7 +367,7 @@ def nudge_proportions(
     base_composition: dict,
     enemy_units: list,
 ) -> dict:
-    """Apply counter-table-driven proportion nudges to a base army composition.
+    """Apply scoring-table-driven proportion nudges to a base army composition.
     
     Returns a new composition dict with adjusted proportions. The base composition
     is never mutated. If there's insufficient enemy data, returns base unchanged.
@@ -539,7 +539,7 @@ def resource_pressure_nudge(composition: dict, bot) -> dict:
     When gas-starved (minerals >> gas): boost low-gas-ratio units, reduce high-gas ones.
     When mineral-starved (gas >> minerals): boost high-gas-ratio units, reduce low-gas ones.
     
-    Chained after counter-table nudge_proportions() — both nudges compose additively.
+    Chained after scoring-table nudge_proportions() — both nudges compose additively.
     Max shift ±RESOURCE_PRESSURE_MAX_NUDGE (15%), clamped to PRODUCTION_MIN_PROPORTION floor,
     re-normalized to 1.0.
     
@@ -618,10 +618,10 @@ def strategy_nudge_proportions(composition: dict, bot) -> dict:
 
     Uses strategy belief (P(cheese/all_in/timing/macro)) to predict what enemy units
     we'll face, then scores our composition against those predicted units using the
-    existing COUNTER_TABLE. This is data-driven — the only "opinion" is what units
+    existing SCORING_TABLE. This is data-driven — the only "opinion" is what units
     each strategy/race typically produces (STRATEGY_EXPECTED_UNITS).
 
-    Chained after counter-table nudge, before resource-pressure nudge.
+    Chained after scoring-table nudge, before resource-pressure nudge.
     Probability-weighted across categories above STRATEGY_NUDGE_THRESHOLD.
     Max shift ±STRATEGY_NUDGE_MAX (10%), clamped to PRODUCTION_MIN_PROPORTION floor,
     re-normalized to 1.0.
@@ -671,11 +671,11 @@ def strategy_nudge_proportions(composition: dict, bot) -> dict:
 
         # Convert expected unit proportions to a fake "enemy list" for
         # _compute_effectiveness. Weight each unit type by its proportion.
-        # _compute_effectiveness sums COUNTER_TABLE scores per enemy unit,
+        # _compute_effectiveness sums SCORING_TABLE scores per enemy unit,
         # so we create weighted "virtual" enemies.
         fake_enemies = []
         for unit_type, proportion in expected_units.items():
-            # Skip non-unit entries (Pylon, PhotonCannon, etc.) — not in COUNTER_TABLE
+            # Skip non-unit entries (Pylon, PhotonCannon, etc.) — not in SCORING_TABLE
             if unit_type in (UnitTypeId.PYLON, UnitTypeId.PHOTONCANNON,
                              UnitTypeId.BUNKER, UnitTypeId.SPINECRAWLER,
                              UnitTypeId.SCV, UnitTypeId.DRONE, UnitTypeId.PROBE,
@@ -1193,7 +1193,7 @@ def select_army_composition(bot, main_army: Units) -> dict:
         1. Pick base composition from profile (army_composition_0)
         2. Apply economy switch if threshold met (army_composition_0 → army_composition_1)
         3. Apply archon switch if threshold met (→ army_composition_2, or army_1 fallback)
-        4. Apply counter-table-driven proportion nudges based on enemy comp
+        4. Apply scoring-table-driven proportion nudges based on enemy comp
         5. Cache the nudged result on bot._last_nudged_comp for debug display
     
     Returns:
@@ -1233,7 +1233,7 @@ def select_army_composition(bot, main_army: Units) -> dict:
         if archon_percentage >= threshold:
             selected_composition = army_2
     
-    # === Nudge pipeline: counter-table → strategy → resource-pressure → priority reorder ===
+    # === Nudge pipeline: scoring-table → strategy → resource-pressure → priority reorder ===
     
     # Step 1: Counter-table nudge (only if intel is fresh enough)
     # When composition belief is enabled, use its probability-weighted freshness

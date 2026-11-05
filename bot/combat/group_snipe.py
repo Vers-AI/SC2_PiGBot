@@ -37,7 +37,7 @@ from cython_extensions import (
 )
 from cython_extensions.numpy_helper import cy_all_points_below_max_value, cy_point_below_value
 
-from bot.combat.target_scoring import TACTICAL_BONUS, TYPE_VALUE_SCALE, DEFAULT_TYPE_VALUE
+from bot.combat.scoring_table import TACTICAL_BONUS, TYPE_VALUE_SCALE, DEFAULT_TYPE_VALUE
 from ares.consts import EngagementResult
 
 from bot.constants import (

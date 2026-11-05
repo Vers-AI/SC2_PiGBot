@@ -1,6 +1,6 @@
 # Counter Table Research — Liquipedia (LotV pages), pulled 2026-10-10
 Source API: liquipedia.net/starcraft2/api.php (gzip required), pages: <Unit>_(Legacy_of_the_Void).
-Citations reference the same "# LP:" format as the existing COUNTER_TABLE in bot/combat/target_scoring.py.
+Citations reference the same "# LP:" format as the existing SCORING_TABLE in bot/combat/scoring_table.py.
 
 ## ADEPT (Gateway, Light, Biological; built today by PiG_Bot)
 - LP: "strong against early Zealots and other light units"

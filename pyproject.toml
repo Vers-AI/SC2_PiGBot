@@ -15,10 +15,19 @@ requests = "^2.32.3"
 
 [tool.poetry.group.dev.dependencies]
 # (empty — pgmpy removed in Phase B sklearn cutover; sklearn is a transitive dep via ares-sc2)
+pytest = "^9.2.0"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit"]
+# The in-tree ares submodule is the runtime source; run.py appends these same paths.
+# ares-sc2/src/ares exposes ares' subpackages top-level (behaviors, managers, consts),
+# ares-sc2/src exposes the `ares` package, ares-sc2 exposes sc2_helper. Without these,
+# `import bot` fails because poetry installs the path dep as site-packages/src/ares.
+pythonpath = ["ares-sc2/src/ares", "ares-sc2/src", "ares-sc2"]
 
 [tool.black]
 extend-exclude = 'ares-sc2/*'
