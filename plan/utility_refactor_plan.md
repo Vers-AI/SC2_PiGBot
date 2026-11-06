@@ -211,7 +211,7 @@ Gate principle: constructible states → unit + scenario (Tier A constructs the 
 
 Every acceptance criterion names its channel. Channels, cheapest first:
 
-- **Unit (offline):** pure-Python tests pinning scoring math — no SC2 binary, no game. Runner: pytest via the Poetry dev group (`poetry run pytest` from repo root); suite root `tests/unit/` with `testpaths` pinned in pyproject so the opponent test bots are never collected; `poetry run pytest` passing is a merge condition; no CI step for Phase 1. The persisted suite starts with Task 2's format-validation test; OpenCode writes tests first (constraint 2). `IntelContext` is the test seam — unit tests construct it directly, no game required.
+- **Unit (offline):** pure-Python tests pinning scoring math — no SC2 binary, no game. Runner: pytest via the Poetry dev group (`poetry run pytest` from repo root); suite root `tests/unit/` with `testpaths` pinned in pyproject so the opponent test bots are never collected; `poetry run pytest` passing is a merge condition; CI runs this channel on PRs into `development` (`.github/workflows/ci.yml`). The persisted suite starts with Task 2's format-validation test; OpenCode writes tests first (constraint 2). `IntelContext` is the test seam — unit tests construct it directly, no game required.
 - **Local game:** one-off run.py game vs in-game AI; debug overlay on for import/render surface. Minutes.
 - **Scenario:** DebugSpawn-assisted local run for states that cannot be manifested by playing (recall, engagement edges, allocation). Phase 2 prerequisite: the scenario stub bot (~100 LOC, `tests/` host). Judged on transition events, never win rate.
 - **Lab:** series, banked tapes, roster, Compare tab, branch worktree mounting (runner `branch` param).
