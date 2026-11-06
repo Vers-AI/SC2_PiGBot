@@ -118,10 +118,18 @@ TACTICAL_BONUS: dict[UnitTypeId, float] = {
 #   3. Bonus range: 5-12 typical. Higher = stronger counter signal.
 #   4. Only add entries where there's a real matchup advantage. Sparse is fine.
 #
+# COVERAGE RULE (tests/unit/test_scoring_table.py enforces it):
+#   Every Protoss combat unit we build needs rows on BOTH sides —
+#     - as OUR_TYPE  (we field it, it needs an answer to the enemy types)
+#     - as ENEMY_TYPE (the enemy fields it, we need to know what beats it)
+#   The second side is the PvP mirror side; Observer has no weapon and
+#   Oracle/Mothership are excluded as attackers by design.
+#
 # DATA SOURCE: Liquipedia SC2 unit pages (Legacy of the Void versions)
 #   https://liquipedia.net/starcraft2/<UnitName>_(Legacy_of_the_Void)
 #   Check the "Competitive Usage" sections for matchup-specific info.
 #   Each entry below is annotated with "# LP:" citing the Liquipedia reasoning.
+#   Full quotes + the pair list per unit: plan/counter_table_research_liquipedia.md
 #
 SCORING_TABLE: dict[tuple[UnitTypeId, UnitTypeId], float] = {
     # Stalkers: anti-air specialist + armored bonus (Liquipedia: "ability to counter air units")
@@ -138,6 +146,12 @@ SCORING_TABLE: dict[tuple[UnitTypeId, UnitTypeId], float] = {
     (UnitTypeId.STALKER, UnitTypeId.PHOENIX):          6.0,  # Anti-air
     (UnitTypeId.STALKER, UnitTypeId.CORRUPTOR):        8.0,  # Anti-air (LP: key vs Zerg air)
     (UnitTypeId.STALKER, UnitTypeId.BROODLORD):       8.0,  # LP: "anti Broodlord units"
+    # PvP mirror targets (enemy Protoss units we can face)
+    (UnitTypeId.STALKER, UnitTypeId.DARKTEMPLAR):     8.0,  # LP: "they are fragile when detected" — Observer + range finish it
+    (UnitTypeId.STALKER, UnitTypeId.HIGHTEMPLAR):     6.0,  # LP: "an almost harmless attack and is relatively weak in terms of hit points and shields"
+    (UnitTypeId.STALKER, UnitTypeId.ARCHON):          6.0,  # LP: "the way to counter Archons is by simply focus firing them"
+    (UnitTypeId.STALKER, UnitTypeId.SENTRY):          6.0,  # LP: Guardian Shield makes the Sentry "a high priority target for opposing armies"
+    (UnitTypeId.STALKER, UnitTypeId.LURKERMPBURROWED): -6.0,  # LP: "Lurkers rip the standard complementary gateway unit to Colossi, the Stalker"
 
     # Immortals: anti-armor specialist (LP: "50 base damage against armored")
     (UnitTypeId.IMMORTAL, UnitTypeId.ROACH):         10.0,  # LP: "strongly cost-effective against Roaches"
@@ -149,6 +163,11 @@ SCORING_TABLE: dict[tuple[UnitTypeId, UnitTypeId], float] = {
     (UnitTypeId.IMMORTAL, UnitTypeId.ULTRALISK):     12.0,  # LP: "shut down Ultralisk transitions"
     (UnitTypeId.IMMORTAL, UnitTypeId.THOR):          10.0,  # LP: "effective against Thors"
     (UnitTypeId.IMMORTAL, UnitTypeId.LURKERMPBURROWED): 10.0,  # LP: "especially key targets like burrowed Lurkers"
+    # PvP mirror targets (enemy Protoss units we can face)
+    (UnitTypeId.IMMORTAL, UnitTypeId.DARKTEMPLAR):    8.0,  # LP: "fragile when detected" — 45-dmg melee can't scratch 550 eHP
+    (UnitTypeId.IMMORTAL, UnitTypeId.DISRUPTOR):      8.0,  # LP: "Immortals are sometimes used to handle Disruptors numbers"
+    (UnitTypeId.IMMORTAL, UnitTypeId.COLOSSUS):      8.0,  # LP: "Immortals deal a large amount of damage to... Colossi"
+    (UnitTypeId.IMMORTAL, UnitTypeId.ARCHON):         5.0,  # LP: "an Archon has only ten health points beneath its shield" — sustained DPS strips it
 
     # Zealots: melee + Charge vs light/slow (only with Charge — see score_target)
     (UnitTypeId.ZEALOT, UnitTypeId.MARINE):           8.0,  # LP: Charge closes distance to ranged Terran
@@ -156,6 +175,10 @@ SCORING_TABLE: dict[tuple[UnitTypeId, UnitTypeId], float] = {
     (UnitTypeId.ZEALOT, UnitTypeId.ZERGLING):         6.0,  # LP: "very effective...with even surface areas"
     (UnitTypeId.ZEALOT, UnitTypeId.SIEGETANKSIEGED):  8.0,  # LP: "effective threat against Siege Tanks...absorb 4 shots...friendly-fire"
     (UnitTypeId.ZEALOT, UnitTypeId.MARAUDER):         6.0,  # LP: "competitive against...particularly the Marauder"
+    # PvP mirror targets (enemy Protoss units we can face)
+    (UnitTypeId.ZEALOT, UnitTypeId.DARKTEMPLAR):   -8.0,  # LP: DTs "can repel small numbers of Zealots even if they are visible"
+    (UnitTypeId.ZEALOT, UnitTypeId.DISRUPTOR):     -8.0,  # LP: Nova "can kill the following units with one shot:... Zealots"
+    (UnitTypeId.ZEALOT, UnitTypeId.IMMORTAL):       6.0,  # LP: Immortals are "quite ineffective against enemy Zealots"
     # NOTE: Zealot vs Baneling REMOVED — LP: "Banelings very effective against massed Zealots"
 
     # Archons: anti-light / anti-bio splash + high shields
@@ -164,6 +187,18 @@ SCORING_TABLE: dict[tuple[UnitTypeId, UnitTypeId], float] = {
     (UnitTypeId.ARCHON, UnitTypeId.MARINE):           8.0,  # Splash vs bio
     (UnitTypeId.ARCHON, UnitTypeId.HYDRALISK):        8.0,  # Splash effective
     (UnitTypeId.ARCHON, UnitTypeId.BANELING):        10.0,  # High shields absorb baneling hits
+    # PvP mirror targets (enemy Protoss units we can face)
+    (UnitTypeId.ARCHON, UnitTypeId.DARKTEMPLAR):      6.0,  # LP: Archons are merged in when "the opponent has detectors that vitiate the Dark Templars' main strength"
+    (UnitTypeId.ARCHON, UnitTypeId.HIGHTEMPLAR):      6.0,  # LP: "Archons are strong against almost every Protoss unit"
+    (UnitTypeId.ARCHON, UnitTypeId.SENTRY):           4.0,  # LP: "Sentries are worthless because Archons break force fields"
+    (UnitTypeId.ARCHON, UnitTypeId.ADEPT):            6.0,  # LP: "Adepts can't deal any real damage against them"
+    (UnitTypeId.ARCHON, UnitTypeId.VOIDRAY):          6.0,  # LP: Void Rays have "poor damage against Archons"
+    (UnitTypeId.ARCHON, UnitTypeId.CARRIER):          6.0,  # LP: Archons "can beat Carriers by taking down their interceptor complements"
+    (UnitTypeId.ARCHON, UnitTypeId.DISRUPTOR):       -8.0,  # LP: "Archons are countered by Disruptors" (Nova bonus vs shields, no dodge)
+    # No armored tag — the Archon soaks Tank fire the armored Immortal/Colossus can't
+    (UnitTypeId.ARCHON, UnitTypeId.SIEGETANKSIEGED):  8.0,  # LP: "the Archon is now the most durable unit against Siege Tank fire"
+    (UnitTypeId.ARCHON, UnitTypeId.SIEGETANK):        6.0,  # Same durability, weaker mobile gun
+    (UnitTypeId.ARCHON, UnitTypeId.ROACH):            8.0,  # LP: "their bonus against biological units makes Archons effective against all Zerg units"
 
     # Colossus: splash vs light units (LP: "bonus damage against light")
     (UnitTypeId.COLOSSUS, UnitTypeId.MARINE):        10.0,  # LP: "good against Marine-heavy...bonus against Light"
@@ -179,6 +214,12 @@ SCORING_TABLE: dict[tuple[UnitTypeId, UnitTypeId], float] = {
     (UnitTypeId.COLOSSUS, UnitTypeId.PHOENIX):        -8.0,   # PvP: Phoenix lifts Colossus, hard counter
     (UnitTypeId.COLOSSUS, UnitTypeId.CARRIER):        -8.0,   # PvP: Carrier outranges, Colossus can't shoot air
     (UnitTypeId.COLOSSUS, UnitTypeId.TEMPEST):       -10.0,   # PvP: Tempest outranges everything, Colossus helpless
+    # PvP mirror targets (enemy Protoss units we can face)
+    (UnitTypeId.COLOSSUS, UnitTypeId.HIGHTEMPLAR):    8.0,  # LP (in-game help): High Templar is weak vs Colossus
+    (UnitTypeId.COLOSSUS, UnitTypeId.IMMORTAL):      -6.0,  # LP: "Immortals deal a large amount of damage to... Colossi"
+    # Terran/zerg attacker-side gaps found in the coverage audit
+    (UnitTypeId.COLOSSUS, UnitTypeId.MARAUDER):       -8.0,  # LP: "very weak against large masses of Marauders... Marauders deal bonus damage against the Armored Colossi"
+    (UnitTypeId.COLOSSUS, UnitTypeId.SIEGETANKSIEGED): -4.0,  # LP: out-ranged by "the Terran Siege Tank in its immobile Siege Mode"
 
     # Disruptor: burst splash vs immobile/clumped armies
     (UnitTypeId.DISRUPTOR, UnitTypeId.SIEGETANKSIEGED): 10.0,  # LP: "very good against units that cannot move"
@@ -190,6 +231,14 @@ SCORING_TABLE: dict[tuple[UnitTypeId, UnitTypeId], float] = {
     (UnitTypeId.DISRUPTOR, UnitTypeId.HYDRALISK):      6.0,  # Clumped hydras vulnerable
     (UnitTypeId.DISRUPTOR, UnitTypeId.IMMORTAL):       5.0,  # Doesn't one-shot (200HP+100S), but decent
     (UnitTypeId.DISRUPTOR, UnitTypeId.LURKERMPBURROWED): 8.0,  # LP: "Lurkers" can't move
+    # Nova one-shots (LP: "can kill the following units with one shot: ... Zealots, Stalkers, High Templars, Dark Templars, Adepts, Disruptors, and Sentries")
+    (UnitTypeId.DISRUPTOR, UnitTypeId.ZEALOT):      10.0,  # Nova one-shot
+    (UnitTypeId.DISRUPTOR, UnitTypeId.HIGHTEMPLAR): 10.0,  # Nova one-shot
+    (UnitTypeId.DISRUPTOR, UnitTypeId.DARKTEMPLAR): 10.0,  # Nova one-shot + kills stealth without detection
+    (UnitTypeId.DISRUPTOR, UnitTypeId.ADEPT):        8.0,  # Nova one-shot
+    # Novas needed to take the target down (LP: "The Disruptor needs three or more Novas to take out Thors (4), Ultralisks (5), Colossi (3), and Archons (4)")
+    (UnitTypeId.DISRUPTOR, UnitTypeId.ARCHON):      -8.0,  # 4 Novas — our Nova cannot break an Archon down
+    (UnitTypeId.DISRUPTOR, UnitTypeId.COLOSSUS):     -4.0,  # 3 Novas — the Colossus outlasts a Nova
     # NOTE: Disruptor vs Stalker REMOVED — LP: "Stalkers can use Blink to avoid Nova"
 
     # High Templar: Psionic Storm vs clumped armies + Feedback vs casters
@@ -202,6 +251,12 @@ SCORING_TABLE: dict[tuple[UnitTypeId, UnitTypeId], float] = {
     (UnitTypeId.HIGHTEMPLAR, UnitTypeId.MUTALISK):     4.0,  # LP: "Mutas escape storms fairly easily...Archons fare better"
     (UnitTypeId.HIGHTEMPLAR, UnitTypeId.GHOST):       10.0,  # LP: "Feedback...counteracted by using Feedback on Ghost"
     (UnitTypeId.HIGHTEMPLAR, UnitTypeId.VIPER):       10.0,  # LP: "Feedback is only really useful versus Vipers"
+    # Feedback targets (LP: "Dealing pure damage, ignores all types of armor"; the Sentry/Phoenix/Oracle are all susceptible)
+    (UnitTypeId.HIGHTEMPLAR, UnitTypeId.PHOENIX):    8.0,  # LP: "High Templars can also be used to Feedback Phoenixes and Oracles"
+    (UnitTypeId.HIGHTEMPLAR, UnitTypeId.ORACLE):     8.0,  # LP: the Oracle is susceptible to Feedback
+    (UnitTypeId.HIGHTEMPLAR, UnitTypeId.SENTRY):     6.0,  # LP: the Sentry is susceptible to Feedback
+    # PvP mirror target (enemy Protoss units we can face)
+    (UnitTypeId.HIGHTEMPLAR, UnitTypeId.COLOSSUS):  -6.0,  # LP (in-game help): High Templar is weak vs Colossus
 
     # Adepts: strong vs light, no anti-air (LP: "strong against early Zealots and other light units")
     (UnitTypeId.ADEPT, UnitTypeId.MARINE):    6.0,  # Light, early numbers
@@ -209,7 +264,8 @@ SCORING_TABLE: dict[tuple[UnitTypeId, UnitTypeId], float] = {
     (UnitTypeId.ADEPT, UnitTypeId.ROACH):    -6.0,  # Armored, out-tanks (LP: PvZ "Roaches out-tank")
     (UnitTypeId.ADEPT, UnitTypeId.MUTALISK): -6.0,  # LP: "Adepts have no anti-air attack"
 
-    # Sentries: support caster, no direct attack in LotV — small scores, it enables rather than kills
+    # Sentries: support caster — the LotV Disruption Beam is weak (6 dmg, +4 vs shields);
+    # these rows encode GS/FF support value, not the beam
     (UnitTypeId.SENTRY, UnitTypeId.MARINE):   3.0,  # GS reduces marine damage; support role
     (UnitTypeId.SENTRY, UnitTypeId.ZERGLING): 3.0,
     (UnitTypeId.SENTRY, UnitTypeId.ZEALOT):   4.0,  # LP: FF defense vs Zealots
@@ -217,6 +273,7 @@ SCORING_TABLE: dict[tuple[UnitTypeId, UnitTypeId], float] = {
     # Dark Templar: cloaked melee burst (LP: "even a small number of DT can decimate a large number of workers very quickly")
     (UnitTypeId.DARKTEMPLAR, UnitTypeId.MARINE): 5.0,  # 45-dmg melee shreds light if no detection
     # NOTE: detection-dependent; worker-line value not modeled in this table (workers excluded)
+    (UnitTypeId.DARKTEMPLAR, UnitTypeId.DISRUPTOR): -8.0,  # LP: Nova "can kill the following units with one shot:... Dark Templars"
 
     # Phoenix: air superiority + Graviton Beam vs light/casters (LP: "effective at disabling caster units or destroying them outright. Most casters have light armor")
     (UnitTypeId.PHOENIX, UnitTypeId.MUTALISK):       8.0,  # Classic Muta counter
@@ -225,6 +282,7 @@ SCORING_TABLE: dict[tuple[UnitTypeId, UnitTypeId], float] = {
     (UnitTypeId.PHOENIX, UnitTypeId.VIPER):          6.0,  # Air, disables
     (UnitTypeId.PHOENIX, UnitTypeId.ORACLE):         5.0,  # Mirror: out-fights caster
     (UnitTypeId.PHOENIX, UnitTypeId.VIKINGFIGHTER): -8.0,  # Armored air, out-ranges 9>5, LP-tier hard counter
+    (UnitTypeId.PHOENIX, UnitTypeId.DISRUPTOR):    8.0,  # LP: "Phoenix are often used to disable Disruptors once the Nova has been launched"
 
     # Void Rays: anti-armored ramp damage (LP: "a few Void Rays can focus down the armored units very fast")
     (UnitTypeId.VOIDRAY, UnitTypeId.SIEGETANK):      4.0,
@@ -236,6 +294,7 @@ SCORING_TABLE: dict[tuple[UnitTypeId, UnitTypeId], float] = {
     (UnitTypeId.VOIDRAY, UnitTypeId.MARINE):        -6.0,  # Mass small arms
     (UnitTypeId.VOIDRAY, UnitTypeId.STALKER):       -8.0,  # LP: "Stalkers can deal with Void Rays easily because of the ease of making large amounts"
     (UnitTypeId.VOIDRAY, UnitTypeId.HYDRALISK):     -6.0,  # Mass ranged
+    (UnitTypeId.VOIDRAY, UnitTypeId.ARCHON):       -6.0,  # LP: Archons are the PvP answer to Void Rays (poor damage vs them)
 
     # Tempests: super-long-range snipe platform (LP: "snipe enemy Colossi and forcing the enemy to retreat")
     (UnitTypeId.TEMPEST, UnitTypeId.COLOSSUS):       8.0,  # LP: snipe role, super-long range
@@ -251,10 +310,12 @@ SCORING_TABLE: dict[tuple[UnitTypeId, UnitTypeId], float] = {
     (UnitTypeId.CARRIER, UnitTypeId.VIKINGFIGHTER): -6.0,  # LP resource war: "killed in 2 volleys by Carriers... less than a third of the cost"
     (UnitTypeId.CARRIER, UnitTypeId.CORRUPTOR):     -5.0,  # LP: Zerg: Corruptors (same family as Colossus-counter line)
     (UnitTypeId.CARRIER, UnitTypeId.VOIDRAY):       -5.0,  # LP: PvP "easily countered by Stalkers + Sentries, Tempests, and Void Rays"
+    (UnitTypeId.CARRIER, UnitTypeId.ARCHON):       -6.0,  # LP: Archons "can beat Carriers by taking down their interceptor complements"
 
-    # NOTE: Oracle and Mothership EXCLUDED BY DESIGN — support/harass casters with no
-    # matchup advantage vs army units (LP: Oracle "flying harassment and support caster";
-    # Mothership "primary use is its powerful support abilities").
+    # NOTE: Oracle and Mothership EXCLUDED AS ATTACKERS BY DESIGN — support/harass
+    # casters with no matchup advantage vs army units (LP: Oracle "flying harassment
+    # and support caster"; Mothership "primary use is its powerful support abilities").
+    # They still appear as ENEMY_TYPE (e.g. the Oracle as a Feedback target).
     # See plan/counter_table_research_liquipedia.md before adding rows for either.
 }
 
