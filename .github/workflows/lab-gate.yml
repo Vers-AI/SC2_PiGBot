@@ -135,11 +135,11 @@ jobs:
         id: gate
         env:
           BRANCH: ${{ steps.resolve.outputs.branch }}
-          BASELINE: ${{ inputs.baseline }}
-          GAMES_PER_OPPONENT: ${{ inputs.games_per_opponent }}
-          REPO_URL: ${{ inputs.repo_url }}
-          TEST_BOT_ID: ${{ inputs.test_bot_id }}
-          OPPONENT_BOT_IDS: ${{ inputs.opponent_bot_ids }}
+          BASELINE: ${{ inputs.baseline || 'master' }}
+          GAMES_PER_OPPONENT: ${{ inputs.games_per_opponent || '3' }}
+          REPO_URL: ${{ inputs.repo_url || 'Vers-AI/SC2_PiGBot' }}
+          TEST_BOT_ID: ${{ inputs.test_bot_id || '1' }}
+          OPPONENT_BOT_IDS: ${{ inputs.opponent_bot_ids || '5,7,8' }}
           LAB_BRIDGE_TOKEN: ${{ secrets.LAB_BRIDGE_TOKEN }}
         run: |
           set -uo pipefail
