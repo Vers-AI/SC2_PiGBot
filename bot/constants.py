@@ -116,7 +116,7 @@ REPAIRER_PROXIMITY = 3.0
 count as a repairer (repair range is ~1.5 tiles; buffer for clump spread)."""
 
 REPAIRER_TARGET_BONUS = 15.0
-"""Score bonus for confirmed repairer SCVs in target_scoring. SCV base is
+"""Score bonus for confirmed repairer SCVs in scoring_table. SCV base is
 ~0.55, so this lifts a repairer to ~15.5 — above Marines/Marauders in range
 (2-8) but below high-priority casters (HT 25+). Killing the repairer is
 cheaper than out-damaging the heal."""
@@ -758,7 +758,7 @@ STRATEGY_EXPECTED_UNITS: dict[tuple[StrategyCategory, Race], dict[UnitTypeId, fl
 }
 """Expected enemy unit proportions per (strategy category, race).
 Used by strategy_nudge_proportions() to predict what we'll face and nudge
-our composition toward effective counters via COUNTER_TABLE. Proportions
+our composition toward effective counters via SCORING_TABLE. Proportions
 are based on Liquipedia/community meta knowledge of typical compositions
 at the time each strategy hits."""
 
@@ -1166,7 +1166,7 @@ FOCUS_MIN_STALKERS = 2
 
 # ===== RESOURCE-AWARE PRODUCTION =====
 RESOURCE_PRESSURE_MAX_NUDGE = 0.15
-"""Maximum proportion shift per unit type from resource pressure (±15%). Larger than counter-table nudge since resource starvation is more urgent."""
+"""Maximum proportion shift per unit type from resource pressure (±15%). Larger than scoring-table nudge since resource starvation is more urgent."""
 
 RESOURCE_IMBALANCE_RATIO = 2.0
 """Mineral:gas (or gas:mineral) ratio threshold to trigger resource-pressure nudging."""

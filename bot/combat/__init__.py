@@ -39,7 +39,7 @@ from bot.combat.unit_micro import (
     micro_air_unit,
 )
 
-from bot.combat.target_scoring import (
+from bot.combat.scoring_table import (
     score_target,
     select_target,
 )

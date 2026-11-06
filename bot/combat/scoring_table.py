@@ -1,9 +1,11 @@
-"""Weighted target scoring system for combat targeting.
+"""Scoring table + weighted target scoring for combat targeting.
 
-Purpose: Replace simple "attack closest/lowest HP" with multi-factor scoring
+Purpose: Elevate the matchup table from a production nudge to the bot's scoring core —
+    SCORING_TABLE ranks compositions against believed enemy compositions, and score_target()
+    picks which enemy to shoot.
 Key Decisions: Layered scoring (distance + health + type value + range + counter matchup + threat),
     uses Cython extensions for all heavy math, returns best target per unit;
-    COUNTER_TABLE covers the full Protoss combat arsenal (Oracle/Mothership excluded by design),
+    SCORING_TABLE covers the full Protoss combat arsenal (Oracle/Mothership excluded by design),
     pairs + scores sourced from plan/counter_table_research_liquipedia.md (Liquipedia LotV pages)
 Limitations: O(n*m) where n=own units, m=enemies in radius; mitigated by pre-filtering with cy_closer_than
 """
@@ -101,7 +103,7 @@ TACTICAL_BONUS: dict[UnitTypeId, float] = {
     UnitTypeId.WARPPRISMPHASING:  12.0,
 }
 
-# ===== COUNTER TABLE =====
+# ===== SCORING TABLE =====
 # (our_type, enemy_type) -> bonus score.
 #
 # DUAL PURPOSE: This table drives both combat TARGETING (which enemy to shoot)
@@ -121,7 +123,7 @@ TACTICAL_BONUS: dict[UnitTypeId, float] = {
 #   Check the "Competitive Usage" sections for matchup-specific info.
 #   Each entry below is annotated with "# LP:" citing the Liquipedia reasoning.
 #
-COUNTER_TABLE: dict[tuple[UnitTypeId, UnitTypeId], float] = {
+SCORING_TABLE: dict[tuple[UnitTypeId, UnitTypeId], float] = {
     # Stalkers: anti-air specialist + armored bonus (Liquipedia: "ability to counter air units")
     (UnitTypeId.STALKER, UnitTypeId.COLOSSUS):       10.0,  # Armored tag, high-value snipe
     (UnitTypeId.STALKER, UnitTypeId.IMMORTAL):        5.0,  # Armored tag (targeting only; Immortals hard-counter Stalkers)
@@ -323,12 +325,12 @@ def score_target(my_unit: Unit, enemy: Unit) -> float:
         health_ratio = (enemy.health + enemy.shield) / (enemy.health_max + enemy.shield_max)
         score += (1.0 - health_ratio) * HEALTH_WEIGHT
 
-    # Counter table bonus (Zealots only get counter bonuses with Charge upgrade)
+    # Scoring table bonus (Zealots only get counter bonuses with Charge upgrade)
     if my_unit.type_id == UnitTypeId.ZEALOT:
         if UpgradeId.CHARGE in _cached_upgrades:
-            score += COUNTER_TABLE.get((my_unit.type_id, enemy.type_id), 0.0)
+            score += SCORING_TABLE.get((my_unit.type_id, enemy.type_id), 0.0)
     else:
-        score += COUNTER_TABLE.get((my_unit.type_id, enemy.type_id), 0.0)
+        score += SCORING_TABLE.get((my_unit.type_id, enemy.type_id), 0.0)
 
     # --- Per-Unit Score (specific to this unit) ---
 

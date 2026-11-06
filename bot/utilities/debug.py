@@ -988,7 +988,7 @@ def render_target_scoring_debug(bot, main_army: Units) -> None:
     if not bot.debug or not main_army:
         return
     
-    from bot.combat.target_scoring import score_target, select_target
+    from bot.combat.scoring_table import score_target, select_target
     from cython_extensions import cy_closer_than
     
     # Get all visible enemy units (non-structure, non-memory)

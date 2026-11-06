@@ -23,7 +23,7 @@ from ares.behaviors.combat.individual import (
     UseAOEAbility, UseAbility,
 )
 from cython_extensions import cy_closest_to, cy_in_attack_range, cy_distance_to, cy_find_units_center_mass, cy_towards, cy_is_facing
-from bot.combat.target_scoring import select_target
+from bot.combat.scoring_table import select_target
 from bot.constants import (
     DISRUPTOR_SQUAD_FOLLOW_DISTANCE, DISRUPTOR_SQUAD_TARGET_DISTANCE,
     HT_SQUAD_FOLLOW_DISTANCE, HT_SQUAD_TARGET_DISTANCE,

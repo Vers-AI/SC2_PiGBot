@@ -100,7 +100,7 @@ bot/
     combat.py               # Core army control logic (squads, roles, engagement decisions)
     unit_micro.py           # Per-unit micro: ranged, melee, disruptor, HT, sentry
     formation.py            # Formation geometry helpers
-    target_scoring.py       # Priority target selection
+    scoring_table.py        # Scoring table + priority target selection
     force_field.py          # Sentry force field logic
     group_chase.py          # Group chase behavior
     group_snipe.py          # Group snipe behavior
