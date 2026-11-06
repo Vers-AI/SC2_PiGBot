@@ -90,6 +90,8 @@ poetry run isort .
 poetry run python -m pytest tests/
 ```
 
+CI runs the pytest suite on every PR into `development` and on pushes to `development`/`master` (`.github/workflows/ci.yml`).
+
 ## Project Structure
 ```
 bot/

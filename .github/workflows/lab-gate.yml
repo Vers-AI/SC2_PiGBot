@@ -1,0 +1,375 @@
+# Purpose: Bridge this bot repo to the shared SC2 test lab's gate API — ask the lab
+#          to play a PiG_Bot gate series (branch vs baseline) and report the verdict.
+# Key decisions: workflow_dispatch only — the lab plays one campaign at a time and is a
+#          scarce shared resource, so nothing here may fire automatically. The lab's own
+#          lock is the final concurrency authority; the workflow's `concurrency` block
+#          only keeps two dispatches from racing each other, and never cancels a run.
+#          The lab ids are PiG_Bot-specific configuration, so they live in this repo
+#          (the lab side stays bot-agnostic).
+# Limitations: the branch under test must exist in the lab's checkout
+#          (/mnt/forge/repos/SC2_PiGBot) and must not be checked out there — the lab
+#          creates its own git worktree for it. A run costs 2 x opponents x games_per_opponent
+#          games, because the lab plays the branch series and the baseline series.
+
+name: lab-gate
+
+on:
+  pull_request:
+    types: [labeled]
+    branches: [development]
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: >-
+          Branch to test. Leave empty to use the PR head branch of the dispatch context;
+          the run fails with a clear message when no branch can be derived.
+        # Not `required: true` on purpose: an empty value is what triggers the
+        # PR-context derivation below, and the UI would otherwise block that dispatch.
+        required: false
+        default: ''
+        type: string
+      games_per_opponent:
+        description: 'Games per opponent per series (the lab plays branch + baseline).'
+        required: false
+        default: '3'
+        type: string
+      baseline:
+        description: 'Baseline ref the branch is compared against.'
+        required: false
+        default: 'master'
+        type: string
+      repo_url:
+        description: 'Repo the lab checks out; must match the registered test bot source.'
+        required: false
+        default: 'Vers-AI/SC2_PiGBot'
+        type: string
+      test_bot_id:
+        description: 'Lab bot id of the bot under test (PiG_Bot).'
+        required: false
+        default: '1'
+        type: string
+      opponent_bot_ids:
+        description: >-
+          Comma separated lab bot ids of the benchmark roster
+          (MicroMachine, Clicadinha, Who).
+        required: false
+        default: '5,7,8'
+        type: string
+
+# Read-only checkout by default; the extra writes are only for the verdict comment.
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+# Never cancel a running series — the lab's own lock is the final authority and a
+# half-played series is wasted lab time.
+concurrency:
+  group: lab-gate
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: gate series
+    # Label trigger guard: only the 'lab-gate' label fires this job.
+    if: github.event_name != 'pull_request' || github.event.label.name == 'lab-gate'
+    # Self-hosted: the runner shares the host with the lab, so the lab API is reachable
+    # on loopback only. The `lab` label keeps this job off any other runner.
+    runs-on: [self-hosted, lab]
+    timeout-minutes: 300
+    env:
+      # The lab mounts its Django app under /test_lab/ — the prefix is part of the URL.
+      LAB_API_BASE: http://127.0.0.1:8090/test_lab
+      LAB_BOT_CHECKOUT: /mnt/forge/repos/SC2_PiGBot
+      BUSY_TIMEOUT_MIN: 30
+      POLL_TIMEOUT_MIN: 240
+      POLL_INTERVAL_SEC: 60
+    steps:
+      - name: Resolve branch and pull request
+        id: resolve
+        env:
+          INPUT_BRANCH: ${{ inputs.branch }}
+          EVENT_PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_REF: ${{ github.ref }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+
+          branch="${INPUT_BRANCH:-}"
+          pr_number="${EVENT_PR_NUMBER:-}"
+
+          if [ -z "$branch" ] && [ -n "${EVENT_PR_HEAD_REF:-}" ]; then
+            branch="$EVENT_PR_HEAD_REF"
+            echo "Branch taken from the dispatch pull request context: $branch"
+          fi
+
+          # Dispatched on a pull/merge ref (a "run from a PR link" dispatch).
+          if [ -z "$branch" ] && [[ "$EVENT_REF" =~ ^refs/pull/([0-9]+)/(merge|head)$ ]]; then
+            pr_number="${BASH_REMATCH[1]}"
+            branch=$(gh api "repos/$REPO/pulls/$pr_number" --jq '.head.ref' 2>/dev/null || echo '')
+            echo "Branch taken from pull request #$pr_number: $branch"
+          fi
+
+          if [ -z "$branch" ]; then
+            echo "::error::No branch to test. Dispatch with a branch input, or launch the" \
+                 "workflow from a pull request so its head branch can be derived" \
+                 "(dispatch ref was '$EVENT_REF')."
+            exit 1
+          fi
+
+          # Fallback for the verdict comment: an open PR whose head is the tested branch.
+          if [ -z "$pr_number" ]; then
+            pr_list=$(gh pr list --repo "$REPO" --head "$branch" --state open \
+              --json number,headRefName 2>/dev/null || echo '[]')
+            pr_number=$(printf '%s' "$pr_list" | jq -r --arg b "$branch" \
+              '[.[] | select(.headRefName == $b)][0].number // empty' 2>/dev/null || echo '')
+          fi
+
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+          echo "Resolved branch='$branch' pr_number='${pr_number:-none}'"
+
+      - name: Trigger the gate series and wait for the verdict
+        id: gate
+        env:
+          BRANCH: ${{ steps.resolve.outputs.branch }}
+          BASELINE: ${{ inputs.baseline }}
+          GAMES_PER_OPPONENT: ${{ inputs.games_per_opponent }}
+          REPO_URL: ${{ inputs.repo_url }}
+          TEST_BOT_ID: ${{ inputs.test_bot_id }}
+          OPPONENT_BOT_IDS: ${{ inputs.opponent_bot_ids }}
+          LAB_BRIDGE_TOKEN: ${{ secrets.LAB_BRIDGE_TOKEN }}
+        run: |
+          set -uo pipefail
+
+          if [ -z "${LAB_BRIDGE_TOKEN:-}" ]; then
+            echo "::error::The LAB_BRIDGE_TOKEN secret is not available to this job."
+            exit 1
+          fi
+          if ! command -v jq >/dev/null 2>&1; then
+            echo "::error::jq is required on the runner to read the lab API responses."
+            exit 1
+          fi
+
+          trigger_url="${LAB_API_BASE}/api/trigger-gate/"
+          status_url() { printf '%s/api/gate-status/%s/' "$LAB_API_BASE" "$1"; }
+          status_file="${RUNNER_TEMP}/lab-gate-status.json"
+          state_file="${RUNNER_TEMP}/lab-gate-state.json"
+          response_file="${RUNNER_TEMP}/lab-gate-trigger.json"
+
+          # curl prints the http code even on a transport failure ("000"), so the
+          # fallback only covers the case where curl died before writing anything.
+          http_get() {
+            local code
+            code=$(curl -sS -o "$2" -w '%{http_code}' \
+              -H "Authorization: Bearer $LAB_BRIDGE_TOKEN" "$1" 2>/dev/null || true)
+            printf '%s' "${code:-000}"
+          }
+          http_post() {
+            local code
+            code=$(curl -sS -o "$2" -w '%{http_code}' -X POST "$1" \
+              -H "Authorization: Bearer $LAB_BRIDGE_TOKEN" \
+              -H 'Content-Type: application/json' --data "$3" 2>/dev/null || true)
+            printf '%s' "${code:-000}"
+          }
+
+          run_id=""
+          verdict=""
+          status_value=""
+          error_message=""
+          write_state() {
+            jq -n --arg run_id "$run_id" --arg verdict "$verdict" --arg status "$status_value" \
+                  --arg branch "$BRANCH" --arg baseline "$BASELINE" --arg error "$error_message" \
+              '{run_id:$run_id, verdict:$verdict, status:$status, branch:$branch,
+                baseline:$baseline, error:$error}' > "$state_file"
+          }
+          fail() {
+            error_message="$*"
+            write_state
+            echo "::error::$*"
+            exit 1
+          }
+
+          opponent_ids_json=$(printf '%s' "$OPPONENT_BOT_IDS" | \
+            jq -R 'split(",") | map(gsub("\\s"; "")) | map(select(length > 0) | tonumber)')
+          payload=$(jq -n \
+            --arg repo_url "$REPO_URL" \
+            --arg branch "$BRANCH" \
+            --arg baseline "$BASELINE" \
+            --argjson test_bot_id "$TEST_BOT_ID" \
+            --argjson opponent_bot_ids "$opponent_ids_json" \
+            --argjson games_per_opponent "$GAMES_PER_OPPONENT" \
+            '{repo_url:$repo_url, branch:$branch, baseline:$baseline, test_bot_id:$test_bot_id,
+              opponent_bot_ids:$opponent_bot_ids, games_per_opponent:$games_per_opponent}')
+          echo "Gate request: $payload"
+
+          # Watch a run that already holds the lab lock. Returns 0 when it finishes.
+          wait_for_complete() {
+            local watched="$1" deadline="$2" code state
+            while :; do
+              [ "$(date +%s)" -ge "$deadline" ] && return 1
+              code=$(http_get "$(status_url "$watched")" "$status_file")
+              if [ "$code" = "200" ]; then
+                state=$(jq -r '.status // empty' "$status_file")
+                if [ "$state" = "complete" ]; then
+                  return 0
+                fi
+                echo "  lab run $watched is '$state' ($(jq -r '.games_finished // 0' "$status_file") games finished)"
+              else
+                echo "  status poll for lab run $watched failed (HTTP $code)"
+              fi
+              sleep "$POLL_INTERVAL_SEC"
+            done
+          }
+
+          busy_deadline=$(( $(date +%s) + BUSY_TIMEOUT_MIN * 60 ))
+          attempt=0
+          while [ -z "$run_id" ]; do
+            attempt=$(( attempt + 1 ))
+            if [ "$attempt" -gt 5 ]; then
+              fail "The lab stayed busy after $attempt trigger attempts; giving up instead of queueing."
+            fi
+
+            http_code=$(http_post "$trigger_url" "$response_file" "$payload")
+            case "$http_code" in
+              200)
+                run_id=$(jq -r '.run_id // empty' "$response_file")
+                [ -n "$run_id" ] || fail "The lab accepted the trigger but returned no run_id: $(cat "$response_file")"
+                echo "Gate run started: run_id=$run_id"
+                ;;
+              409)
+                # The lab runs one gate at a time. Wait for the active run to finish and
+                # then request our own run — adopting the other run's verdict would report
+                # a verdict for a branch we did not test.
+                active_run=$(jq -r '.run_id // empty' "$response_file")
+                echo "::notice::The lab is busy with run ${active_run}; waiting for it to finish" \
+                     "(busy timeout ${BUSY_TIMEOUT_MIN} min)."
+                if ! wait_for_complete "$active_run" "$busy_deadline"; then
+                  fail "The lab is still busy after ${BUSY_TIMEOUT_MIN} min (active run ${active_run});" \
+                       "not queueing silently — re-dispatch once the lab is free."
+                fi
+                echo "The lab is free again — requesting our own gate run."
+                ;;
+              401|403)
+                fail "The lab rejected the bridge token (HTTP $http_code). Check the LAB_BRIDGE_TOKEN secret."
+                ;;
+              *)
+                echo "Lab response (HTTP $http_code):"
+                cat "$response_file"
+                fail "The lab rejected the gate trigger (HTTP $http_code). If the message mentions" \
+                     "the branch, it must exist in the lab checkout ($LAB_BOT_CHECKOUT) and must" \
+                     "not be checked out there — the lab creates its own worktree for it."
+                ;;
+            esac
+          done
+          write_state
+
+          poll_deadline=$(( $(date +%s) + POLL_TIMEOUT_MIN * 60 ))
+          consecutive_failures=0
+          while :; do
+            code=$(http_get "$(status_url "$run_id")" "$status_file")
+            if [ "$code" = "200" ]; then
+              consecutive_failures=0
+              status_value=$(jq -r '.status // empty' "$status_file")
+              echo "run $run_id: status=$status_value games=$(jq -r '.games_finished // 0' "$status_file")/$(jq -r '.games_expected // 0' "$status_file")"
+              if [ "$status_value" = "complete" ]; then
+                verdict=$(jq -r '.verdict // empty' "$status_file")
+                break
+              fi
+            else
+              consecutive_failures=$(( consecutive_failures + 1 ))
+              echo "::warning::Status poll failed (HTTP $code) — $consecutive_failures in a row."
+              if [ "$consecutive_failures" -ge 5 ]; then
+                fail "The lab status endpoint failed 5 times in a row (last HTTP $code)."
+              fi
+            fi
+
+            if [ "$(date +%s)" -ge "$poll_deadline" ]; then
+              fail "Gate run $run_id did not complete within ${POLL_TIMEOUT_MIN} min (last status: ${status_value:-unknown})."
+            fi
+            sleep "$POLL_INTERVAL_SEC"
+          done
+
+          write_state
+          echo "Gate run $run_id completed with verdict '$verdict'."
+
+      - name: Report the verdict
+        if: always()
+        run: |
+          set -uo pipefail
+          status_file="${RUNNER_TEMP}/lab-gate-status.json"
+          state_file="${RUNNER_TEMP}/lab-gate-state.json"
+
+          if [ ! -f "$status_file" ]; then
+            echo "::error::The gate run produced no status payload — it did not complete."
+            [ -f "$state_file" ] && jq . "$state_file"
+            exit 1
+          fi
+
+          echo "::group::lab-gate verdict"
+          jq . "$status_file"
+          echo "::endgroup::"
+
+          status_value=$(jq -r '.status // "unknown"' "$status_file")
+          verdict=$(jq -r '.verdict // ""' "$status_file")
+
+          if [ "$status_value" != "complete" ]; then
+            echo "::error::The gate run did not complete (status: $status_value)."
+            exit 1
+          fi
+          if [ "$verdict" = "pass" ]; then
+            echo "Gate verdict: pass"
+            exit 0
+          fi
+          echo "::error::Gate verdict: ${verdict:-missing}"
+          exit 1
+
+      - name: Comment the verdict on the associated pull request
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.resolve.outputs.pr_number }}
+        run: |
+          set -uo pipefail
+
+          if [ -z "${PR_NUMBER:-}" ]; then
+            echo "No pull request is associated with this dispatch — skipping the verdict comment."
+            exit 0
+          fi
+
+          gh_bin=$(command -v gh || true)
+          [ -n "$gh_bin" ] || gh_bin=/home/linuxbrew/.linuxbrew/bin/gh
+          if [ ! -x "$gh_bin" ]; then
+            echo "::warning::The gh CLI is not available on this runner — skipping the verdict comment."
+            exit 0
+          fi
+
+          status_file="${RUNNER_TEMP}/lab-gate-status.json"
+          state_file="${RUNNER_TEMP}/lab-gate-state.json"
+          read -r verdict status_value run_id branch baseline noise_band < <(
+            jq -r '[.verdict // "", .status // "", .run_id // "", .branch // "", .baseline // "",
+                     .noise_band // ""] | @tsv' "$status_file" 2>/dev/null || printf '\t\t\t\t\t'
+          )
+          if [ -z "$branch" ] && [ -f "$state_file" ]; then
+            branch=$(jq -r '.branch // ""' "$state_file")
+            baseline=$(jq -r '.baseline // ""' "$state_file")
+          fi
+          rows=$(jq -r '(.results // [])[]
+            | "| \(.opponent_name) | \(.branch.wins)-\(.branch.losses) | \(.baseline.wins)-\(.baseline.losses) | \(.delta) | \(if .within_band then "yes" else "no" end) |"' \
+            "$status_file" 2>/dev/null || echo "")
+
+          # printf, not a heredoc: a heredoc body would have to be flush left to keep the
+          # markdown intact, and flush left lines end the YAML block scalar.
+          body=$(printf '### lab-gate: %s\n\nBranch `%s` vs baseline `%s` — lab run `%s` (status: %s), noise band: %s\n\n| opponent | branch W-L | baseline W-L | delta | inside band |\n| --- | --- | --- | --- | --- |\n%s\n' \
+            "${verdict:-unknown}" "${branch:-?}" "${baseline:-?}" "${run_id:-?}" \
+            "${status_value:-unknown}" "${noise_band:-unknown}" "$rows")
+
+          if ! printf '%s' "$(jq -n --arg body "$body" '{body:$body}')" | \
+               "$gh_bin" api "repos/$REPO/issues/$PR_NUMBER/comments" --method POST --input -; then
+            echo "::warning::Could not post the verdict comment on PR #$PR_NUMBER."
+            exit 0
+          fi
+          echo "Verdict comment posted on PR #$PR_NUMBER."

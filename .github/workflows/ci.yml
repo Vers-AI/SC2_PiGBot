@@ -1,0 +1,57 @@
+# Purpose: Tier-1 CI — run the pytest unit suite (tests/unit/) on every PR into
+#   development and on every push to development/master. This is the merge
+#   condition declared in plan/utility_refactor_plan.md (Verification → Unit).
+# Key decisions: Poetry 2.x via pipx (same shape as ladder_zip.yml); setup-python's
+#   built-in poetry cache keys on poetry.lock's hash and restores the virtualenv, so
+#   warm runs skip the slow ares-sc2 source build; ares-sc2 is checked out recursively
+#   because it is a Poetry path dependency.
+# Limitations: unit channel only — no SC2 binary, no game, no linting, no deploy steps.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [development]
+  push:
+    branches: [development, master]
+
+# A newer push on the same ref supersedes an in-flight run.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    name: pytest (unit suite)
+    runs-on: ubuntu-latest
+    # Guard against a hung job burning runner minutes (cold install + suite ~ 3 min).
+    timeout-minutes: 15
+    steps:
+      # ares-sc2 is a Poetry path dependency: without the submodule checked out at
+      # its pinned commit, `poetry install` cannot resolve the lockfile.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # Poetry must be on PATH before setup-python — the poetry cache reads
+      # `poetry config --list` to locate the virtualenv directory.
+      - name: Install Poetry
+        run: pipx install "poetry>=2.0,<3.0"
+
+      # Cache key = hash of poetry.lock; on a hit the virtualenv is restored and
+      # `poetry install` only re-syncs what changed.
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "poetry"
+          cache-dependency-path: poetry.lock
+
+      # The dev group carries pytest; the ares-sc2 path dependency pulls in
+      # scikit-learn, which is why the first (cold) run is the slow one.
+      - name: Install dependencies
+        run: poetry install --with dev
+
+      - name: Run pytest
+        run: poetry run pytest
