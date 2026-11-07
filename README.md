@@ -115,6 +115,7 @@ bot/
     strategy_belief_model.pkl # BN strategy classification model (4 categories)
   utilities/
     intel.py                # Enemy intel tracking, choke grid creation
+    reasoner.py             # Utility-AI reasoner: curves, appraisals, IntelContext
     debug.py                # Visual debug overlays
     nova_manager.py         # Disruptor nova tracking
     use_disruptor_nova.py   # Disruptor nova behavior

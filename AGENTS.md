@@ -244,6 +244,7 @@ bot/
     structure_manager.py    # Chrono, recharge, mass recall, building management
   utilities/
     intel.py                # Enemy intel tracking, choke grid creation
+    reasoner.py             # Utility-AI reasoner: curves, appraisals, IntelContext
     debug.py                # Visual debug overlays
     nova_manager.py         # Disruptor nova tracking
     use_disruptor_nova.py   # Disruptor nova behavior
