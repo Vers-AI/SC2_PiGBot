@@ -42,6 +42,29 @@ Belief:
     enable_opponent: True     # Phase 4: Cross-game opponent priors (Dirichlet)
     enable_scout_voi: False   # Phase 3: Level-2 routing + staleness×relevance ranking
 
+# Response-curve parameters for the utility-AI reasoner (bot/utilities/reasoner.py).
+# Personality hypotheses: seeded from Liquipedia-annotated reasoning, refit from
+# telemetry in Task 8. Steepness is the primary anti-oscillation knob — raise it
+# to commit harder around the tipping point, lower it to waffle longer.
+# One entry per scored quantity: minimum/maximum are that quantity's raw range.
+UtilityAI:
+    Curves:
+        threat:                 # threat-like inputs: distant noise ignored, commitment near critical
+            kind: exponential
+            minimum: 0.0
+            maximum: 1.0
+            steepness: 4.0
+        response:               # respond-vs-continue decisions: sigmoid around the tipping point
+            kind: logistic
+            minimum: 0.0
+            maximum: 1.0
+            midpoint: 0.5
+            steepness: 8.0
+        value:                 # additive value terms (economy, tech): plain normalized scale
+            kind: linear
+            minimum: 0.0
+            maximum: 1.0
+
 Distances:
     GroundEnemyNearBases: 25.
     GroundEnemyLeavingBases: 30.
