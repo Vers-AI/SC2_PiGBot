@@ -26,9 +26,6 @@ from typing import Any, Protocol, runtime_checkable
 CONFIG_SECTION = "UtilityAI"
 """config.yml section holding the response-curve personality hypotheses."""
 
-CURVE_KINDS = ("linear", "exponential", "logistic")
-"""Response-curve shapes the library implements."""
-
 _PARAM_FIELDS = ("minimum", "maximum", "midpoint", "steepness")
 
 
@@ -69,6 +66,9 @@ DEFAULT_CURVE_PARAMS: Mapping[str, CurveParams] = MappingProxyType(
     }
 )
 """Per-shape defaults — the fallback for every field a config entry omits."""
+
+CURVE_KINDS = tuple(DEFAULT_CURVE_PARAMS)
+"""Response-curve shapes the library implements."""
 
 
 @dataclass(frozen=True)
